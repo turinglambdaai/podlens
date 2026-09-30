@@ -90,7 +90,7 @@ jobs:
       - name: Zip update feed
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/podlens.app -DestinationPath \
+          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath \
             "PodLens-${{ github.ref_name }}-windows-x64.zip"
       - uses: actions/upload-artifact@v4
         with:
