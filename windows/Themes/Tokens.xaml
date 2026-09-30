@@ -1,0 +1,31 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      PodLens design tokens (windows side).
+      The single source of truth is docs/DESIGN-ROADMAP.md §5; every new
+      color or font size must be added there first. macOS mirrors these in
+      macos-host/Sources/RivetHost/DesignTokens.swift.
+    -->
+
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <Color x:Key="AppAccentColor">#C15F3C</Color>
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#C15F3C" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#F7E5DD" />
+            <SolidColorBrush x:Key="AppCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AppLineBrush" Color="#E8E2D9" />
+            <SolidColorBrush x:Key="AppInkSoftBrush" Color="#6B6660" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <Color x:Key="AppAccentColor">#D97C5C</Color>
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#D97C5C" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#3B2A22" />
+            <SolidColorBrush x:Key="AppCardBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="AppLineBrush" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="AppInkSoftBrush" Color="#A8A29B" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>
