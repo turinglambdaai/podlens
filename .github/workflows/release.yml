@@ -99,7 +99,7 @@ jobs:
           UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
           KEY_DER="$(mktemp -d)/update-ed25519-private.der"
-          KEY_PEM="$(mktemp)/update-ed25519-private.pem"
+          KEY_PEM="$(mktemp)"
           printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_PEM"
           openssl pkey -in "$KEY_PEM" -outform DER -out "$KEY_DER"
           rm -f "$KEY_PEM"
