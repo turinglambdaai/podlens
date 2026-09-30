@@ -9,7 +9,7 @@ enum DesignTokens {
 
     /// Soft highlight background (current transcript segment, selected chips).
     /// Light: #F7E5DD · Dark: #3B2A22.
-    static let accentSoft = Color(nsColor: NSColor { appearance in
+    static let accentSoft = Color(nsColor: NSColor(name: nil) { appearance in
         if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
             return NSColor(red: 0x3B / 255.0, green: 0x2A / 255.0, blue: 0x22 / 255.0, alpha: 1)
         }

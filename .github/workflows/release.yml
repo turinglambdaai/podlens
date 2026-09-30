@@ -99,7 +99,10 @@ jobs:
           UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
           KEY_DER="$(mktemp -d)/update-ed25519-private.der"
-          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" | openssl pkey -in /dev/stdin -outform DER -out "$KEY_DER"
+          KEY_PEM="$(mktemp)/update-ed25519-private.pem"
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_PEM"
+          openssl pkey -in "$KEY_PEM" -outform DER -out "$KEY_DER"
+          rm -f "$KEY_PEM"
           export RIVET_UPDATE_PRIVATE_KEY="$KEY_DER"
           raco rivet release --development
           rm -f "$KEY_DER"
