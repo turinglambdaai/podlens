@@ -12,6 +12,9 @@
 
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <AppBarButton x:Name="AddFeedButton" Icon="Add" Label="添加订阅" Click="AddFeed_Click" />
+            <AppBarButton x:Name="DiscoverButton" Label="发现" Click="Discover_Click">
+                <AppBarButton.Icon><FontIcon Glyph="&#xE735;" /></AppBarButton.Icon>
+            </AppBarButton>
             <AppBarButton x:Name="RefreshAllButton" Icon="Refresh" Label="刷新全部" Click="RefreshAll_Click" />
             <AppBarSeparator />
             <AppBarButton x:Name="DownloadButton" Icon="Download" Label="下载" Click="Download_Click" IsEnabled="False" />

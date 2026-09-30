@@ -42,6 +42,10 @@ public struct RivetAPI: Sendable {
     public let client: RivetClient
     public init(client: RivetClient) { self.client = client }
 
+    public func catalog_list() async throws -> [[String]] {
+        let result = try await client.call("catalog-list", arguments: [])
+        return try decode__List_List_String_(result)
+    }
     public func episode_download(id: String) async throws -> String {
         let result = try await client.call("episode-download", arguments: [encode_String(id)])
         return try decode_String(result)

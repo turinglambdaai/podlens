@@ -532,6 +532,51 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
   });
 }
 
+void MainWindow::Discover_Click(winrt::Windows::Foundation::IInspectable const&,
+                                Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (!api_) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+
+  std::thread([weak, dispatcher]() mutable {
+    std::string error;
+    std::vector<std::vector<std::string>> rows;
+    if (weak.get()) {
+      try {
+        rows = weak.get()->api_->catalog_list().get();
+      } catch (std::exception const& e) {
+        error = e.what();
+      }
+    }
+    dispatcher.TryEnqueue([weak, rows = std::move(rows), error]() mutable {
+      if (auto window = weak.get()) {
+        if (!error.empty()) {
+          window->SetStatus(false, to_wide(error));
+          return;
+        }
+        // build the catalog panel in the detail pane: one block per entry,
+        // already-subscribed entries marked, plus an add button each
+        std::wstring text;
+        std::wstring current_category;
+        for (auto const& row : rows) {
+          if (row.size() < 7) continue;
+          auto const& category = row[1];
+          if (category != current_category) {
+            current_category = category;
+            text += L"\n【" + to_wide(category) + L"】\n";
+          }
+          text += L"▸ " + to_wide(row[2]);
+          if (row[6] == "1") text += L"  ✓" + std::wstring(podlens::Tr("discover.added"));
+          text += L"\n    " + to_wide(row[3]) + L"\n    " + to_wide(row[4]) + L"\n";
+        }
+        text += L"\n" + std::wstring(podlens::Tr("discover.note"));
+        window->DetailText().Text(winrt::hstring(text));
+        window->SetStatus(true, std::wstring(podlens::Tr("discover.title")));
+      }
+    });
+  }).detach();
+}
+
 void MainWindow::RefreshAll_Click(winrt::Windows::Foundation::IInspectable const&,
                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
   if (!api_) return;

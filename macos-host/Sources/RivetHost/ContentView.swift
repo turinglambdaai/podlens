@@ -11,9 +11,13 @@ struct ContentView: View {
 
     var body: some View {
         main
-            .sheet(isPresented: $showAddFeed) {
-                AddFeedSheet()
-            }
+        .sheet(isPresented: $showAddFeed) {
+            AddFeedSheet()
+        }
+        .sheet(isPresented: Binding(get: { model.store.showDiscover },
+                                    set: { model.store.showDiscover = $0 })) {
+            DiscoverSheet()
+        }
             .sheet(isPresented: model.showSettingsBinding) {
                 SettingsSheet()
             }
@@ -48,6 +52,104 @@ struct ContentView: View {
 
 extension UpdateService.Manifest: Identifiable {
     var id: String { version }
+}
+
+// MARK: discover sheet
+
+struct DiscoverSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(L("discoverTitle")).font(.headline)
+            Text(L("discoverNote"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    ForEach(categories, id: \.self) { category in
+                        let items = model.store.catalog.filter { $0.category == category }
+                        if !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(categoryLabel(category))
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(Color.accentColor)
+                                ForEach(items) { entry in
+                                    CatalogRow(entry: entry)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+
+            Button(L("cancel")) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(20)
+        .frame(minWidth: 560, minHeight: 520)
+        .task { model.store.loadCatalog() }
+    }
+
+    private var categories: [String] {
+        var seen: [String] = []
+        for entry in model.store.catalog where !seen.contains(entry.category) {
+            seen.append(entry.category)
+        }
+        return seen
+    }
+
+    private func categoryLabel(_ category: String) -> String {
+        switch category {
+        case "tech": return L("catTech")
+        case "security": return L("catSecurity")
+        case "science": return L("catScience")
+        case "design": return L("catDesign")
+        case "business": return L("catBusiness")
+        case "news": return L("catNews")
+        default: return category
+        }
+    }
+}
+
+struct CatalogRow: View {
+    @EnvironmentObject private var model: AppModel
+    let entry: PodLensStore.CatalogEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.title).font(.callout.bold())
+                Text(entry.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            if entry.added {
+                Text(L("subscribed"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.gray.opacity(0.15))
+                    .clipShape(Capsule())
+            } else {
+                Button(L("subscribe")) {
+                    model.store.addFromCatalog(entry)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
 }
 
 // MARK: sidebar
@@ -92,6 +194,14 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(L("addFeed"))
+
+                Button {
+                    model.store.showDiscover = true
+                } label: {
+                    Image(systemName: "sparkles.rectangle.stack")
+                }
+                .buttonStyle(.borderless)
+                .help(L("discover"))
 
                 Button {
                     model.store.refreshAll()

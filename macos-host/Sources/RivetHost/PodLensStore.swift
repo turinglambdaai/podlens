@@ -52,8 +52,20 @@ final class PodLensStore: ObservableObject {
         var status: String
     }
 
+    struct CatalogEntry: Identifiable, Hashable {
+        let id: String
+        let category: String
+        let title: String
+        let description: String
+        let url: String
+        let homepage: String
+        let added: Bool
+    }
+
     @Published var feeds: [Feed] = []
     @Published var episodes: [Episode] = []
+    @Published var catalog: [CatalogEntry] = []
+    @Published var showDiscover = false
     @Published var selectedFeed: Feed?
     @Published var selectedEpisode: Episode?
     @Published var segments: [Segment] = []
@@ -101,6 +113,26 @@ final class PodLensStore: ObservableObject {
     }
 
     // MARK: feeds & episodes
+
+    func loadCatalog() {
+        guard let api else { return }
+        Task {
+            do {
+                let rows = try await api.catalog_list()
+                let entries = rows.map {
+                    CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
+                                 description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1")
+                }
+                await MainActor.run { self.catalog = entries }
+            } catch {
+                statusLine = L("fetchFailed") + " \(error)"
+            }
+        }
+    }
+
+    func addFromCatalog(_ entry: CatalogEntry) {
+        addFeed(url: entry.url)
+    }
 
     func loadFeeds() {
         guard let api else { return }

@@ -53,6 +53,7 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Sentence-aligned translation, bilingual / translation-only / original-only views
 - Structured summaries (TL;DR, key points, quotes, topics)
 - Bring-your-own-key: OpenAI, DeepSeek, Groq, SiliconFlow, Ollama, any OpenAI-compatible endpoint
+- Curated catalog of classic English podcasts (tech, science, business, design) in a Discover panel — one tap to add, never auto-subscribed; every entry is verified live by `scripts/verify-catalog.rkt` at release time
 - Agent-friendly CLI over the same core (`add`, `episodes`, `transcribe`, `translate`, `summarize`, `show`, `--json`, exit codes 0/1/2)
 - Signed in-app updates (Ed25519 manifest + SHA-256, see [docs/UPDATE.md](docs/UPDATE.md))
 

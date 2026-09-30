@@ -38,6 +38,13 @@ jobs:
       - name: Run tests
         run: raco test tests/
         shell: bash
+      # network-dependent: a dead feed must not block the pipeline, but a
+      # failure is surfaced so the catalog gets pruned before the release
+      - name: Verify curated catalog (soft)
+        run: racket scripts/verify-catalog.rkt
+        shell: bash
+        continue-on-error: true
+        if: matrix.os == 'ubuntu-latest'
       - name: CLI smoke
         shell: bash
         env:

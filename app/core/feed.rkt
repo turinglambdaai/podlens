@@ -148,9 +148,14 @@
 ;; items: list of hashes with guid, title, pub-date-epoch, pub-date-display,
 ;; enclosure-url, enclosure-length, enclosure-type, duration-sec, description
 (define (parse-feed xml-bytes)
+  ;; Real-world feeds (NPR especially) ship bare ampersands ("Barnes & Noble")
+  ;; that Racket's strict XML lexer rejects. Repair them before parsing:
+  ;; escape every & not already opening a numeric or named entity.
+  (define repaired
+    (regexp-replace* #px"&(?![a-zA-Z#][a-zA-Z0-9]{1,10};)" xml-bytes #"&amp;"))
   (define doc
     (normalize-node
-     (with-input-from-bytes xml-bytes
+     (with-input-from-bytes repaired
        (lambda () (xml->xexpr (document-element (read-xml)))))))
   (define channel (or (find-first "channel" doc) doc))
   ;; itunes:image / <image> both carry local name "image"; prefer one with

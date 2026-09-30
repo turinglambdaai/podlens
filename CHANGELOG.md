@@ -3,6 +3,26 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## 1.1.0 - 2026-09-30
+
+### Added
+
+- Curated podcast catalog (16 classic English shows across tech, security,
+  science, design, business, news) behind a Discover panel — the backend
+  exposes `catalog-list` with an `added` flag; hosts add entries through the
+  normal subscribe path. Nothing is ever auto-subscribed.
+- CLI: `catalog [category]` lists the catalog with subscribed marks
+- `scripts/verify-catalog.rkt` re-verifies every entry against the live
+  wire through the app's own HTTP/RSS stack (CI runs it soft-fail)
+
+### Fixed
+
+- Large feeds were truncated at the advertised Content-Length: NPR serves
+  bodies larger than the header claims. Bodies are now read to EOF with
+  `Connection: close`.
+- Bare ampersands in real-world feeds (NPR: "Barnes & Noble") crashed the
+  strict XML lexer; they are repaired before parsing.
+
 ## 1.0.2 - 2026-09-30
 
 ### Fixed

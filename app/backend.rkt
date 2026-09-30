@@ -13,6 +13,7 @@
 ;;   episode-list row = (id title pub-display duration-sec downloaded
 ;;                       transcript-status summary-status position-sec done
 ;;                       has-translation)
+;;   catalog-list row = (id category title description url homepage added)
 ;;   transcript row   = (start end text translation)
 ;;
 ;; Lifecycle: the embedded runtime calls `start` with the two RVT1 fds.
@@ -23,8 +24,10 @@
          racket/format
          racket/file
          racket/list
+         racket/set
          racket/string
          rivet/backend
+         "core/catalog.rkt"
          "core/config.rkt"
          "core/feed.rkt"
          "core/i18n.rkt"
@@ -37,7 +40,7 @@
 (provide start
          app-version)
 
-(define app-version "1.0.2")
+(define app-version "1.1.0")
 
 ;; ---- States / Events ------------------------------------------------------
 
@@ -107,6 +110,23 @@
 (define-rpc (feed-refresh-all : Int64)
   (for/sum ([f (in-list (feed-all))])
     (feed-refresh (hash-ref f 'id))))
+
+;; Curated discovery catalog. Rows:
+;;   (id category title description url homepage added)
+;; `added` is "1" when a subscription with the same feed URL already
+;; exists, so hosts can gray the entry out. The catalog never
+;; auto-subscribes; adding goes through the normal feed-add.
+(define-rpc (catalog-list : (List (List String)))
+  (define subscribed-urls
+    (list->set (map (lambda (f) (string-trim (hash-ref f 'url ""))) (feed-all))))
+  (for/list ([e (in-list (catalog-entries))])
+    (list (catalog-entry-id e)
+          (catalog-entry-category e)
+          (catalog-entry-name e)
+          (catalog-entry-description e (lang!))
+          (catalog-entry-url e)
+          (catalog-entry-homepage e)
+          (if (set-member? subscribed-urls (catalog-entry-url e)) "1" "0"))))
 
 ;; ---- episodes -------------------------------------------------------------------
 

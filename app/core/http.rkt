@@ -67,13 +67,18 @@
   (and v (string->number (string-trim v))))
 
 ;; One request, no redirects. → (values status headers body-bytes)
+;;
+;; Bodies are read to EOF with Connection: close. Some podcast CDNs (NPR)
+;; advertise a wrong Content-Length and keep streaming past it — trusting
+;; the header truncated large feeds mid-document.
 (define (request-once method url-string headers [data #f])
   (define-values (ssl? host port path) (split-url url-string))
   (define conn
     (http-conn-open host #:ssl? ssl? #:port port))
   (define all-headers
     (append (list (format "User-Agent: ~a" http-user-agent)
-                  "Accept: */*")
+                  "Accept: */*"
+                  "Connection: close")
             headers))
   (define-values (status resp-headers body-port)
     (if data
@@ -85,11 +90,7 @@
                              #:method method
                              #:headers all-headers)))
   (define resp-headers* (headers->strings resp-headers))
-  (define n (content-length-or-#f resp-headers*))
-  (define body
-    (if n
-        (read-bytes n body-port)
-        (port->bytes body-port)))
+  (define body (port->bytes body-port))
   (close-input-port body-port)
   (with-handlers ([exn:fail? void]) (http-conn-close! conn))
   (values (status-code status) resp-headers* body))
@@ -99,6 +100,19 @@
   (define s (if (bytes? status) (bytes->string/utf-8 status) status))
   (define m (regexp-match #px"HTTP/[0-9.]+ +([0-9]+)" s))
   (and m (string->number (second m))))
+
+;; Read exactly n bytes (or fewer only at EOF). A bare read-bytes can
+;; return a short chunk as soon as any data is available, which silently
+;; truncated large podcast feeds (~300 KB of a 2 MB body).
+(define (read-bytes-exact! n in)
+  (define out (make-bytes n))
+  (let loop ([filled 0])
+    (if (= filled n)
+        out
+        (let ([got (read-bytes-avail! out in filled)])
+          (cond
+            [(eof-object? got) (subbytes out 0 filled)]
+            [else (loop (+ filled got))])))))
 
 ;; GET with up to 5 redirects. → (values code headers body-bytes)
 (define (http-get-bytes url-string [extra-headers '()])
@@ -133,7 +147,8 @@
     (http-conn-sendrecv! conn path
                          #:method "GET"
                          #:headers (list (format "User-Agent: ~a" http-user-agent)
-                                         "Accept: */*")))
+                                         "Accept: */*"
+                                         "Connection: close")))
   (define code (status-code status))
   (define total (content-length-or-#f (headers->strings resp-headers)))
   (define written 0)

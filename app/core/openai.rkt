@@ -145,11 +145,11 @@
                          #:method "POST"
                          #:headers (append headers
                                            (list (format "User-Agent: ~a" http-user-agent)
-                                                 (format "Content-Type: multipart/form-data; boundary=~a" boundary)))
+                                                 (format "Content-Type: multipart/form-data; boundary=~a" boundary)
+                                                 "Connection: close"))
                          #:data body))
   (define hs (headers->strings resp-headers))
-  (define n (content-length-or-#f hs))
-  (define out (if n (read-bytes n body-port) (port->bytes body-port)))
+  (define out (port->bytes body-port))
   (close-input-port body-port)
   (values (status-code status) '() out))
 

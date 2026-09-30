@@ -78,5 +78,16 @@ private let strings: [String: (String, String)] = [
     "speed": ("倍速", "Speed"),
     "markDone": ("标记已听", "Mark played"),
     "done": ("已听完", "Played"),
+    "discover": ("发现", "Discover"),
+    "discoverTitle": ("发现播客", "Discover Podcasts"),
+    "discoverNote": ("精选英文播客目录，点「添加」即订阅；不会自动订阅任何节目。", "A curated list of English podcasts — add what you like; nothing is subscribed automatically."),
+    "subscribe": ("添加", "Add"),
+    "subscribed": ("已订阅", "Added"),
+    "catTech": ("科技", "Tech"),
+    "catSecurity": ("安全", "Security"),
+    "catScience": ("科学", "Science"),
+    "catDesign": ("设计", "Design"),
+    "catBusiness": ("商业", "Business"),
+    "catNews": ("资讯", "News"),
     "fetchFailed": ("操作失败：%@", "Operation failed: %@")
 ]

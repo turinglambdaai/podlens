@@ -14,7 +14,9 @@
          racket/list
          racket/match
          racket/port
+         racket/set
          racket/string
+         "core/catalog.rkt"
          "core/config.rkt"
          "core/feed.rkt"
          "core/i18n.rkt"
@@ -24,7 +26,7 @@
          "core/util.rkt"
          "update.rkt")
 
-(define cli-version "1.0.2")
+(define cli-version "1.1.0")
 
 ;; ---- output helpers ----------------------------------------------------------
 
@@ -260,6 +262,33 @@
             (displayln (tr (lang) 'position-saved)))
         0])]))
 
+(define (cmd-catalog args)
+  ;; list the curated catalog; mark entries already subscribed
+  (define subscribed-urls
+    (list->set (map (lambda (f) (string-trim (hash-ref f 'url ""))) (feed-all))))
+  (define wanted (if (null? args) #f (car args)))
+  (define rows
+    (filter (lambda (r) (or (not wanted) (equal? (car r) wanted)))
+            (catalog-entries)))
+  (if (stdout-json?)
+      (emit-ok
+       (hasheq 'catalog
+               (for/list ([e (in-list rows)])
+                 (hasheq 'id (catalog-entry-id e)
+                         'category (catalog-entry-category e)
+                         'name (catalog-entry-name e)
+                         'url (catalog-entry-url e)
+                         'added (if (set-member? subscribed-urls (catalog-entry-url e)) #t #f)))))
+      (begin
+        (for ([e (in-list rows)])
+          (displayln (format "~a  [~a]~a  ~a"
+                             (catalog-entry-id e)
+                             (catalog-entry-category e)
+                             (if (set-member? subscribed-urls (catalog-entry-url e)) " ✓" "")
+                             (catalog-entry-name e)))
+          (displayln (format "    ~a" (catalog-entry-url e))))
+        0)))
+
 (define (cmd-refresh args)
   (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
     (define ids (if (null? args) (map (lambda (f) (hash-ref f 'id)) (feed-all)) args))
@@ -371,6 +400,7 @@
           'list cmd-list
           'episodes cmd-episodes
           'refresh cmd-refresh
+          'catalog cmd-catalog
           'download cmd-download
           'transcribe cmd-transcribe
           'translate cmd-translate
