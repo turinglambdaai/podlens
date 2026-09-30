@@ -174,11 +174,17 @@
             </Grid>
         </NavigationView>
 
-        <InfoBar Grid.Row="1" x:Name="StatusBar" IsOpen="True" IsClosable="False"
-                 Severity="Informational" Message="…" />
+        <Border Grid.Row="1" BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource AppLineBrush}" Padding="16,3">
+            <TextBlock x:Name="StatusLine" FontSize="11" TextTrimming="CharacterEllipsis"
+                       Foreground="{ThemeResource AppInkSoftBrush}" Text="" />
+        </Border>
+
+        <InfoBar Grid.Row="2" x:Name="ErrorBar" IsOpen="False" IsClosable="True"
+                 Severity="Error" Message="…" Margin="12,4" />
 
         <!-- persistent player bar -->
-        <Border Grid.Row="2" x:Name="PlayerBar" Visibility="Collapsed"
+        <Border Grid.Row="3" x:Name="PlayerBar" Visibility="Collapsed"
                 BorderThickness="0,1,0,0" BorderBrush="{ThemeResource AppLineBrush}"
                 Background="{ThemeResource AppCardBrush}" Padding="16,10">
             <Grid ColumnSpacing="12">

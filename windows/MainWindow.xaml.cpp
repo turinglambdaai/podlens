@@ -28,7 +28,6 @@
 namespace winrt::RivetHost::implementation {
 namespace {
 
-using Microsoft::UI::Xaml::Controls::InfoBarSeverity;
 using Microsoft::UI::Xaml::Visibility;
 namespace mux = winrt::Microsoft::UI::Xaml;
 namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
@@ -246,7 +245,7 @@ MainWindow::MainWindow() {
 
   Title(winrt::hstring(std::wstring(podlens::Tr("app.title"))));
   SubtitleText().Text(std::wstring(podlens::Tr("app.subtitle")));
-  StatusBar().Message(winrt::hstring(std::wstring(podlens::Tr("status.starting"))));
+  StatusLine().Text(std::wstring(podlens::Tr("status.starting")));
   AddFeedButton().Content(box_value(winrt::hstring(
       L"＋ " + std::wstring(podlens::Tr("nav.add_feed")))));
   DiscoverButton().Content(box_value(winrt::hstring(
@@ -292,6 +291,13 @@ MainWindow::MainWindow() {
   position_timer_.Interval(std::chrono::seconds{1});
   position_timer_.Tick([weak = get_weak()](auto&&, auto&&) {
     if (auto window = weak.get()) window->TickPlayer();
+  });
+
+  error_bar_timer_ = DispatcherQueue().CreateTimer();
+  error_bar_timer_.Interval(std::chrono::seconds{6});
+  error_bar_timer_.IsRepeating(false);
+  error_bar_timer_.Tick([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) window->ErrorBar().IsOpen(false);
   });
 
   initialized_ = true;
@@ -1004,8 +1010,22 @@ std::wstring MainWindow::FormatTime(double seconds) {
 // ---- helpers --------------------------------------------------------------------
 
 void MainWindow::SetStatus(bool ok, std::wstring const& message) {
-  StatusBar().Severity(ok ? InfoBarSeverity::Success : InfoBarSeverity::Error);
-  StatusBar().Message(winrt::hstring(message));
+  // The status strip carries everything quietly; the InfoBar interrupts only
+  // for errors and dismisses itself, so healthy states never take up space.
+  StatusLine().Text(winrt::hstring(message));
+  if (ok) {
+    StatusLine().Foreground(Microsoft::UI::Xaml::Application::Current()
+                                .Resources()
+                                .Lookup(box_value(winrt::hstring(L"AppInkSoftBrush")))
+                                .as<Microsoft::UI::Xaml::Media::Brush>());
+  } else {
+    StatusLine().Foreground(
+        Microsoft::UI::Xaml::Media::SolidColorBrush(winrt::Windows::UI::Color{0xFF, 0xB3, 0x26, 0x1E}));
+    ErrorBar().Message(winrt::hstring(message));
+    ErrorBar().IsOpen(true);
+    error_bar_timer_.Stop();
+    error_bar_timer_.Start();
+  }
 }
 
 std::string MainWindow::SelectedFeedId() {

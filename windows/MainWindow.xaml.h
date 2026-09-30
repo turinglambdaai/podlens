@@ -144,6 +144,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   // playback state; the player is a member so position/rate survive toggles
   winrt::Windows::Media::Playback::MediaPlayer player_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer position_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer error_bar_timer_{nullptr};
   double duration_ = 0;
   bool user_seeking_ = false;
   bool syncing_ui_ = false;
