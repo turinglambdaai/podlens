@@ -5,6 +5,8 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 1.2.0 - 2026-09-30
+
 ### Added
 
 - Windows MSI installer built by `raco rivet release` (WiX, per-machine,
