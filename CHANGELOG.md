@@ -10,6 +10,34 @@ All notable changes to PodLens are documented here. Format follows
 - Windows window title now carries the product tagline
   ("PodLens — 听得懂的英文播客") instead of "PodLens — 播客工作台" —
   the product is a reading-level player, not a workbench (roadmap §1).
+- Hosts honor `PODLENS_DATA_DIR` when locating cached audio (macOS +
+  Windows, dev/test only); macOS restores the chosen playback rate after
+  pause/resume; finished jobs are pruned when episode lists change.
+
+### Fixed
+
+- Update checks no longer rely on a drifted hardcoded version: the backend
+  and CLI share one `app/version.rkt` mirroring `rivet.rktd` (the
+  deployment identity is not yet exposed by Rivet — turinglambdaai/rivet#97).
+  Released 1.2.0 builds kept reporting "update available" against
+  themselves through the backend RPC and CLI paths.
+- RFC 822 feed dates with numeric UTC offsets were read as wall-clock UTC:
+  the offset branch's regexp used `#rx` with `{4}`, which never fires, so
+  every non-zero offset was silently ignored — and the feed test asserted
+  the wrong value. `-0700`/`+0900` now shift correctly.
+- Translation progress is persisted after every batch; a failed batch late
+  in a long episode no longer discards the batches already paid for.
+- Concurrent jobs on the same episode are rejected instead of racing the
+  episode row and transcript file.
+- `check-updates` reports failures with a localized message instead of
+  swallowing the exception; update status strings are localized (zh) on
+  the CLI and backend RPC paths.
+- Silent ASR chunks (music, silence) advance the transcript timeline by
+  the chunk window instead of collapsing subsequent timestamps; the
+  multipart upload path closes its connection; the vendored pure-Racket
+  SHA-256 was removed (digest utilities proposed upstream as
+  turinglambdaai/rivet#99; the port-probing test workaround is
+  turinglambdaai/rivet#98).
 
 ## 1.2.0 - 2026-09-30
 

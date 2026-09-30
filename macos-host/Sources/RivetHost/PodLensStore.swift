@@ -105,6 +105,8 @@ final class PodLensStore: ObservableObject {
                 loadEpisodes(feedId: feedId)
             }
             loadFeeds()
+            // drop finished jobs; the dictionary only needs running state
+            jobs = jobs.filter { $0.value.status == "running" }
         case .open_url(let url):
             if let u = URL(string: url) { NSWorkspace.shared.open(u) }
         case .update_available:
@@ -197,7 +199,7 @@ final class PodLensStore: ObservableObject {
         Task {
             do {
                 let n = try await api.feed_refresh_all()
-                statusLine = "\(n)"
+                statusLine = String(format: L("refreshAllDone"), n)
                 loadFeeds()
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
@@ -301,11 +303,19 @@ final class PodLensStore: ObservableObject {
 
     // MARK: playback
 
-    /// The backend keeps the cache under ~/.podlens/audio/<episodeId><ext>;
+    /// The backend keeps the cache under `<data-dir>/audio/<episodeId><ext>`;
     /// the host resolves the file by id prefix (no extra RPC needed).
+    /// PODLENS_DATA_DIR must match the backend's override (dev/test only).
     private func localAudioURL(for episodeID: String) -> URL? {
-        let audioDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".podlens/audio", isDirectory: true)
+        let base: URL
+        if let override = ProcessInfo.processInfo.environment["PODLENS_DATA_DIR"],
+           !override.trimmingCharacters(in: .whitespaces).isEmpty {
+            base = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            base = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".podlens", isDirectory: true)
+        }
+        let audioDir = base.appendingPathComponent("audio", isDirectory: true)
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: audioDir.path) else {
             return nil
         }
@@ -347,6 +357,7 @@ final class PodLensStore: ObservableObject {
             player.pause()
             playing = false
         } else {
+            player.defaultRate = rate
             player.play()
             playing = true
         }
@@ -359,7 +370,8 @@ final class PodLensStore: ObservableObject {
 
     func setRate(_ r: Float) {
         rate = r
-        player?.rate = playing ? r : 0
+        player?.defaultRate = r
+        if playing { player?.rate = r }
     }
 
     func currentSegmentIndex() -> Int? {

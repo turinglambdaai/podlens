@@ -25,7 +25,7 @@
          "core/http.rkt"
          "core/util.rkt")
 
-(provide update-check
+(provide update-check-result
          update-configured?
          current-update-public-key-hex
          current-update-key-id
@@ -77,15 +77,19 @@
               (system* path "version"))))
         "OpenSSL 3")))
 
-;; → string status, same contract as the macOS host's UpdateService:
-;;   "update available: X" | "PodLens is up to date" |
-;;   "updates unavailable: ..." | "update check failed: ..."
-(define (update-check current-version)
+;; → structured result the callers localize:
+;;   '(up-to-date) | (list 'available version)
+;;   (list 'unavailable reason) | (list 'failed reason)
+;;
+;; The macOS host runs the same contract natively; this module gives the
+;; CLI and the backend RPC the same check by shelling out to OpenSSL 3.
+(define (update-check-result current-version)
   (cond
     [(not (update-configured?))
-     "updates unavailable: developer build (no update key configured)"]
+     (list 'unavailable "developer build (no update key configured)")]
     [else
-     (with-handlers ([exn:fail? (lambda (e) (format "update check failed: ~a" (exn-message e)))])
+     (with-handlers
+         ([exn:fail? (lambda (e) (list 'failed (exn-message e)))])
        (define (get-json url)
          (define-values (code _h body)
            (http-get-bytes url (list "Accept: application/vnd.github+json")))
@@ -134,8 +138,8 @@
            (define manifest (with-input-from-file manifest-file read-json))
            (define latest (hash-ref manifest 'version "0"))
            (if (version-newer? current-version latest)
-               (format "update available: ~a" latest)
-               "PodLens is up to date"))
+               (list 'available latest)
+               (list 'up-to-date)))
          (lambda ()
            (with-handlers ([exn:fail? void])
              (delete-file manifest-file)

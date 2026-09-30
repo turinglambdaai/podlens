@@ -35,8 +35,14 @@
 
 (test-case "rfc822 dates"
   (check-equal? (rfc822->epoch "Mon, 26 Jun 2023 07:00:00 +0000") 1687762800)
-  (check-equal? (rfc822->epoch "Tue, 13 Jun 2023 07:00:00 -0700") 1686639600)
-  (check-false (rfc822->epoch "not a date")))
+  ;; 07:00-0700 is 14:00 UTC; a former expectation here asserted the
+  ;; wall-clock-as-UTC value, which is what the broken #rx offset check
+  ;; produced when it silently never fired
+  (check-equal? (rfc822->epoch "Tue, 13 Jun 2023 07:00:00 -0700") 1686664800)
+  (check-equal? (rfc822->epoch "Mon, 26 Jun 2023 07:00:00 +0900") 1687730400)
+  (check-equal? (rfc822->epoch "Mon, 26 Jun 2023 07:00:00 GMT") 1687762800)
+  (check-false (rfc822->epoch "not a date"))
+  (check-false (rfc822->epoch "Mon, 31 Feb 2023 07:00:00 +0000")))
 
 (test-case "itunes durations"
   (check-equal? (itunes-duration->seconds "2941") 2941)

@@ -151,7 +151,8 @@
   (define hs (headers->strings resp-headers))
   (define out (port->bytes body-port))
   (close-input-port body-port)
-  (values (status-code status) '() out))
+  (with-handlers ([exn:fail? void]) (http-conn-close! conn))
+  (values (status-code status) hs out))
 
 (define (raise-api-error who code resp)
   (define msg

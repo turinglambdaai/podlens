@@ -100,31 +100,38 @@
 ;; RFC 822-ish dates as used by feeds:
 ;;   "Mon, 15 Jul 2026 09:30:00 +0000" / "15 Jul 2026 09:30:00 GMT"
 ;; Returns epoch seconds in UTC, or #f when unparseable.
+;;
+;; find-seconds with date? #f interprets the wall clock as UTC regardless of
+;; the machine's time zone (verified: same answer on a +08:00 host); the
+;; numeric offset is then applied explicitly. The offset regexp must be #px —
+;; #rx does not support {4}, and that branch silently never fired before,
+;; which made every non-zero offset (and the old test asserting it) wrong.
 (define (rfc822->epoch s)
-  (define m
-    (regexp-match
-     #px"([0-9]{1,2})[ -]([A-Za-z]{3,})[ -]([0-9]{2,4})[ T]+([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?\\s*([+-][0-9]{4}|[A-Za-z]+)?"
-     (string-trim s)))
-  (and m
-       (let* ([day (string->number (list-ref m 1))]
-              [mon (cdr (assoc (string-downcase (substring (list-ref m 2) 0 3)) months))]
-              [year* (string->number (list-ref m 3))]
-              [year (if (< year* 100) (+ 2000 year*) year*)]
-              [hh (string->number (list-ref m 4))]
-              [mm (string->number (list-ref m 5))]
-              [ss (or (and (list-ref m 6) (string->number (list-ref m 6))) 0)]
-              [tz (list-ref m 7)]
-              [offset
-               (cond
-                 [(not tz) 0]
-                 [(regexp-match #rx"^[+-][0-9]{4}$" tz)
-                  (define sign (if (equal? (substring tz 0 1) "+") -1 1))
-                  (define h (string->number (substring tz 1 3)))
-                  (define mi (string->number (substring tz 3 5)))
-                  (* sign (+ (* h 3600) (* mi 60)))]
-                 [else 0])] ; GMT/UT/Z/unknown → UTC
-              [days (find-seconds ss mm hh day mon year #f)])
-         (- days offset))))
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (define m
+      (regexp-match
+       #px"([0-9]{1,2})[ -]([A-Za-z]{3,})[ -]([0-9]{2,4})[ T]+([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?\\s*([+-][0-9]{4}|[A-Za-z]+)?"
+       (string-trim s)))
+    (and m
+         (let* ([day (string->number (list-ref m 1))]
+                [mon (cdr (assoc (string-downcase (substring (list-ref m 2) 0 3)) months))]
+                [year* (string->number (list-ref m 3))]
+                [year (if (< year* 100) (+ 2000 year*) year*)]
+                [hh (string->number (list-ref m 4))]
+                [mm (string->number (list-ref m 5))]
+                [ss (or (and (list-ref m 6) (string->number (list-ref m 6))) 0)]
+                [tz (list-ref m 7)]
+                [offset
+                 (cond
+                   [(not tz) 0]
+                   [(regexp-match #px"^[+-][0-9]{4}$" tz)
+                    (define sign (if (equal? (substring tz 0 1) "+") 1 -1))
+                    (* sign (+ (* (string->number (substring tz 1 3)) 3600)
+                               (* (string->number (substring tz 3 5)) 60)))]
+                   [else 0])] ; GMT/UT/Z/unknown → UTC
+                [wall-as-utc (find-seconds ss mm hh day mon year #f)])
+           ;; "+hh:mm" means the wall clock runs ahead of UTC
+           (- wall-as-utc offset)))))
 
 ;; "1:02:03" / "04:30" / "3725" → seconds
 (define (itunes-duration->seconds s)

@@ -101,19 +101,6 @@
   (define m (regexp-match #px"HTTP/[0-9.]+ +([0-9]+)" s))
   (and m (string->number (second m))))
 
-;; Read exactly n bytes (or fewer only at EOF). A bare read-bytes can
-;; return a short chunk as soon as any data is available, which silently
-;; truncated large podcast feeds (~300 KB of a 2 MB body).
-(define (read-bytes-exact! n in)
-  (define out (make-bytes n))
-  (let loop ([filled 0])
-    (if (= filled n)
-        out
-        (let ([got (read-bytes-avail! out in filled)])
-          (cond
-            [(eof-object? got) (subbytes out 0 filled)]
-            [else (loop (+ filled got))])))))
-
 ;; GET with up to 5 redirects. → (values code headers body-bytes)
 (define (http-get-bytes url-string [extra-headers '()])
   (let loop ([url url-string] [hops 0])

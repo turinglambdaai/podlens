@@ -136,12 +136,13 @@
                               'end (+ offset (hash-ref s 'end 0))
                               'text (string-trim (hash-ref s 'text ""))))))
       (on-progress (+ 35 (quotient (* 55 (add1 i)) n-chunks)) "transcribing")
-      ;; next chunk's offset: the segment_time window end keeps chunk starts
-      ;; monotonic even when a chunk comes back with no segments
+      ;; Next chunk's offset: advance by the last segment's end, or by the
+      ;; chunk window when the chunk came back silent (e.g. music) — a silent
+      ;; chunk still occupies its segment_time slot in the audio timeline.
       (values
        (+ offset
           (if (null? segs)
-              0
+              (hash-ref cfg 'asr-chunk-seconds 600)
               (inexact->exact (floor (hash-ref (last segs) 'end 0)))))
        (add1 i)))
     (when (null? all-segments)
@@ -207,7 +208,15 @@
         (unless (and (list? lines) (= (length lines) (length batch)))
           (error 'run-translate! "translation batch ~a returned wrong line count" (add1 i)))
         (on-progress (quotient (* 100 (add1 i)) (length batches)) "translating")
-        (append acc (map (lambda (s) (string-trim (format "~a" s))) lines))))
+        (define acc* (append acc (map (lambda (s) (string-trim (format "~a" s))) lines)))
+        ;; Persist after every batch: translation is billed per sentence, so a
+        ;; failure late in a long episode must not cost the finished batches.
+        (transcript-save! id
+                          (hash-set* t
+                                     'translation acc*
+                                     'target-lang lang
+                                     'updated-epoch (now-epoch)))
+        acc*))
     (transcript-save! id
                       (hash-set* t
                                  'translation translations
@@ -279,10 +288,31 @@
                     (hasheq)))))
 
 (define (job-start! mgr kind episode-id thunk)
-  (define id (stable-id (format "~a|~a|~a" kind episode-id (current-inexact-milliseconds))))
-  (job-set! mgr id (hasheq 'kind kind 'episode-id episode-id
-                           'status "running" 'pct 0 'message ""
-                           'started (now-epoch)))
+  ;; Check-and-insert runs under the manager lock so two concurrent RPCs
+  ;; cannot both start jobs for the same episode (transcribe + translate at
+  ;; once would race the episode row and the transcript file).
+  (define started
+    (with-lock (job-manager-sem mgr)
+      (lambda ()
+        (define busy?
+          (for/or ([j (in-hash-values (job-manager-jobs mgr))])
+            (and (equal? (hash-ref j 'episode-id) episode-id)
+                 (equal? (hash-ref j 'status) "running"))))
+        (if busy?
+            #f
+            (let* ([id (stable-id (format "~a|~a|~a"
+                                          kind episode-id (current-inexact-milliseconds)))]
+                   [j (make-hasheq (list (cons 'kind kind)
+                                         (cons 'episode-id episode-id)
+                                         (cons 'status "running")
+                                         (cons 'pct 0)
+                                         (cons 'message "")
+                                         (cons 'started (now-epoch))))])
+              (hash-set! (job-manager-jobs mgr) id j)
+              id)))))
+  (unless started
+    (error 'job-start! "another job is already running for this episode"))
+  (define id started)
   (define (progress pct [message ""])
     (job-set! mgr id (hasheq 'pct pct 'message message))
     ((job-manager-emit! mgr) id kind pct message))

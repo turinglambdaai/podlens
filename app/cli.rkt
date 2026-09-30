@@ -24,9 +24,11 @@
          "core/paths.rkt"
          "core/pipeline.rkt"
          "core/util.rkt"
-         "update.rkt")
+         "update.rkt"
+         "version.rkt")
 
-(define cli-version "1.1.0")
+;; the version mirrors rivet.rktd (see app/version.rkt)
+(define cli-version app-version)
 
 ;; ---- output helpers ----------------------------------------------------------
 
@@ -334,8 +336,14 @@
     [_ (usage! (tr (lang) 'usage))]))
 
 (define (cmd-check-updates _args)
-  (with-handlers ([exn:fail? void])
-    (define status (update-check cli-version))
+  (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
+    (define status
+      (match (update-check-result cli-version)
+        [(list 'available v) (tr (lang) 'update-available v)]
+        [(list 'up-to-date) (tr (lang) 'up-to-date)]
+        [(list 'unavailable _) (tr (lang) 'update-dev)]
+        [(list 'failed m) (tr (lang) 'update-failed m)]
+        [_ (tr (lang) 'update-failed "unknown")]))
     (if (stdout-json?)
         (emit-ok (hasheq 'status status))
         (displayln status))

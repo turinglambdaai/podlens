@@ -89,5 +89,6 @@ private let strings: [String: (String, String)] = [
     "catDesign": ("设计", "Design"),
     "catBusiness": ("商业", "Business"),
     "catNews": ("资讯", "News"),
-    "fetchFailed": ("操作失败：%@", "Operation failed: %@")
+    "fetchFailed": ("操作失败：%@", "Operation failed: %@"),
+    "refreshAllDone": ("刷新完成，新增 %d 集", "Refreshed, %d new episode(s)")
 ]

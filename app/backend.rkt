@@ -24,6 +24,7 @@
          racket/format
          racket/file
          racket/list
+         racket/match
          racket/set
          racket/string
          rivet/backend
@@ -35,12 +36,11 @@
          "core/paths.rkt"
          "core/pipeline.rkt"
          "core/util.rkt"
+         "version.rkt"
          (prefix-in upd: "update.rkt"))
 
 (provide start
          app-version)
-
-(define app-version "1.1.0")
 
 ;; ---- States / Events ------------------------------------------------------
 
@@ -239,11 +239,15 @@
 ;; ---- updates ---------------------------------------------------------------------------
 
 (define-rpc (update-check : String)
+  (define result (upd:update-check-result app-version))
   (define status
-    (if (upd:update-configured?)
-        (upd:update-check app-version)
-        (tr (lang!) 'update-dev)))
-  (when (string-prefix? status "update available")
+    (match result
+      [(list 'available v) (tr (lang!) 'update-available v)]
+      [(list 'up-to-date) (tr (lang!) 'up-to-date)]
+      [(list 'unavailable _) (tr (lang!) 'update-dev)]
+      [(list 'failed m) (tr (lang!) 'update-failed m)]
+      [_ (tr (lang!) 'update-failed "unknown")]))
+  (when (and (pair? result) (eq? (car result) 'available))
     (update-available status))
   status)
 

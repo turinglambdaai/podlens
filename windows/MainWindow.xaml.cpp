@@ -1042,15 +1042,23 @@ std::string MainWindow::SelectedEpisodeId() {
   return episodes_[static_cast<size_t>(index)].id;
 }
 
-// The backend caches audio under %USERPROFILE%\.podlens\audio\<episodeId>*;
-// the host resolves the file by id prefix so playback needs no extra RPC.
+// The backend caches audio under <data-dir>\audio\<episodeId>*; the host
+// resolves the file by id prefix so playback needs no extra RPC. The
+// PODLENS_DATA_DIR override must match the backend's (dev/test only).
 std::wstring MainWindow::FindLocalAudio(std::string const& episode_id) {
-  PWSTR profile = nullptr;
-  if (::SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &profile) != S_OK) {
-    return {};
+  std::filesystem::path base;
+  if (char const* override_dir = std::getenv("PODLENS_DATA_DIR");
+      override_dir && *override_dir) {
+    base = std::filesystem::path(override_dir);
+  } else {
+    PWSTR profile = nullptr;
+    if (::SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &profile) != S_OK) {
+      return {};
+    }
+    base = std::filesystem::path(profile) / L".podlens";
+    ::CoTaskMemFree(profile);
   }
-  std::filesystem::path dir = std::filesystem::path(profile) / L".podlens" / L"audio";
-  ::CoTaskMemFree(profile);
+  std::filesystem::path dir = base / L"audio";
   std::error_code ec;
   if (!std::filesystem::exists(dir, ec)) return {};
   for (auto const& entry : std::filesystem::directory_iterator(dir, ec)) {

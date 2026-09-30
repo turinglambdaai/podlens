@@ -27,6 +27,7 @@
    'unknown-key '("未知配置项 {0}" . "Unknown setting {0}")
    'up-to-date '("已是最新版本" . "PodLens is up to date")
    'update-available '("发现新版本 {0}" . "Update available: {0}")
+   'update-failed '("更新检查失败：{0}" . "Update check failed: {0}")
    'update-dev '("开发构建，未配置更新公钥" . "Developer build — no update key configured")
    'usage '("用法见 help" . "See help for usage")
    ;; doctor
