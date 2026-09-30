@@ -29,7 +29,7 @@ struct Entry {
 };
 
 inline constexpr Entry kStrings[] = {
-    {"app.title", L"PodLens — 播客工作台", L"PodLens — Podcast Workbench"},
+    {"app.title", L"PodLens — 听得懂的英文播客", L"PodLens — Podcasts, in your language"},
     {"menu.subs", L"订阅", L"Subscriptions"},
     {"menu.help", L"帮助", L"Help"},
     {"menu.add_feed", L"添加订阅…", L"Add Feed…"},

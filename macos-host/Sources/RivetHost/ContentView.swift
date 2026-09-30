@@ -438,7 +438,7 @@ struct TranscriptView: View {
                     }
                 }
             }
-            .onChange(of: model.store.currentTime) { _ in
+            .onChange(of: model.store.currentTime) { _, _ in
                 if let idx = model.store.currentSegmentIndex() {
                     proxy.scrollTo(idx, anchor: .center)
                 }
@@ -659,7 +659,7 @@ struct UpdateSheet: View {
                 Button(L("updateLater")) { dismiss() }
                 Button(L("updateRestart")) {
                     dismiss()
-                    Task { try? await model.installUpdate(manifest) }
+                    Task { await model.installUpdate(manifest) }
                 }
                 .buttonStyle(.borderedProminent)
             }

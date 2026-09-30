@@ -33,7 +33,7 @@ struct UpdateService {
          keyBase64: String? = UpdateService.publicKeyBase64,
          currentVersion: String? = nil) {
         self.apiURL = apiURL
-        var cfg = sessionConfiguration
+        let cfg = sessionConfiguration
         cfg.timeoutIntervalForRequest = 30
         cfg.timeoutIntervalForResource = 600
         self.sessionConfiguration = cfg
