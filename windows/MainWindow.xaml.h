@@ -45,6 +45,7 @@ struct MainWindow : MainWindowT<MainWindow> {
 
  private:
   winrt::fire_and_forget InitializeBackendAsync();
+  void ReloadFeeds();
   void RenderFeeds(std::vector<std::vector<std::string>> rows);
   void RenderEpisodes(std::vector<std::vector<std::string>> rows);
   void RenderDetail();

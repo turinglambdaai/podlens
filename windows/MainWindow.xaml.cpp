@@ -9,6 +9,7 @@
 #include <shellapi.h>
 
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Media.Core.h>
 #include <winrt/Windows.Media.Playback.h>
 #include <winrt/Windows.Storage.h>
@@ -127,7 +128,7 @@ std::string json_tldr(std::string const& json) {
 
 MainWindow::MainWindow() {
   InitializeComponent();
-  Title(winrt::to_hstring(podlens::Tr("app.title")));
+  Title(winrt::hstring(std::wstring(podlens::Tr("app.title"))));
   InitializeBackendAsync();
 }
 
