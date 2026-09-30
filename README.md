@@ -2,9 +2,24 @@
 
 Podcasts, in your language. A cross-platform desktop podcast player that transcribes, translates and summarizes English episodes with your own LLM API key — for listeners who understand far more reading than hearing.
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.0.0-C15F3C)
+**English** · [中文](README.zh-CN.md)
 
-**English** · [中文](README.zh-CN.md) · [podlens.jrtx.site](https://podlens.jrtx.site)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.1.0-C15F3C)
+
+🏠 Product page: **https://podlens.jrtx.site**
+
+## Download
+
+Grab the latest release for your platform from
+[GitHub Releases](https://github.com/turinglambdaai/podlens/releases):
+
+| Platform | Artifact |
+|---|---|
+| macOS 14+ (Apple Silicon) | `PodLens-v1.1.0-macos.dmg` (ad-hoc signed — first launch: right-click → Open) |
+| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+
+Updates arrive in-app through an Ed25519-signed manifest
+([docs/UPDATE.md](docs/UPDATE.md)).
 
 ## Why PodLens?
 
@@ -45,7 +60,7 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Playback uses the platform media stack; the audio cache lives in `~/.podlens/audio/`
 - The UI talks only to the typed contract in `app/backend.rkt` — changing it is a cross-platform release
 
-## What ships in 1.0
+## What ships in 1.1
 
 - Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection
 - Download episodes to a local cache; play with speed control (1.0–2.0×), resume from last position
@@ -59,25 +74,14 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 
 ## Quick Start
 
-### 1. Install
-
-Grab the latest build from [Releases](https://github.com/turinglambdaai/podlens/releases):
-
-| Platform | Artifact |
-|---|---|
-| macOS 14+ | `PodLens-v1.0.0-macos.dmg` (universal) |
-| Windows 10+ | `PodLens-v1.0.0-windows-x64.zip` |
-
-The first launch of an unnotarized build on macOS: right-click → Open (developer builds are ad-hoc signed; CI builds are notarized once signing credentials are configured).
-
-### 2. Configure your API key
+### 1. Configure your API key
 
 Open Settings and fill in:
 
 - `api-base` — e.g. `https://api.openai.com/v1` (or DeepSeek/Groq/Ollama base)
 - `api-key` — your key, stored locally in `~/.podlens/config.json`, never synced
 
-### 3. Listen
+### 2. Listen
 
 Add a podcast RSS URL, pick an episode, press **转写 → 翻译 → 总结** (transcribe → translate → summarize). Or from a terminal:
 

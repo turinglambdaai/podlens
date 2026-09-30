@@ -2,9 +2,22 @@
 
 听得懂的英文播客。跨平台桌面播客应用：用你自己的大模型 API key，把英文单集转写、逐句翻译、自动总结——为"读得懂、听不懂"的听众而生。
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.0.0-C15F3C)
+[English](README.md) · **中文**
 
-[English](README.md) · **中文** · [podlens.jrtx.site](https://podlens.jrtx.site)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.1.0-C15F3C)
+
+🏠 产品主页：**https://podlens.jrtx.site**
+
+## 下载
+
+从 [GitHub Releases](https://github.com/turinglambdaai/podlens/releases) 获取最新版：
+
+| 平台 | 产物 |
+|---|---|
+| macOS 14+（Apple Silicon） | `PodLens-v1.1.0-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） |
+| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+
+应用内通过 Ed25519 签名清单自动更新（[docs/UPDATE.md](docs/UPDATE.md)）。
 
 ## 为什么做 PodLens？
 
@@ -45,7 +58,7 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 - 播放走平台媒体栈；音频缓存在 `~/.podlens/audio/`
 - UI 只与 `app/backend.rkt` 中的类型化契约对话——改契约就是一次三端同步发布
 
-## 1.0 都有什么
+## 1.1 都有什么
 
 - 订阅 RSS 播客源（RSS 2.0 + iTunes 标签），刷新时检测新单集
 - 单集下载到本地缓存；倍速播放（1.0–2.0×），从上次进度继续
@@ -59,25 +72,14 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 
 ## 快速开始
 
-### 1. 安装
-
-从 [Releases](https://github.com/turinglambdaai/podlens/releases) 下载最新构建：
-
-| 平台 | 产物 |
-|---|---|
-| macOS 14+ | `PodLens-v1.0.0-macos.dmg`（universal） |
-| Windows 10+ | `PodLens-v1.0.0-windows-x64.zip` |
-
-未公证构建在 macOS 上的首次启动：右键 → 打开（开发者构建为 ad-hoc 签名；配置签名证书后 CI 构建会自动公证）。
-
-### 2. 配置 API key
+### 1. 配置 API key
 
 打开设置，填写：
 
 - `api-base`——如 `https://api.openai.com/v1`（或 DeepSeek/Groq/Ollama 的地址）
 - `api-key`——你的 key，保存在本机 `~/.podlens/config.json`，从不同步
 
-### 3. 开听
+### 2. 开听
 
 添加播客 RSS 地址，选一集，点 **转写 → 翻译 → 总结**。或者在终端：
 
