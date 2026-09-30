@@ -7,6 +7,7 @@
 #include "I18n.h"
 
 #include <shellapi.h>
+#include <shlobj.h>
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -484,20 +485,20 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
   if (!api_) return;
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
-  auto input = winrt::make<TextBox>();
+
+  Microsoft::UI::Xaml::Controls::TextBox input;
   input.PlaceholderText(winrt::hstring(L"https://example.com/feed.xml"));
   input.Width(420);
 
   auto dialog = winrt::Microsoft::UI::Xaml::Controls::ContentDialog();
   dialog.Title(winrt::box_value(winrt::hstring(std::wstring(podlens::Tr("menu.add_feed")))));
   dialog.Content(input);
-  dialog.PrimaryButtonText(std::wstring(podlens::Tr("dialog.add")));
-  dialog.CloseButtonText(std::wstring(podlens::Tr("dialog.cancel")));
-  dialog.XamlRoot(XamlRoot());
+  dialog.PrimaryButtonText(winrt::hstring(std::wstring(podlens::Tr("dialog.primary_add"))));
+  dialog.CloseButtonText(winrt::hstring(std::wstring(podlens::Tr("dialog.cancel"))));
+  dialog.XamlRoot(Content().XamlRoot());
 
-  auto const weak_input = winrt::make_weak(input);
   auto op = dialog.ShowAsync();
-  op.Completed([weak, weak_input, dispatcher, op](
+  op.Completed([weak, input, dispatcher](
                    winrt::Windows::Foundation::IAsyncOperation<
                        winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult> const&
                        sender,
@@ -506,7 +507,7 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary) {
       return;
     }
-    auto const url = to_utf8(weak_input.get().Text());
+    auto const url = to_utf8(input.Text());
     if (url.empty()) return;
     std::thread([weak, dispatcher, url]() mutable {
       std::string error;
