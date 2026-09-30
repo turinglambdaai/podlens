@@ -90,6 +90,16 @@ a { color: inherit; text-decoration: none; }
 }
 .step h3 { font-size: 16px; margin-bottom: 6px; }
 .step p { font-size: 14px; color: var(--muted); }
+
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.shots figure { margin: 0; }
+.shots img {
+  width: 100%; display: block;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.07);
+}
+.shots figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; text-align: center; }
+
 .note { margin-top: 26px; text-align: center; font-size: 13.5px; color: var(--muted); }
 
 .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; max-width: 640px; margin: 0 auto; }

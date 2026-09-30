@@ -5,6 +5,12 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+### Changed
+
+- Windows window title now carries the product tagline
+  ("PodLens — 听得懂的英文播客") instead of "PodLens — 播客工作台" —
+  the product is a reading-level player, not a workbench (roadmap §1).
+
 ## 1.2.0 - 2026-09-30
 
 ### Added
@@ -17,6 +23,15 @@ All notable changes to PodLens are documented here. Format follows
   master and generates `assets/branding/app.ico` + `app.icns`, wired into
   `rivet.rktd` so the Windows exe (and MSI shortcuts) and the macOS bundle
   carry real artwork.
+
+### Changed
+
+- Windows host redesigned (roadmap M1, PR #3): three-pane `NavigationView`
+  skeleton, episode rows with status chips, tabbed detail (transcript |
+  summary), empty states, and a bottom player bar with seek and 1.0–2.0×
+  speed — closing the gap with the macOS host. Both platforms now consume
+  one design-token sheet (`windows/Themes/Tokens.xaml`,
+  `macos-host/.../DesignTokens.swift`).
 
 ### Fixed
 

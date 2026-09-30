@@ -61,8 +61,10 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Playback uses the platform media stack; the audio cache lives in `~/.podlens/audio/`
 - The UI talks only to the typed contract in `app/backend.rkt` — changing it is a cross-platform release
 
-## What ships in 1.1
+## What ships in 1.2
 
+- Native Windows redesign (roadmap M1): three-pane navigation, episode rows with status chips, tabbed detail (transcript | summary), empty states, and a bottom player bar with seek and 1.0–2.0× speed — closing the gap with macOS
+- One design-token sheet consumed by both hosts, plus real app icons on both platforms
 - Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection
 - Download episodes to a local cache; play with speed control (1.0–2.0×), resume from last position
 - Sentence-level transcript with follow-along highlighting (tap a line to seek)
@@ -111,9 +113,9 @@ podlens/
 │   └── core/               # feeds, library, config, openai, pipeline, i18n
 ├── macos-host/             # SwiftUI host (player, transcript, updater)
 ├── windows/                # WinUI 3 host (C++/WinRT code-behind)
-├── tests/                  # 18 backend tests incl. a fake OpenAI server
-├── scripts/                # update-keys.sh, make-update-manifest.sh
-├── docs/                   # UPDATE.md (update contract), release runbook
+├── tests/                  # 19 backend tests incl. a fake OpenAI server
+├── scripts/                # update-keys.sh, make-update-manifest.sh, make-icons.py
+├── docs/                   # UPDATE.md (update contract) · DESIGN-ROADMAP.md (M1–M5)
 ├── site/                   # podlens.jrtx.site (GitHub Pages)
 └── .github/workflows/      # ci.yml · release.yml · pages.yml
 ```
@@ -131,12 +133,14 @@ raco test tests/        # backend tests (no API key needed — fake server)
 
 ## Honest gaps
 
-- **Playback on Windows is minimal** — play/pause per episode via the platform player; no waveform, no gapless, no chapter markers yet
+- **Windows playback has no waveform, gapless or chapter markers yet** — seek and 1.0–2.0× speed are there (M1 closed the layout gap with macOS)
 - **macOS builds are ad-hoc signed** until notarization credentials are configured in CI; first launch needs right-click → Open
 - **Translation cost is unbounded by design** — every sentence of a chosen episode goes through your API; long episodes cost real money
 - **One target language at a time** — the pipeline retranslates when you change `target-lang`
 
 ## Roadmap
+
+The full design roadmap (M1 consistency baseline → M2 transcript-as-product → M3 utility loop → M4 mobile companion → M5 back to Rivet) lives in [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md).
 
 - [x] RSS subscription + episode cache + playback positions
 - [x] ASR / translation / summary pipeline with job progress events

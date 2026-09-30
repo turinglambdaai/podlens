@@ -58,8 +58,10 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 - 播放走平台媒体栈；音频缓存在 `~/.podlens/audio/`
 - UI 只与 `app/backend.rkt` 中的类型化契约对话——改契约就是一次三端同步发布
 
-## 1.1 都有什么
+## 1.2 都有什么
 
+- Windows 原生界面重设计（路线图 M1）：三栏导航、带状态 chips 的单集行、详情区 tab 化（逐句稿 | 总结）、空状态占位、底部播放条（seek + 1.0–2.0× 倍速）——与 macOS 追平
+- 双端共用一份 design tokens，两个平台都有真正的应用图标
 - 订阅 RSS 播客源（RSS 2.0 + iTunes 标签），刷新时检测新单集
 - 单集下载到本地缓存；倍速播放（1.0–2.0×），从上次进度继续
 - 逐句转写稿，跟随播放高亮（点句子即跳转）
@@ -107,9 +109,9 @@ podlens/
 │   └── core/               # feeds、library、config、openai、pipeline、i18n
 ├── macos-host/             # SwiftUI 宿主（播放器、逐句稿、更新服务）
 ├── windows/                # WinUI 3 宿主（C++/WinRT code-behind）
-├── tests/                  # 18 个后端测试（含假 OpenAI 服务器，无需真实 key）
-├── scripts/                # update-keys.sh、make-update-manifest.sh
-├── docs/                   # UPDATE.md（更新契约）、发布手册
+├── tests/                  # 19 个后端测试（含假 OpenAI 服务器，无需真实 key）
+├── scripts/                # update-keys.sh、make-update-manifest.sh、make-icons.py
+├── docs/                   # UPDATE.md（更新契约）· DESIGN-ROADMAP.md（M1–M5）
 ├── site/                   # podlens.jrtx.site（GitHub Pages）
 └── .github/workflows/      # ci.yml · release.yml · pages.yml
 ```
@@ -127,12 +129,14 @@ raco test tests/        # 后端测试（假服务器，不需要真实 key）
 
 ## 诚实缺口
 
-- **Windows 播放很基础**——每集播放/暂停走平台播放器；尚无波形、无缝衔接、章节标记
+- **Windows 播放尚无波形/无缝衔接/章节标记**——seek 与 1.0–2.0× 倍速已有（M1 已追平 macOS 布局）
 - **macOS 构建为 ad-hoc 签名**——CI 配置公证证书之前，首次启动需要右键 → 打开
 - **翻译成本上不封顶**——选中单集的每一句都会走你的 API，长单集花费真金白银
 - **一次一种目标语言**——改 `target-lang` 后需要重新翻译
 
 ## 路线图
+
+完整设计路线图（M1 一致性基线 → M2 逐句稿即产品 → M3 实用性闭环 → M4 移动伴随 → M5 沉淀回 Rivet）见 [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md)。
 
 - [x] RSS 订阅 + 单集缓存 + 播放进度
 - [x] ASR / 翻译 / 总结流水线，任务进度事件

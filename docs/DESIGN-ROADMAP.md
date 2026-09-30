@@ -89,15 +89,15 @@ macOS：`DesignTokens.swift` 常量。新增颜色/字号必须先进这张表�
 
 ## 6. 路线图
 
-### M1 — 两端一致性基线：Windows 追平 macOS ☐
+### M1 — 两端一致性基线：Windows 追平 macOS ☑（v1.2.0，PR #3）
 
-- [ ] tokens 双端落地（§5 的表成为唯一真源）
-- [ ] Windows 改 `NavigationView` 三区骨架；顶栏 CommandBar 删到只剩
+- [x] tokens 双端落地（§5 的表成为唯一真源）——`windows/Themes/Tokens.xaml` + `macos-host/.../DesignTokens.swift`
+- [x] Windows 改 `NavigationView` 三区骨架；顶栏 CommandBar 删到只剩
       添加订阅/设置，其余动作移入单集行与详情
-- [ ] 单集 item 模板（标题/日期/时长/状态 chips），替换裸 ListBox
-- [ ] 详情区 tab 化（逐句稿 | 总结）+ EpisodeHeader（macOS 已有）
-- [ ] Windows PlayerBar 追平 macOS（播放/seek/倍速 1.0–2.0）
-- [ ] 空状态：订阅空/单集空/详情未选中三种占位（引导语 + 去发现页按钮）
+- [x] 单集 item 模板（标题/日期/时长/状态 chips），替换裸 ListBox
+- [x] 详情区 tab 化（逐句稿 | 总结）+ EpisodeHeader（macOS 已有）
+- [x] Windows PlayerBar 追平 macOS（播放/seek/倍速 1.0–2.0）
+- [x] 空状态：订阅空/单集空/详情未选中三种占位（引导语 + 去发现页按钮）
 
 **验收**：两端截图并排对照（`docs/screenshots/`），§3 检查表逐项同构；
 首屏第一眼有品牌感（accent 出现、层级分明、无裸控件感）。

@@ -14,6 +14,7 @@
     <nav class="nav-links">
       <a href="#features" data-i18n="nav.features">功能</a>
       <a href="#pipeline" data-i18n="nav.pipeline">原理</a>
+      <a href="#screenshots" data-i18n="nav.screens">界面</a>
       <a href="#download" data-i18n="nav.download">下载</a>
       <a href="https://github.com/turinglambdaai/podlens" data-i18n="nav.github">GitHub</a>
       <button id="lang-toggle" class="lang-btn" title="Switch language">EN</button>
@@ -66,6 +67,11 @@
         <h3 data-i18n="f6.title">Agent 友好</h3>
         <p data-i18n="f6.body">同一核心的 CLI：add / transcribe / summarize / --json / 稳定退出码。让编码 agent 替你处理播客。</p>
       </div>
+      <div class="card">
+        <div class="card-icon">🧭</div>
+        <h3 data-i18n="f7.title">精选目录</h3>
+        <p data-i18n="f7.body">内置 16 档经典英文播客（科技/安全/科学/设计/商业/资讯），「发现」面板一键添加，绝不自动订阅；每个条目发布前都实测可达。</p>
+      </div>
     </div>
   </section>
 
@@ -77,6 +83,21 @@
       <div class="step"><span class="step-num">3</span><h3 data-i18n="s3.title">总结</h3><p data-i18n="s3.body">全文压缩成结构化 JSON：TL;DR、要点、引用、话题，可被任何工具消费。</p></div>
     </div>
     <p class="note" data-i18n="pipeline.note">全部结果缓存在 ~/.podlens/，纯 JSON——你的数据永远可以带走。</p>
+  </section>
+
+  <section id="screenshots" class="section alt">
+    <h2 data-i18n="shots.title">界面一览</h2>
+    <div class="shots">
+      <figure>
+        <img src="screenshots/windows-library.png" alt="PodLens Windows 媒体库" loading="lazy">
+        <figcaption data-i18n="shots.cap1">媒体库——三栏导航与单集列表（Windows 1.2 全新界面）</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/windows-episode-detail.png" alt="PodLens Windows 单集详情" loading="lazy">
+        <figcaption data-i18n="shots.cap2">单集详情——逐句稿/总结 tab、双语切换与底部播放条</figcaption>
+      </figure>
+    </div>
+    <p class="note" data-i18n="shots.note">macOS 版同为三栏布局，由同一份 design tokens 驱动。</p>
   </section>
 
   <section id="download" class="section">
@@ -102,7 +123,7 @@
 <script>
 (function () {
   var zh = {
-    "nav.features": "功能", "nav.pipeline": "原理", "nav.download": "下载", "nav.github": "GitHub",
+    "nav.features": "功能", "nav.pipeline": "原理", "nav.screens": "界面", "nav.download": "下载", "nav.github": "GitHub",
     "hero.eyebrow": "开源 · 本地优先 · 原生应用 · BYOK",
     "hero.h1a": "听得懂的", "hero.h1b": "英文播客",
     "hero.sub": "PodLens 把每一集英文播客变成「逐句稿 + 对照翻译 + 一页总结」。转写、翻译、总结都走你自己的大模型 API，结果缓存在本机，一次生成，永久可读。",
@@ -115,6 +136,11 @@
     "f4.title": "BYOK", "f4.body": "OpenAI、DeepSeek、Groq、SiliconFlow、Ollama——任意 OpenAI 兼容端点。key 存在本机，从不上传。",
     "f5.title": "真原生", "f5.body": "基于 Rivet：一份 Racket 核心嵌入进程内，macOS 是 SwiftUI，Windows 是 WinUI 3。没有 Electron，没有套壳。",
     "f6.title": "Agent 友好", "f6.body": "同一核心的 CLI：add / transcribe / summarize / --json / 稳定退出码。让编码 agent 替你处理播客。",
+    "f7.title": "精选目录", "f7.body": "内置 16 档经典英文播客（科技/安全/科学/设计/商业/资讯），「发现」面板一键添加，绝不自动订阅；每个条目发布前都实测可达。",
+    "shots.title": "界面一览",
+    "shots.cap1": "媒体库——三栏导航与单集列表（Windows 1.2 全新界面）",
+    "shots.cap2": "单集详情——逐句稿/总结 tab、双语切换与底部播放条",
+    "shots.note": "macOS 版同为三栏布局，由同一份 design tokens 驱动。",
     "pipeline.title": "三步流水线",
     "s1.title": "转写", "s1.body": "音频进 ASR 端点，长单集自动分段，逐句带时间戳缓存。",
     "s2.title": "翻译", "s2.body": "逐句送入对话模型，编号对齐返回，翻译永远和原句一一对应。",
@@ -126,7 +152,7 @@
     "footer.built": "基于 Rivet 构建"
   };
   var en = {
-    "nav.features": "Features", "nav.pipeline": "Pipeline", "nav.download": "Download", "nav.github": "GitHub",
+    "nav.features": "Features", "nav.pipeline": "Pipeline", "nav.screens": "Screens", "nav.download": "Download", "nav.github": "GitHub",
     "hero.eyebrow": "Open source · Local-first · Native · BYOK",
     "hero.h1a": "Podcasts, ", "hero.h1b": "in your language",
     "hero.sub": "PodLens turns every English episode into a transcript, a sentence-aligned translation and a one-page summary — powered by your own LLM API key, cached locally, yours forever.",
@@ -139,13 +165,18 @@
     "f4.title": "BYOK", "f4.body": "OpenAI, DeepSeek, Groq, SiliconFlow, Ollama — any OpenAI-compatible endpoint. Your key stays on your machine.",
     "f5.title": "Truly native", "f5.body": "Built on Rivet: one Racket core embedded in-process, SwiftUI on macOS and WinUI 3 on Windows. No Electron, no wrapper.",
     "f6.title": "Agent-friendly", "f6.body": "A CLI over the same core: add / transcribe / summarize / --json / stable exit codes. Let your coding agent handle podcasts.",
+    "f7.title": "Curated catalog", "f7.body": "16 classic English shows (tech, security, science, design, business, news) in a Discover panel — one tap to add, never auto-subscribed; every entry is verified live before each release.",
+    "shots.title": "A look at the UI",
+    "shots.cap1": "Library — three-pane navigation and the episode list (new Windows 1.2 UI)",
+    "shots.cap2": "Episode detail — transcript/summary tabs, bilingual toggle and the player bar",
+    "shots.note": "The macOS app uses the same three-pane layout, driven by one shared design-token sheet.",
     "pipeline.title": "A three-step pipeline",
     "s1.title": "Transcribe", "s1.body": "Audio goes to the ASR endpoint; long episodes are auto-chunked; sentences cache with timestamps.",
     "s2.title": "Translate", "s2.body": "Numbered lines go to a chat model and come back aligned — a translation always maps 1:1 to its sentence.",
     "s3.title": "Summarize", "s3.body": "The full text condenses into structured JSON: TL;DR, key points, quotes, topics — consumable by any tool.",
     "pipeline.note": "Everything caches under ~/.podlens/ as plain JSON — your data is always portable.",
     "download.title": "Download",
-    "dl.mac": "14+ · Apple Silicon · DMG", "dl.win": "10+ · x64 · MSI 安装器 / 便携 zip",
+    "dl.mac": "14+ · Apple Silicon · DMG", "dl.win": "10+ · x64 · MSI installer / portable zip",
     "download.note": "Windows: the MSI installer adds start-menu and desktop shortcuts; the zip is the portable build. macOS: first launch of an unnotarized build — right-click → Open. Updates ship through an Ed25519-signed manifest.",
     "footer.built": "Built on Rivet"
   };
