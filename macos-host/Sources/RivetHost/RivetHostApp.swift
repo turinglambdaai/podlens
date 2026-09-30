@@ -10,6 +10,7 @@ struct PodLensApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(DesignTokens.accent)
                 .environmentObject(model)
                 .frame(minWidth: 980, minHeight: 620)
                 .task { model.start() }

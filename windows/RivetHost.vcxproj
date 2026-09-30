@@ -75,7 +75,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="Microsoft.Windows.CppWinRT" Version="3.0.260818.1" />
   </ItemGroup>
-  <ItemGroup><ApplicationDefinition Include="App.xaml" /><Page Include="MainWindow.xaml" /></ItemGroup>
+  <ItemGroup><ApplicationDefinition Include="App.xaml" /><Page Include="MainWindow.xaml" /><Page Include="Themes\Tokens.xaml"><SubType>Designer</SubType></Page></ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="App.xaml.h"><DependentUpon>App.xaml</DependentUpon></ClInclude>
