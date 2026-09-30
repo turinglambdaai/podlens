@@ -1,0 +1,7 @@
+.rivet/
+build/
+dist/
+compiled/
+*.zo
+*.so
+.DS_Store

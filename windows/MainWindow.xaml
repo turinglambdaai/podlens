@@ -1,0 +1,75 @@
+<Window
+    x:Class="RivetHost.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
+            <AppBarButton x:Name="AddFeedButton" Icon="Add" Label="添加订阅" Click="AddFeed_Click" />
+            <AppBarButton x:Name="RefreshAllButton" Icon="Refresh" Label="刷新全部" Click="RefreshAll_Click" />
+            <AppBarSeparator />
+            <AppBarButton x:Name="DownloadButton" Icon="Download" Label="下载" Click="Download_Click" IsEnabled="False" />
+            <AppBarButton x:Name="TranscribeButton" Label="转写" Click="Transcribe_Click" IsEnabled="False">
+                <AppBarButton.Icon><FontIcon Glyph="&#xE945;" /></AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton x:Name="TranslateButton" Label="翻译" Click="Translate_Click" IsEnabled="False">
+                <AppBarButton.Icon><FontIcon Glyph="&#xE7F2;" /></AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton x:Name="SummarizeButton" Label="总结" Click="Summarize_Click" IsEnabled="False">
+                <AppBarButton.Icon><FontIcon Glyph="&#xE9F9;" /></AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarSeparator />
+            <AppBarButton x:Name="PlayButton" Icon="Play" Label="播放" Click="Play_Click" IsEnabled="False" />
+            <AppBarSeparator />
+            <AppBarButton x:Name="SettingsButton" Icon="Setting" Label="设置" Click="Settings_Click" />
+            <AppBarButton x:Name="UpdatesButton" Icon="Sync" Label="检查更新" Click="CheckUpdates_Click" />
+        </CommandBar>
+
+        <Grid Grid.Row="1" Padding="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- subscriptions -->
+            <StackPanel Grid.Column="0" Spacing="6">
+                <TextBlock Text="订阅" FontWeight="SemiBold" />
+                <ListBox x:Name="FeedList" MinHeight="120"
+                         SelectionChanged="FeedList_SelectionChanged" />
+            </StackPanel>
+
+            <!-- episodes -->
+            <StackPanel Grid.Column="1" Spacing="6" Margin="12,0">
+                <TextBlock Text="单集" FontWeight="SemiBold" />
+                <ListBox x:Name="EpisodeList" MinHeight="120"
+                         SelectionChanged="EpisodeList_SelectionChanged" />
+            </StackPanel>
+
+            <!-- transcript / summary -->
+            <Grid Grid.Column="2" Margin="12,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <RadioButtons Grid.Row="0" x:Name="ModeSelector" SelectionChanged="Mode_SelectionChanged">
+                    <RadioButton Content="双语" IsChecked="True" />
+                    <RadioButton Content="只看译文" />
+                    <RadioButton Content="只看原文" />
+                </RadioButtons>
+                <ScrollViewer Grid.Row="1" x:Name="DetailScroll" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <TextBlock x:Name="DetailText" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="选择一集开始" />
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <InfoBar Grid.Row="2" x:Name="StatusBar" IsOpen="True" IsClosable="False"
+                 Severity="Informational" Message="正在启动嵌入式 Racket CS…" />
+    </Grid>
+</Window>

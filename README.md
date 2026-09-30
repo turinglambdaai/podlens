@@ -1,0 +1,141 @@
+# PodLens
+
+Podcasts, in your language. A cross-platform desktop podcast player that transcribes, translates and summarizes English episodes with your own LLM API key — for listeners who understand far more reading than hearing.
+
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.0.0-C15F3C)
+
+**English** · [中文](README.zh-CN.md) · [podlens.jrtx.site](https://podlens.jrtx.site)
+
+## Why PodLens?
+
+Listening comprehension is the last wall for most non-native English speakers. Feeds have no translation, nobody summarizes an hour of talk, and pausing to look things up kills the flow. PodLens fixes this with a per-episode pipeline:
+
+- **Transcribe** — speech-to-text through any OpenAI-compatible `/audio/transcriptions` endpoint (Whisper and friends), with timestamps per sentence
+- **Translate** — sentence-aligned translation into Chinese (or English), rendered alongside the original
+- **Summarize** — a TL;DR, 5–8 key points, notable quotes and topic tags for every episode
+
+The transcripts, translations and summaries are cached on disk, so an episode is processed once and stays yours.
+
+### How it compares
+
+| | PodLens | Apple Podcasts | Overcast |
+|---|---|---|---|
+| Native UI | **SwiftUI / WinUI 3** | AppKit | web wrapper |
+| Transcript | **on demand, yours** | limited podcasts | limited podcasts |
+| Translation | **per sentence, local cache** | — | — |
+| Summary | **TL;DR + key points** | AI recaps (US only) | — |
+| LLM provider | **BYOK, any OpenAI-compatible** | Apple-only | — |
+
+## How it works
+
+PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared Racket backend (feed parsing, library storage, the AI pipeline, the update client) embedded into each first-party native host. Not Electron, not a web wrapper.
+
+```text
+                 Racket application core
+      feeds · library · ASR/translate/summarize · updater
+                          │
+                    RVT1 protocol
+                 typed RPC / Events
+                    ┌─────┴─────┐
+                macOS         Windows
+               SwiftUI        WinUI 3
+```
+
+- The backend embeds Racket CS in-process — no helper daemon, no console window
+- Playback uses the platform media stack; the audio cache lives in `~/.podlens/audio/`
+- The UI talks only to the typed contract in `app/backend.rkt` — changing it is a cross-platform release
+
+## What ships in 1.0
+
+- Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection
+- Download episodes to a local cache; play with speed control (1.0–2.0×), resume from last position
+- Sentence-level transcript with follow-along highlighting (tap a line to seek)
+- Sentence-aligned translation, bilingual / translation-only / original-only views
+- Structured summaries (TL;DR, key points, quotes, topics)
+- Bring-your-own-key: OpenAI, DeepSeek, Groq, SiliconFlow, Ollama, any OpenAI-compatible endpoint
+- Agent-friendly CLI over the same core (`add`, `episodes`, `transcribe`, `translate`, `summarize`, `show`, `--json`, exit codes 0/1/2)
+- Signed in-app updates (Ed25519 manifest + SHA-256, see [docs/UPDATE.md](docs/UPDATE.md))
+
+## Quick Start
+
+### 1. Install
+
+Grab the latest build from [Releases](https://github.com/turinglambdaai/podlens/releases):
+
+| Platform | Artifact |
+|---|---|
+| macOS 14+ | `PodLens-v1.0.0-macos.dmg` (universal) |
+| Windows 10+ | `PodLens-v1.0.0-windows-x64.zip` |
+
+The first launch of an unnotarized build on macOS: right-click → Open (developer builds are ad-hoc signed; CI builds are notarized once signing credentials are configured).
+
+### 2. Configure your API key
+
+Open Settings and fill in:
+
+- `api-base` — e.g. `https://api.openai.com/v1` (or DeepSeek/Groq/Ollama base)
+- `api-key` — your key, stored locally in `~/.podlens/config.json`, never synced
+
+### 3. Listen
+
+Add a podcast RSS URL, pick an episode, press **转写 → 翻译 → 总结** (transcribe → translate → summarize). Or from a terminal:
+
+```bash
+/Applications/PodLens.app/Contents/MacOS/PodLens add "https://feeds.example.com/show.xml"
+PodLens episodes <feed-id>
+PodLens transcribe <episode-id>
+PodLens show <episode-id> --json
+```
+
+The CLI runs headless over the exact same Racket core the GUI embeds.
+
+## Repository layout
+
+```text
+podlens/
+├── rivet.rktd              # release identity, version, deployment targets
+├── app/
+│   ├── backend.rkt         # the RVT1 wire contract (21 RPCs, 5 events, 1 state)
+│   ├── update.rkt          # signed-manifest update checks
+│   ├── cli.rkt             # agent-facing CLI (--json, exit codes)
+│   └── core/               # feeds, library, config, openai, pipeline, i18n
+├── macos-host/             # SwiftUI host (player, transcript, updater)
+├── windows/                # WinUI 3 host (C++/WinRT code-behind)
+├── tests/                  # 18 backend tests incl. a fake OpenAI server
+├── scripts/                # update-keys.sh, make-update-manifest.sh
+├── docs/                   # UPDATE.md (update contract), release runbook
+├── site/                   # podlens.jrtx.site (GitHub Pages)
+└── .github/workflows/      # ci.yml · release.yml · pages.yml
+```
+
+## Development
+
+Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the Rivet package linked, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows).
+
+```bash
+raco pkg install --auto --no-docs --link /path/to/rivet
+raco rivet doctor
+raco rivet dev          # build + launch the current platform's host
+raco test tests/        # backend tests (no API key needed — fake server)
+```
+
+## Honest gaps
+
+- **Playback on Windows is minimal** — play/pause per episode via the platform player; no waveform, no gapless, no chapter markers yet
+- **macOS builds are ad-hoc signed** until notarization credentials are configured in CI; first launch needs right-click → Open
+- **Translation cost is unbounded by design** — every sentence of a chosen episode goes through your API; long episodes cost real money
+- **One target language at a time** — the pipeline retranslates when you change `target-lang`
+
+## Roadmap
+
+- [x] RSS subscription + episode cache + playback positions
+- [x] ASR / translation / summary pipeline with job progress events
+- [x] SwiftUI + WinUI 3 hosts over one RVT1 contract
+- [x] Ed25519-signed update channel
+- [ ] Notarized macOS + Authenticode-signed Windows releases
+- [ ] Chapter markers and per-chapter summaries
+- [ ] Listening stats and vocabulary export
+
+## License
+
+Licensed under the [AGPL-3.0 License](LICENSE).

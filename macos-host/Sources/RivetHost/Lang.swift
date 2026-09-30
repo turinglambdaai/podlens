@@ -1,0 +1,82 @@
+import Foundation
+
+/// Host-side strings. zh is the default; en is the fallback map. The Racket
+/// core has its own table (app/core/i18n.rkt) for CLI/backend messages —
+/// the two sets intentionally share keys only where both sides speak.
+func L(_ key: String) -> String {
+    let lang = UserDefaults.standard.string(forKey: "podlens-lang") ?? "zh"
+    let pair = strings[key] ?? (key, key)
+    return lang == "en" ? pair.1 : pair.0
+}
+
+func setLanguage(_ lang: String) {
+    UserDefaults.standard.set(lang, forKey: "podlens-lang")
+}
+
+func currentLanguage() -> String {
+    UserDefaults.standard.string(forKey: "podlens-lang") ?? "zh"
+}
+
+private let strings: [String: (String, String)] = [
+    "appTagline": ("听得懂的英文播客", "Podcasts, in your language"),
+    "booting": ("正在启动嵌入式 Racket CS…", "Starting embedded Racket CS…"),
+    "ready": ("就绪", "Ready"),
+    "backendError": ("后端错误：", "Backend error:"),
+    "menuCheckUpdates": ("检查更新…", "Check for Updates…"),
+    "menuRefreshAll": ("刷新全部订阅", "Refresh All Subscriptions"),
+    "menuSettings": ("设置…", "Settings…"),
+    "addFeed": ("添加订阅", "Add Subscription"),
+    "feedURL": ("RSS 地址", "RSS URL"),
+    "add": ("添加", "Add"),
+    "cancel": ("取消", "Cancel"),
+    "removeFeed": ("取消订阅", "Unsubscribe"),
+    "emptyFeeds": ("还没有订阅\n点左下角 + 添加播客 RSS", "No subscriptions yet\nClick + to add a podcast RSS feed"),
+    "episodes": ("单集", "Episodes"),
+    "refresh": ("刷新", "Refresh"),
+    "download": ("下载", "Download"),
+    "removeAudio": ("删除音频", "Delete Audio"),
+    "transcribe": ("转写", "Transcribe"),
+    "translate": ("翻译", "Translate"),
+    "summarize": ("总结", "Summarize"),
+    "selectEpisode": ("选择一集开始", "Pick an episode to begin"),
+    "transcriptTab": ("逐句稿", "Transcript"),
+    "summaryTab": ("总结", "Summary"),
+    "noTranscript": ("还没有逐句稿，点「转写」开始（需要先在设置里配置 API key）", "No transcript yet — press Transcribe (needs an API key in Settings)"),
+    "transcribing": ("转写中", "Transcribing"),
+    "translating": ("翻译中", "Translating"),
+    "summarizing": ("总结中", "Summarizing"),
+    "downloading": ("下载中", "Downloading"),
+    "bilingual": ("双语", "Bilingual"),
+    "zhOnly": ("只看译文", "Translation only"),
+    "enOnly": ("只看原文", "Original only"),
+    "tldr": ("一句话总结", "TL;DR"),
+    "keyPoints": ("要点", "Key points"),
+    "quotes": ("值得记的话", "Notable quotes"),
+    "topics": ("话题", "Topics"),
+    "noSummary": ("还没有总结，点「总结」生成", "No summary yet — press Summarize"),
+    "settings": ("设置", "Settings"),
+    "settingsSaved": ("已保存", "Saved"),
+    "settingsDesc": ("所有设置保存在本机 ~/.podlens/config.json", "Settings live in ~/.podlens/config.json"),
+    "language": ("界面语言", "Language"),
+    "updateAvailableTitle": ("发现新版本", "Update available"),
+    "updateAvailableBody": ("新版本 %@ 已发布，下载并重启？", "Version %@ is available. Install and restart now?"),
+    "updateRestart": ("下载并重启", "Install and Restart"),
+    "updateLater": ("下次再说", "Later"),
+    "updateUpToDate": ("已是最新版本", "PodLens is up to date"),
+    "updateCheckFailed": ("检查更新失败：%@", "Update check failed: %@"),
+    "updateDownloading": ("正在下载更新…", "Downloading update…"),
+    "updateInstallFailed": ("安装更新失败：%@。当前版本不受影响。", "Installing the update failed: %@. Your current version is unaffected."),
+    "updateNotInstalled": ("当前是开发构建，无法自动更新", "Developer build — in-app updates unavailable"),
+    "updateBadKey": ("更新公钥未配置", "No update key configured"),
+    "updateManifestMissing": ("更新源缺少清单", "Update feed has no manifest"),
+    "updateSignatureInvalid": ("更新清单签名无效", "Update manifest signature invalid"),
+    "updateChecksumMismatch": ("更新包校验失败", "Update artifact checksum mismatch"),
+    "updateVersionMismatch": ("更新包版本不符", "Update bundle version mismatch"),
+    "updateOpenReleases": ("前往发布页", "Open Releases Page"),
+    "play": ("播放", "Play"),
+    "pause": ("暂停", "Pause"),
+    "speed": ("倍速", "Speed"),
+    "markDone": ("标记已听", "Mark played"),
+    "done": ("已听完", "Played"),
+    "fetchFailed": ("操作失败：%@", "Operation failed: %@")
+]

@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Check tag matches rivet.rktd and CHANGELOG
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(racket -e '(begin (require racket/file) (hash-ref (file->value "rivet.rktd") (quote version) #f))' | tr -d '"')
+          echo "tag=$TAG rivet.rktd=$VERSION"
+          test "$TAG" = "$VERSION" || { echo "::error::tag $TAG != rivet.rktd version $VERSION"; exit 1; }
+          grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
+
+  macos:
+    name: macOS build
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Link Rivet
+        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      - name: Package (ad-hoc; notarization activates when secrets exist)
+        run: raco rivet package
+      - name: Human installer (DMG)
+        run: |
+          hdiutil create -volname PodLens -srcfolder dist/podlens.app -ov -format UDZO \
+            "PodLens-${{ github.ref_name }}-macos.dmg"
+      - name: Update-feed zip
+        run: |
+          ditto -c -k --keepParent dist/podlens.app \
+            "PodLens-${{ github.ref_name }}-macos.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            PodLens-*-macos.dmg
+            PodLens-*-macos.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows build
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Rivet
+        uses: actions/checkout@v4
+        with:
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Link Rivet
+        run: raco pkg install --auto --no-docs --link "$env:GITHUB_WORKSPACE\rivet"
+      - name: Package
+        run: raco rivet package
+        shell: bash
+      - name: Zip update feed
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/podlens.app -DestinationPath \
+            "PodLens-${{ github.ref_name }}-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: PodLens-*-windows-x64.zip
+          if-no-files-found: error
+
+  release:
+    name: Sign manifest + publish
+    needs: [macos, windows]
+    runs-on: macos-latest
+    env:
+      HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Install Racket (version check helper)
+        if: env.HAS_UPDATE_KEY == 'true'
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          version: stable
+          distribution: full
+      - name: Install OpenSSL 3
+        if: env.HAS_UPDATE_KEY == 'true'
+        run: brew install openssl@3
+      - name: Flatten artifact dirs
+        run: |
+          find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
+          find dist -mindepth 1 -maxdepth 1 -type d -empty -delete
+          ls -la dist/
+      - name: Generate + sign update manifest
+        if: env.HAS_UPDATE_KEY == 'true'
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          bash scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_FILE"
+          rm -f "$KEY_FILE"
+        # a release without the update key still ships; clients simply see
+        # no manifest and stay on their version (::warning:: marks it)
+      - name: Ensure SHA256SUMS
+        if: env.HAS_UPDATE_KEY != 'true'
+        run: |
+          cd dist
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+          shasum -a 256 --check SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" -R turinglambdaai/podlens >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turinglambdaai/podlens
+          else
+            gh release create "${{ github.ref_name }}" dist/* \
+              -R turinglambdaai/podlens \
+              --title "PodLens ${{ github.ref_name }}" \
+              --generate-notes
+          fi
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/*
