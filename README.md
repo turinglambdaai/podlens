@@ -12,8 +12,8 @@ Download from [Releases](https://github.com/turinglambdaai/podlens/releases/late
 
 | Platform | Download | Updates |
 |---|---|---|
-| macOS 14+ (Apple Silicon) | `PodLens-v<version>-macos.dmg` | in-app (signed manifest), or reinstall the newer DMG |
-| Windows 10+ x64 | `PodLens-v<version>-windows-x64.zip` | in-app (signed manifest), or re-extract the newer zip |
+| macOS 14+ (Apple Silicon) | `PodLens-v<version>-macos.dmg` (ad-hoc signed — first launch: right-click → Open) | in-app (signed manifest), or reinstall the newer DMG |
+| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` installer (start-menu & desktop shortcuts), or `PodLens-v<version>-windows-x64.zip` portable | re-run the newer MSI to upgrade in place; portable: re-extract |
 
 Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
 (`gh attestation verify <file> -R turinglambdaai/podlens`).

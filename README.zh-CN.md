@@ -12,8 +12,8 @@
 
 | 平台 | 下载 | 更新 |
 |---|---|---|
-| macOS 14+（Apple Silicon） | `PodLens-v<version>-macos.dmg` | 应用内更新（签名清单），或重新安装新版 DMG |
-| Windows 10+ x64 | `PodLens-v<version>-windows-x64.zip` | 应用内更新（签名清单），或解压新版 zip |
+| macOS 14+（Apple Silicon） | `PodLens-v<version>-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） | 应用内更新（签名清单），或重新安装新版 DMG |
+| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式），或 `PodLens-v<version>-windows-x64.zip` 便携版 | 重新运行新版 MSI 覆盖升级；便携版解压替换 |
 
 每个发布都带 `SHA256SUMS` 校验清单和 Sigstore 构建来源证明（`gh attestation verify <file> -R turinglambdaai/podlens`）。
 

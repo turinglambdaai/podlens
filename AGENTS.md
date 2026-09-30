@@ -63,12 +63,14 @@ scripts/update-keys.sh
 
 - **改共享行为**（CLI 语义、管线、文案）：先改 `app/core/` + `tests/`，跑 `raco test tests/`；backend 契约变更 = 三端同步发布
 - **改 UI**：macOS 在 `macos-host/Sources/RivetHost/`，Windows 在 `windows/`；`GeneratedBackend.swift/.hpp` 是生成物，不要手改
-- **版本发布**：`rivet.rktd` version + CHANGELOG 小节 + 打 `v*` tag，CI 完成 packaging + 签名清单 + GitHub Release
+- **版本发布**：`rivet.rktd` version + CHANGELOG 小节 + 打 `v*` tag，CI 完成 packaging、Windows MSI（`raco rivet release`，WiX，含开始菜单/桌面快捷方式与 per-product UpgradeCode）、便携 zip、签名清单与 GitHub Release
+- **应用图标**：`scripts/make-icons.py` 从代码绘制源图并生成 `assets/branding/app.ico` + `app.icns`（已配进 `rivet.rktd`）；改样式只改脚本里的 `draw_master()` 后重跑，不要手改生成物
 - **i18n**：三份独立表（Racket `app/core/i18n.rkt`、macOS `Lang.swift`、Windows `I18n.h`），zh 为默认、en 为回退；键不要求跨端一致（各端只说自己要说的话）
 - **更新密钥轮换**：先发一个信任新公钥的版本，再用新私钥签名，见 docs/UPDATE.md
 
 ## 诚实缺口（不要在文档里夸口）
 
 - Windows 播放只有最简播放/暂停
+- Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
 - macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
 - 翻译按句计费，成本由用户的 API key 承担

@@ -6,6 +6,7 @@
 #   <dist-dir>  directory containing the packaged artifacts:
 #                 PodLens-v<tag>-macos.zip
 #                 PodLens-v<tag>-windows-x64.zip
+#               (the DMG and the MSI are human installers, not manifest entries)
 #   [key-path]  Ed25519 private key PEM; default $UPDATE_KEY_PATH, then
 #               ~/.podlens/update-signing-key.pem
 #
