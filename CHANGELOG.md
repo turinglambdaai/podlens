@@ -3,6 +3,15 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## 1.0.2 - 2026-09-30
+
+### Fixed
+
+- macOS release builds were x86_64-only: setup-racket defaults to the x64
+  Racket VM, which dragged the whole embedded host off-architecture. CI now
+  installs the arm64 Racket CS on macOS runners; arm64 Macs no longer need
+  Rosetta.
+
 ## 1.0.1 - 2026-09-30
 
 ### Fixed

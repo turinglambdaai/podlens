@@ -41,11 +41,12 @@ jobs:
         with:
           repository: turinglambdaai/rivet
           path: rivet
-      - name: Install Racket
+      - name: Install Racket (arm64)
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
+          architecture: arm64
       - name: Link Rivet
         run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
       - name: Package (ad-hoc; notarization activates when secrets exist)
