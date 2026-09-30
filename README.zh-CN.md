@@ -81,13 +81,16 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 添加播客 RSS 地址，选一集，点 **转写 → 翻译 → 总结**。或者在终端：
 
 ```bash
-/Applications/PodLens.app/Contents/MacOS/PodLens add "https://feeds.example.com/show.xml"
-PodLens episodes <feed-id>
-PodLens transcribe <episode-id>
-PodLens show <episode-id> --json
+git clone https://github.com/turinglambdaai/podlens && cd podlens
+raco pkg install --auto --no-docs --link /path/to/rivet
+racket app/cli.rkt add "https://feeds.example.com/show.xml"
+racket app/cli.rkt episodes <feed-id>
+racket app/cli.rkt transcribe <episode-id>
+racket app/cli.rkt show <episode-id> --json
 ```
 
-CLI 无头运行，与 GUI 内嵌的是同一份 Racket 核心。
+CLI 就是 GUI 内嵌的那份 Racket 源码，无头运行。（自带运行时的单文件 CLI
+在路线图上；仓库内运行时 `--help`、`list`、`doctor`、`config` 不需要 API key。）
 
 ## 仓库结构
 

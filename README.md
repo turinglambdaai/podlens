@@ -81,13 +81,17 @@ Open Settings and fill in:
 Add a podcast RSS URL, pick an episode, press **转写 → 翻译 → 总结** (transcribe → translate → summarize). Or from a terminal:
 
 ```bash
-/Applications/PodLens.app/Contents/MacOS/PodLens add "https://feeds.example.com/show.xml"
-PodLens episodes <feed-id>
-PodLens transcribe <episode-id>
-PodLens show <episode-id> --json
+git clone https://github.com/turinglambdaai/podlens && cd podlens
+raco pkg install --auto --no-docs --link /path/to/rivet
+racket app/cli.rkt add "https://feeds.example.com/show.xml"
+racket app/cli.rkt episodes <feed-id>
+racket app/cli.rkt transcribe <episode-id>
+racket app/cli.rkt show <episode-id> --json
 ```
 
-The CLI runs headless over the exact same Racket core the GUI embeds.
+The CLI is the same Racket source the GUI embeds, run headless. (Shipping a
+single self-contained CLI binary is on the roadmap; inside the repo it needs
+no API key for `--help`, `list`, `doctor` and `config`.)
 
 ## Repository layout
 

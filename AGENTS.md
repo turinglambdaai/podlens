@@ -11,7 +11,8 @@ PodLens 是**原生**播客应用（Rivet 架构）：解决「听不懂英文�
 | macOS 14+ | SwiftUI + Rivet（嵌入式 Racket CS） | `macos-host/` | ✅ 构建+打包+启动已验证 |
 | Windows 10+ | WinUI 3 (C++/WinRT) + Rivet | `windows/` | 源码完成，CI 构建验证 |
 
-每个二进制都是双模式：**无参数启动 GUI；带参数走 CLI**（同一份 Racket 核心，无头运行）。
+GUI 与 CLI 共用同一份 Racket 核心：无参数启动 GUI；CLI 走源码方式
+`racket app/cli.rkt <command>`（单文件自带运行时的 CLI 在路线图上）。
 
 底层框架是 [Rivet](https://github.com/turinglambdaai/rivet)（同组织仓库）：RVT1 协议（typed RPC / Events / State）、嵌入式 Racket CS、构建编排。Rivet 的问题修上游、发 PR。
 
