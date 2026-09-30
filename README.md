@@ -13,8 +13,8 @@ Grab the latest release for your platform from
 
 | Platform | Artifact |
 |---|---|
-| macOS 14+ (Apple Silicon) | `PodLens-v1.1.0-macos.dmg` (ad-hoc signed — first launch: right-click → Open) |
-| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+| macOS 14+ (Apple Silicon) | `PodLens-v*-macos.dmg` (ad-hoc signed — first launch: right-click → Open) |
+| Windows 10+ | `podlens-*-windows-x64.msi` installer (start-menu & desktop shortcuts) or `PodLens-v*-windows-x64.zip` portable |
 
 Updates arrive in-app through an Ed25519-signed manifest
 ([docs/UPDATE.md](docs/UPDATE.md)).

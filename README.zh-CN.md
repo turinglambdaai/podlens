@@ -12,8 +12,8 @@
 
 | 平台 | 产物 |
 |---|---|
-| macOS 14+（Apple Silicon） | `PodLens-v1.1.0-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） |
-| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+| macOS 14+（Apple Silicon） | `PodLens-v*-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） |
+| Windows 10+ | `podlens-*-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式）或 `PodLens-v*-windows-x64.zip` 便携版 |
 
 应用内通过 Ed25519 签名清单自动更新（[docs/UPDATE.md](docs/UPDATE.md)）。
 

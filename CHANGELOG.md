@@ -3,6 +3,24 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## Unreleased
+
+### Added
+
+- Windows MSI installer built by `raco rivet release` (WiX, per-machine,
+  start-menu and desktop shortcuts, MajorUpgrade in-place upgrades), beside
+  the existing portable zip. The Windows release job also emits the
+  Rivet-native `update-stable-windows.json` manifest.
+- Application icons on both platforms: `scripts/make-icons.py` draws the
+  master and generates `assets/branding/app.ico` + `app.icns`, wired into
+  `rivet.rktd` so the Windows exe (and MSI shortcuts) and the macOS bundle
+  carry real artwork.
+
+### Fixed
+
+- Site download copy described the macOS DMG as universal; CI builds
+  Apple Silicon only.
+
 ## 1.1.0 - 2026-09-30
 
 ### Added

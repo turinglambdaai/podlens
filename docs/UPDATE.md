@@ -31,7 +31,7 @@ parses the JSON.
 
 - `version` — release version without the `v` prefix; must equal `rivet.rktd`'s `version`
 - platforms is keyed `macos` / `windows`; each value is `{url, sha256, size}`
-- asset naming: `PodLens-v<tag>-{macos.zip,windows-x64.zip}` (the update archives; DMG/other artifacts are for humans)
+- asset naming: `PodLens-v<tag>-{macos.zip,windows-x64.zip}` (the update archives). Human installers ship beside them: `PodLens-v<tag>-macos.dmg` and `podlens-<version>-windows-x64.msi` (WiX, per-machine, start-menu + desktop shortcuts; MSI MajorUpgrade covers upgrades). The MSI is built by `raco rivet release`, which also emits a Rivet-native `update-stable-windows.json` manifest for future host-side updaters; the Taskly manifest above stays the one PodLens clients consume.
 
 ## Trust model, in verify order
 

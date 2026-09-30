@@ -5,3 +5,7 @@ compiled/
 *.zo
 *.so
 .DS_Store
+windows/Generated Files/
+windows/obj/
+windows/RivetHost/
+windows/x64/

@@ -99,6 +99,9 @@
   </ItemGroup>
   <ItemGroup><Midl Include="Project.idl"><SubType>Code</SubType></Midl></ItemGroup>
   <ItemGroup><Manifest Include="app.manifest" /></ItemGroup>
+  <ItemGroup Condition="'$(RIVET_WINDOWS_ICON_RC)'!=''">
+    <ResourceCompile Include="$(RIVET_WINDOWS_ICON_RC)" />
+  </ItemGroup>
 
   <Target Name="ValidateRivetEnvironment" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(RIVET_ROOT)'==''" Text="RIVET_ROOT is not set. Run this project through `raco rivet build`." />
