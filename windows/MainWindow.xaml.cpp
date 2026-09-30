@@ -557,7 +557,7 @@ void MainWindow::Discover_Click(winrt::Windows::Foundation::IInspectable const&,
         // build the catalog panel in the detail pane: one block per entry,
         // already-subscribed entries marked, plus an add button each
         std::wstring text;
-        std::wstring current_category;
+        std::string current_category;
         for (auto const& row : rows) {
           if (row.size() < 7) continue;
           auto const& category = row[1];
