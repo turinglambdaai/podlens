@@ -3,6 +3,16 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## 1.0.1 - 2026-09-30
+
+### Fixed
+
+- The Racket-side update client shipped without the embedded update public
+  key, so the CLI's `check-updates` and the backend's update-check RPC
+  always reported "developer build"; the key is now embedded (the SwiftUI
+  host already carried it) and `check-updates` performs the full signed
+  verification against GitHub Releases.
+
 ## 1.0.0 - 2026-09-30
 
 First release. One Racket core, two first-party native hosts.

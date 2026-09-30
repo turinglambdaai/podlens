@@ -33,10 +33,10 @@
          releases-page
          raw-key->pem)
 
-;; Ed25519 public key, base64 of the raw 32 bytes. #f keeps developer
-;; builds honest about update availability. Replaced at release time.
-(define current-update-public-key-hex #f)
-(define current-update-key-id "none")
+;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
+;; #f keeps developer builds honest about update availability.
+(define current-update-public-key-hex "eWk+MVBTRUkcf3O4HSKek5yZ+cEv1oyx4QEErjC4opA=")
+(define current-update-key-id "release-2026")
 
 (define releases-api "https://api.github.com/repos/turinglambdaai/podlens/releases/latest")
 (define releases-page "https://github.com/turinglambdaai/podlens/releases/latest")

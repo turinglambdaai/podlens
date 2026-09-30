@@ -37,7 +37,7 @@
 (provide start
          app-version)
 
-(define app-version "1.0.0")
+(define app-version "1.0.1")
 
 ;; ---- States / Events ------------------------------------------------------
 

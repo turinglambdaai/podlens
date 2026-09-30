@@ -24,7 +24,7 @@
          "core/util.rkt"
          "update.rkt")
 
-(define cli-version "1.0.0")
+(define cli-version "1.0.1")
 
 ;; ---- output helpers ----------------------------------------------------------
 
