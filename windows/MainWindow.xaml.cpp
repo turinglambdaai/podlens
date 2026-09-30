@@ -507,7 +507,7 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::Controls::ContentDialogResult::Primary) {
       return;
     }
-    auto const url = to_utf8(input.Text());
+    auto const url = to_utf8(std::wstring(input.Text()));
     if (url.empty()) return;
     std::thread([weak, dispatcher, url]() mutable {
       std::string error;

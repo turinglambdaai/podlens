@@ -2,15 +2,12 @@
 
 #include "pch.h"
 #include "MainWindow.g.h"
+#include "GeneratedBackend.hpp"
 
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace rivet_app {
-class API;
-}
 
 namespace winrt::RivetHost::implementation {
 
