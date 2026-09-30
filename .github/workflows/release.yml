@@ -110,9 +110,10 @@ jobs:
       - name: Collect MSI + per-platform manifest + portable zip
         shell: pwsh
         run: |
-          Move-Item dist/podlens-*-windows-x64.msi "podlens-${env:GITHUB_REF_NAME#v}-windows-x64.msi"
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          Move-Item dist/podlens-*-windows-x64.msi "podlens-$version-windows-x64.msi"
           Move-Item dist/update-stable.json update-stable-windows.json
-          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "PodLens-${env:GITHUB_REF_NAME}-windows-x64.zip"
+          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "PodLens-$env:GITHUB_REF_NAME-windows-x64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
