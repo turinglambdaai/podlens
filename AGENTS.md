@@ -14,13 +14,15 @@ PodLens 是**原生**播客应用（Rivet 架构）：解决「听不懂英文�
 GUI 与 CLI 共用同一份 Racket 核心：无参数启动 GUI；CLI 走源码方式
 `racket app/cli.rkt <command>`（单文件自带运行时的 CLI 在路线图上）。
 
-底层框架是 [Rivet](https://github.com/turinglambdaai/rivet)（同组织仓库）：RVT1 协议（typed RPC / Events / State）、嵌入式 Racket CS、构建编排。Rivet 的问题修上游、发 PR。
+底层框架是 [Rivet](https://github.com/turinglambdaai/rivet)（同组织仓库）：RVT1 协议（typed RPC / Events / State）、嵌入式 Racket CS、构建编排。Rivet 迭代很快：**每次动工前先把本地 checkout 更新到 origin/main 再开发**；遇到 Rivet 的问题直接向上游提 issue 或 PR，不在 PodLens 里绕过或本地 hack。
 
 ## 快速命令
 
 ```bash
-# 前置一次：link 本地 rivet checkout
-raco pkg install --auto --no-docs --link /path/to/rivet
+# 每次开发前：先把本地 rivet checkout 更新到 origin/main（Rivet 迭代很快）
+git -C /path/to/rivet fetch origin && git -C /path/to/rivet reset --hard origin/main
+# link（首次或 link 断了）：link rivet 与 rivet-cli 两个子包
+raco pkg install --auto --no-docs --link /path/to/rivet/rivet /path/to/rivet/rivet-cli
 
 # 后端测试（假 OpenAI 服务器，无需真实 key）
 raco test tests/
