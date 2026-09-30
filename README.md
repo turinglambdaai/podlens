@@ -4,20 +4,23 @@ Podcasts, in your language. A cross-platform desktop podcast player that transcr
 
 **English** · [中文](README.zh-CN.md)
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.1.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-## Download
+## Install
 
-Grab the latest release for your platform from
-[GitHub Releases](https://github.com/turinglambdaai/podlens/releases):
+Download from [Releases](https://github.com/turinglambdaai/podlens/releases/latest):
 
-| Platform | Artifact |
-|---|---|
-| macOS 14+ (Apple Silicon) | `PodLens-v1.1.0-macos.dmg` (ad-hoc signed — first launch: right-click → Open) |
-| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+| Platform | Download | Updates |
+|---|---|---|
+| macOS 14+ (Apple Silicon) | `PodLens-v<version>-macos.dmg` | in-app (signed manifest), or reinstall the newer DMG |
+| Windows 10+ x64 | `PodLens-v<version>-windows-x64.zip` | in-app (signed manifest), or re-extract the newer zip |
 
-Updates arrive in-app through an Ed25519-signed manifest
-([docs/UPDATE.md](docs/UPDATE.md)).
+Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
+(`gh attestation verify <file> -R turinglambdaai/podlens`).
+
+The macOS build is ad-hoc signed — on first launch, right-click the app and
+choose Open to clear the Gatekeeper prompt. Updates arrive in-app through an
+Ed25519-signed manifest ([docs/UPDATE.md](docs/UPDATE.md)).
 
 ## Why PodLens?
 

@@ -4,18 +4,20 @@
 
 [English](README.md) · **中文**
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-1.1.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-## 下载
+## 安装
 
-从 [GitHub Releases](https://github.com/turinglambdaai/podlens/releases) 获取最新版：
+从 [Releases](https://github.com/turinglambdaai/podlens/releases/latest) 下载：
 
-| 平台 | 产物 |
-|---|---|
-| macOS 14+（Apple Silicon） | `PodLens-v1.1.0-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） |
-| Windows 10+ | `PodLens-v1.1.0-windows-x64.zip` |
+| 平台 | 下载 | 更新 |
+|---|---|---|
+| macOS 14+（Apple Silicon） | `PodLens-v<version>-macos.dmg` | 应用内更新（签名清单），或重新安装新版 DMG |
+| Windows 10+ x64 | `PodLens-v<version>-windows-x64.zip` | 应用内更新（签名清单），或解压新版 zip |
 
-应用内通过 Ed25519 签名清单自动更新（[docs/UPDATE.md](docs/UPDATE.md)）。
+每个发布都带 `SHA256SUMS` 校验清单和 Sigstore 构建来源证明（`gh attestation verify <file> -R turinglambdaai/podlens`）。
+
+macOS 版本仅为 ad-hoc 签名——首次启动若被 Gatekeeper 拦截，右键应用选「打开」。应用内通过 Ed25519 签名清单自动更新（[docs/UPDATE.md](docs/UPDATE.md)）。
 
 ## 为什么做 PodLens？
 
