@@ -7,6 +7,22 @@ All notable changes to PodLens are documented here. Format follows
 
 ### Added
 
+- System media integration on both hosts: macOS routes hardware media keys
+  and the Control Center now-playing widget through `MPRemoteCommandCenter`
+  (play/pause, ±15/30 s skip, absolute seek, playback rate) with episode
+  title, show name and show artwork in `MPNowPlayingInfoCenter`; Windows
+  wires the System Media Transport Controls manually (taskbar flyout,
+  hardware keys, Bluetooth headset buttons) with the same metadata and a
+  1 Hz timeline feed. Next/previous are disabled on both — there is no
+  queue yet.
+- Player bar upgrades on both hosts: ±15/30 s skip buttons around play,
+  sleep timer (5–90 min, pauses playback when it fires), playback speed
+  extended to 3.0×, and keyboard control (Space = play/pause; ⌘← / ⌘→ on
+  macOS, Ctrl+← / Ctrl+→ on Windows — inert while a text field owns focus).
+- macOS: the transcript follow-along is driven by a 0.5 s time observer and
+  only scrolls when the active sentence changes (previously it re-scrolled
+  every 5 s regardless); position saves are throttled to ~6 s and pushed to
+  Control Center alongside the elapsed time.
 - Discovery search: the Discover panel (and `podlens search <terms>`) now
   search the full podcast directory through the iTunes Search API (free,
   no key; results carry Apple's authoritative feedUrl). Results reuse the
@@ -19,6 +35,9 @@ All notable changes to PodLens are documented here. Format follows
 
 ### Changed
 
+- Regenerated typed clients against rivet main: the generated backend now
+  embeds the deployment identity (name, version, channel) — rivet#97 is
+  closed upstream, and `app/version.rkt` can retire onto it later.
 - Windows window title now carries the product tagline
   ("PodLens — 听得懂的英文播客") instead of "PodLens — 播客工作台" —
   the product is a reading-level player, not a workbench (roadmap §1).
@@ -28,6 +47,12 @@ All notable changes to PodLens are documented here. Format follows
 
 ### Fixed
 
+- Windows playback never worked (including 1.2.0): the `MediaPlayer` object
+  was declared but never constructed, so every call in `StartPlayback`
+  threw on the null projected object and surfaced as "playback failed".
+  The player is created at startup now.
+- macOS: the rate picker rendered 1.25× as "1.2×" (`%.2g` rounding); the
+  labels now use `%g` and read 1×, 1.5×, 2.5×, 3×.
 - Update checks no longer rely on a drifted hardcoded version: the backend
   and CLI share one `app/version.rkt` mirroring `rivet.rktd` (the
   deployment identity is not yet exposed by Rivet — turinglambdaai/rivet#97).

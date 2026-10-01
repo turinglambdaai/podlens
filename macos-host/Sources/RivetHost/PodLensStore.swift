@@ -1,4 +1,5 @@
 import AVFoundation
+import MediaPlayer
 import SwiftUI
 
 /// All client state lives here; views stay dumb. Every backend round trip
@@ -82,17 +83,32 @@ final class PodLensStore: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var rate: Float = 1.0
+    @Published private(set) var sleepMinutes: Int?
+
+    /// Rates offered in the player bar; the remote-command handler accepts
+    /// the same set (Apple Podcasts tops out at 3×).
+    static let playbackRates: [Float] = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 
     private var api: RivetAPI?
     var apiForSettings: RivetAPI? { api }
     private var didAutoOpenDiscover = false
     private var player: AVPlayer?
-    private var positionTimer: Timer?
+    private var timeObserver: Any?
+    private var endObserver: NSObjectProtocol?
+    private var saveTicks = 0
+    private var lastFollowedSegment: Int?
+    private var sleepTimer: Timer?
+    private var sleepFireAt: Date?
+    // now-playing metadata (owned here, rendered by SystemMedia.swift)
+    var npTitle = ""
+    var npShow = ""
+    var npArtwork: MPMediaItemArtwork?
 
     // MARK: boot
 
     func bind(api: RivetAPI) {
         self.api = api
+        setupSystemMediaControls()
     }
 
     func handleEvent(_ event: RivetEvent) {
@@ -375,30 +391,65 @@ final class PodLensStore: ObservableObject {
     }
 
     func startPlayback(for episode: Episode) {
-        positionTimer?.invalidate()
         if let url = localAudioURL(for: episode.id) {
             let item = AVPlayerItem(url: url)
             let player = player ?? AVPlayer()
+            installPlaybackObservers(player)
             player.replaceCurrentItem(with: item)
             self.player = player
             if episode.positionSec > 5 {
                 player.seek(to: CMTime(seconds: episode.positionSec, preferredTimescale: 600))
             }
-            player.rate = rate
+            player.playImmediately(atRate: rate)
             playing = true
+            saveTicks = 0
+            lastFollowedSegment = nil
 
-            positionTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, let p = self.player, let cur = p.currentItem else { return }
-                    self.currentTime = p.currentTime().seconds
-                    self.duration = cur.duration.seconds.isFinite ? cur.duration.seconds : 0
-                    self.savePosition(self.currentTime, done: false)
-                }
-            }
+            npTitle = episode.title
+            npShow = selectedFeed?.title ?? ""
+            npArtwork = nil
+            updateNowPlayingInfo()
+            loadNowPlayingArtwork()
         } else {
             statusLine = L("downloading")
             startJob("download", episode: episode)
         }
+    }
+
+    /// One periodic observer drives UI time, throttled position saves and
+    /// now-playing elapsed time; one end observer closes the episode out.
+    private func installPlaybackObservers(_ player: AVPlayer) {
+        guard timeObserver == nil else { return }
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in self?.playbackTicked(time.seconds) }
+        }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.playedToEnd() }
+        }
+    }
+
+    private func playbackTicked(_ seconds: Double) {
+        guard let p = player, let cur = p.currentItem else { return }
+        currentTime = seconds
+        if cur.duration.seconds.isFinite { duration = cur.duration.seconds }
+        saveTicks += 1
+        if saveTicks >= 12 { // ~every 6 s of playback
+            saveTicks = 0
+            savePosition(currentTime, done: false)
+            updateNowPlayingInfo()
+        }
+    }
+
+    private func playedToEnd() {
+        guard player != nil else { return }
+        playing = false
+        savePosition(duration > 0 ? duration : currentTime, done: true)
+        updateNowPlayingInfo()
     }
 
     func togglePlay() {
@@ -412,21 +463,80 @@ final class PodLensStore: ObservableObject {
             player.play()
             playing = true
         }
+        updateNowPlayingInfo()
+    }
+
+    func remoteCommandPlay() {
+        if !playing { togglePlay() }
+    }
+
+    func remoteCommandPause() {
+        if playing { togglePlay() }
     }
 
     func seek(to seconds: Double) {
-        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
-        currentTime = seconds
+        let clamped = min(max(seconds, 0), duration > 0 ? duration : seconds)
+        player?.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
+        currentTime = clamped
+        updateNowPlayingInfo()
+    }
+
+    func skip(by delta: Double) {
+        seek(to: currentTime + delta)
     }
 
     func setRate(_ r: Float) {
         rate = r
         player?.defaultRate = r
         if playing { player?.rate = r }
+        updateNowPlayingInfo()
+    }
+
+    // MARK: sleep timer
+
+    func startSleepTimer(minutes: Int) {
+        cancelSleepTimer()
+        sleepMinutes = minutes
+        sleepFireAt = Date().addingTimeInterval(TimeInterval(minutes) * 60)
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes) * 60,
+                                          repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.sleepTimerFired() }
+        }
+    }
+
+    func cancelSleepTimer() {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        sleepFireAt = nil
+        sleepMinutes = nil
+    }
+
+    private func sleepTimerFired() {
+        sleepTimer = nil
+        sleepFireAt = nil
+        sleepMinutes = nil
+        if playing { togglePlay() }
+        statusLine = L("sleepFired")
+    }
+
+    /// Whole minutes left on the armed sleep timer, for the menu label.
+    var sleepMinutesRemaining: Int? {
+        guard let sleepFireAt else { return nil }
+        return max(1, Int(ceil(sleepFireAt.timeIntervalSinceNow / 60)))
     }
 
     func currentSegmentIndex() -> Int? {
         guard !segments.isEmpty else { return nil }
         return segments.firstIndex { currentTime >= $0.start && currentTime < $0.end }
+    }
+
+    /// Index of the segment the transcript is currently scrolled to; the
+    /// view follows only when this changes, so 0.5 s ticks don't yank the
+    /// list while the reader is inside the same sentence.
+    func segmentToFollow() -> Int? {
+        let idx = currentSegmentIndex()
+        if idx == lastFollowedSegment { return nil }
+        lastFollowedSegment = idx
+        return idx
     }
 }

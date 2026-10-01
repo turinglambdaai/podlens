@@ -13,7 +13,10 @@
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Media.Core.h>
 #include <winrt/Windows.Media.Playback.h>
+#include <winrt/Windows.Media.h>
+#include <winrt/Windows.System.h>
 #include <winrt/Microsoft.UI.Text.h>
+#include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
@@ -21,9 +24,11 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cwchar>
 #include <fstream>
 #include <future>
 #include <thread>
+#include <type_traits>
 
 namespace winrt::RivetHost::implementation {
 namespace {
@@ -275,7 +280,8 @@ MainWindow::MainWindow() {
 
   // Filling the selectors fires SelectionChanged while the window is still
   // being constructed; initialized_ keeps those callbacks harmless.
-  for (wchar_t const* label : {L"1.0×", L"1.25×", L"1.5×", L"1.75×", L"2.0×"}) {
+  for (wchar_t const* label :
+       {L"1.0×", L"1.25×", L"1.5×", L"1.75×", L"2.0×", L"2.5×", L"3.0×"}) {
     RateSelector().Items().Append(box_value(winrt::hstring(label)));
   }
   RateSelector().SelectedIndex(0);
@@ -292,6 +298,83 @@ MainWindow::MainWindow() {
   position_timer_.Tick([weak = get_weak()](auto&&, auto&&) {
     if (auto window = weak.get()) window->TickPlayer();
   });
+
+  sleep_timer_ = DispatcherQueue().CreateTimer();
+  sleep_timer_.IsRepeating(false);
+  sleep_timer_.Tick([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) {
+      window->sleep_minutes_ = 0;
+      window->RemotePause();
+      window->SetStatus(true, std::wstring(podlens::Tr("player.sleep_fired")));
+    }
+  });
+
+  // The player is constructed up front: every call on a null projected
+  // MediaPlayer throws, so deferring construction made playback itself
+  // fail. SMTC is wired manually — the CommandManager auto-handles
+  // play/pause without refreshing our glyph and timers, and the extra
+  // buttons (next/previous) would promise a queue that does not exist.
+  try {
+    player_ = winrt::Windows::Media::Playback::MediaPlayer();
+    player_.CommandManager().IsEnabled(false);
+    auto smtc = player_.SystemMediaTransportControls();
+    smtc.IsEnabled(true);
+    smtc.IsPlayEnabled(true);
+    smtc.IsPauseEnabled(true);
+    smtc.IsNextEnabled(false);
+    smtc.IsPreviousEnabled(false);
+    auto const dispatcher = DispatcherQueue();
+    auto const weak = get_weak();
+    smtc.ButtonPressed([dispatcher, weak](auto&&, auto&& args) {
+      auto const button = args.Button();
+      dispatcher.TryEnqueue([weak, button]() {
+        if (auto window = weak.get()) {
+          try {
+            if (button ==
+                winrt::Windows::Media::SystemMediaTransportControlsButton::Play) {
+              window->RemotePlay();
+            } else if (button ==
+                       winrt::Windows::Media::SystemMediaTransportControlsButton::Pause) {
+              window->RemotePause();
+            }
+          } catch (...) {
+          }
+        }
+      });
+    });
+  } catch (winrt::hresult_error const& e) {
+    SetStatus(false, e.message().c_str());
+  }
+
+  // Player bar flyout/tooltips carry the build-time language.
+  try {
+    if (auto flyout = SleepButton().Flyout().try_as<muxc::MenuFlyout>()) {
+      for (uint32_t i = 0; i < flyout.Items().Size(); ++i) {
+        auto item = flyout.Items().GetAt(i).try_as<muxc::MenuFlyoutItem>();
+        if (!item) continue;
+        int const minutes = static_cast<int>(std::wcstol(
+            winrt::unbox_value_or<winrt::hstring>(item.Tag(), winrt::hstring(L"0"))
+                .c_str(),
+            nullptr, 10));
+        if (minutes <= 0) {
+          item.Text(std::wstring(podlens::Tr("player.sleep_off")));
+        } else {
+          wchar_t text[48];
+          swprintf(text, 48, podlens::Tr("player.sleep_minutes").data(), minutes);
+          item.Text(std::wstring(text));
+        }
+      }
+    }
+    muxc::ToolTipService::SetToolTip(
+        SleepButton(), box_value(winrt::hstring(std::wstring(podlens::Tr("player.sleep")))));
+    muxc::ToolTipService::SetToolTip(
+        SkipBackButton(),
+        box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_back")))));
+    muxc::ToolTipService::SetToolTip(
+        SkipForwardButton(),
+        box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_forward")))));
+  } catch (...) {
+  }
 
   error_bar_timer_ = DispatcherQueue().CreateTimer();
   error_bar_timer_.Interval(std::chrono::seconds{6});
@@ -427,6 +510,7 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
     FeedRow feed;
     feed.id = row[0];
     feed.title = row[1];
+    feed.artwork = row.size() > 3 ? row[3] : "";
     feed.count = row[4];
     feeds_.push_back(feed);
 
@@ -926,6 +1010,8 @@ void MainWindow::StartPlayback() {
     player_.Play();
     PlayPauseGlyph().Glyph(winrt::hstring(L"\xE769"));
     position_timer_.Start();
+    SetSmtcStatus(true);
+    UpdateSmtcMetadata();
   } catch (winrt::hresult_error const& e) {
     SetStatus(false, e.message().c_str());
   } catch (std::exception const& e) {
@@ -944,10 +1030,12 @@ void MainWindow::TogglePlayPause() {
     player_.Play();
     PlayPauseGlyph().Glyph(winrt::hstring(L"\xE769"));
     if (!position_timer_.IsRunning()) position_timer_.Start();
+    SetSmtcStatus(true);
   } else {
     player_.Pause();
     PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
     SavePosition(false);
+    SetSmtcStatus(false);
   }
 }
 
@@ -956,6 +1044,7 @@ void MainWindow::StopPlayback(bool save) {
   position_timer_.Stop();
   if (player_) player_.Pause();
   PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
+  SetSmtcStatus(false);
 }
 
 void MainWindow::TickPlayer() {
@@ -975,11 +1064,13 @@ void MainWindow::TickPlayer() {
   syncing_ui_ = false;
 
   HighlightRunningSegment(position);
+  UpdateSmtcTimeline(position);
 
   if (duration_ > 0 && position >= duration_ - 0.75) {
     SavePosition(true);
     player_.Pause();
     PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
+    SetSmtcStatus(false);
     SetStatus(true, std::wstring(podlens::Tr("status.playback_done")));
     ReloadEpisodes();
     return;
@@ -1001,6 +1092,120 @@ void MainWindow::SavePosition(bool done) {
   (void)api_->position_save_async(
       selected_episode_id_, std::to_string(static_cast<long long>(position)),
       done ? "1" : "0", [](rivet_app::Result<bool>&&) {});
+}
+
+namespace {
+winrt::Windows::Foundation::TimeSpan SecondsAsTimeSpan(double seconds) {
+  return std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+      std::chrono::duration<double>(seconds));
+}
+}  // namespace
+
+// Remote transport commands arriving through system media controls (taskbar
+// flyout, hardware keys, Bluetooth headsets).
+void MainWindow::RemotePlay() {
+  if (!player_ || !player_.Source()) return;
+  auto const session = player_.PlaybackSession();
+  if (session &&
+      session.PlaybackState() ==
+          winrt::Windows::Media::Playback::MediaPlaybackState::Paused) {
+    player_.Play();
+    PlayPauseGlyph().Glyph(winrt::hstring(L"\xE769"));
+    if (!position_timer_.IsRunning()) position_timer_.Start();
+    SetSmtcStatus(true);
+  }
+}
+
+void MainWindow::RemotePause() {
+  if (!player_ || !player_.Source()) return;
+  auto const session = player_.PlaybackSession();
+  if (session &&
+      session.PlaybackState() ==
+          winrt::Windows::Media::Playback::MediaPlaybackState::Playing) {
+    player_.Pause();
+    PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
+    SavePosition(false);
+    SetSmtcStatus(false);
+  }
+}
+
+void MainWindow::SeekTo(double seconds) {
+  if (!player_ || !player_.Source()) return;
+  seconds = std::max(seconds, 0.0);
+  if (duration_ > 0) seconds = std::min(seconds, duration_);
+  player_.Position(SecondsAsTimeSpan(seconds));
+  syncing_ui_ = true;
+  if (duration_ > 0) SeekSlider().Value(seconds);
+  PositionText().Text(winrt::hstring(FormatSeconds(seconds)));
+  syncing_ui_ = false;
+  UpdateSmtcTimeline(seconds);
+}
+
+void MainWindow::SetSmtcStatus(bool playing) {
+  try {
+    if (!player_) return;
+    auto smtc = player_.SystemMediaTransportControls();
+    smtc.PlaybackStatus(playing ? winrt::Windows::Media::MediaPlaybackStatus::Playing
+                                : winrt::Windows::Media::MediaPlaybackStatus::Paused);
+  } catch (...) {
+    // SMTC hiccups must never take playback down with them.
+  }
+}
+
+void MainWindow::UpdateSmtcMetadata() {
+  try {
+    if (!player_) return;
+    std::wstring title;
+    std::wstring show;
+    std::wstring artwork;
+    for (auto const& episode : episodes_) {
+      if (episode.id == selected_episode_id_) {
+        title = to_wide(episode.title);
+        break;
+      }
+    }
+    auto const feed_id = SelectedFeedId();
+    for (auto const& feed : feeds_) {
+      if (feed.id == feed_id) {
+        show = to_wide(feed.title);
+        artwork = to_wide(feed.artwork);
+        break;
+      }
+    }
+    auto updater = player_.SystemMediaTransportControls().DisplayUpdater();
+    updater.Type(winrt::Windows::Media::MediaPlaybackType::Music);
+    auto music = updater.MusicProperties();
+    music.Title(title);
+    music.Artist(show);
+    if (artwork.rfind(L"http", 0) == 0) {
+      try {
+        updater.Thumbnail(
+            winrt::Windows::Storage::Streams::RandomAccessStreamReference::CreateFromUri(
+                winrt::Windows::Foundation::Uri(artwork)));
+      } catch (...) {
+        // a broken artwork URL just means no cover in the flyout
+      }
+    }
+    updater.Update();
+  } catch (...) {
+  }
+}
+
+void MainWindow::UpdateSmtcTimeline(double position_seconds) {
+  try {
+    if (!player_ || !player_.Source()) return;
+    auto smtc = player_.SystemMediaTransportControls();
+    winrt::Windows::Media::SystemMediaTransportControlsTimelineProperties timeline;
+    timeline.StartTime(std::chrono::seconds{0});
+    timeline.MinSeekTime(std::chrono::seconds{0});
+    timeline.Position(SecondsAsTimeSpan(position_seconds));
+    if (duration_ > 0) {
+      timeline.EndTime(SecondsAsTimeSpan(duration_));
+      timeline.MaxSeekTime(SecondsAsTimeSpan(duration_));
+    }
+    smtc.UpdateTimelineProperties(timeline);
+  } catch (...) {
+  }
 }
 
 std::wstring MainWindow::FormatTime(double seconds) {
@@ -1511,6 +1716,78 @@ void MainWindow::Summarize_Click(winrt::Windows::Foundation::IInspectable const&
 void MainWindow::PlayPause_Click(winrt::Windows::Foundation::IInspectable const&,
                                  Microsoft::UI::Xaml::RoutedEventArgs const&) {
   TogglePlayPause();
+}
+
+void MainWindow::SkipBack_Click(winrt::Windows::Foundation::IInspectable const&,
+                                Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (player_ && player_.PlaybackSession()) {
+    SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) - 15.0);
+  }
+}
+
+void MainWindow::SkipForward_Click(winrt::Windows::Foundation::IInspectable const&,
+                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (player_ && player_.PlaybackSession()) {
+    SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) + 30.0);
+  }
+}
+
+void MainWindow::SleepOption_Click(winrt::Windows::Foundation::IInspectable const& sender,
+                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  auto item = sender.try_as<muxc::MenuFlyoutItem>();
+  if (!item) return;
+  int const minutes = static_cast<int>(std::wcstol(
+      winrt::unbox_value_or<winrt::hstring>(item.Tag(), winrt::hstring(L"0")).c_str(),
+      nullptr, 10));
+  sleep_timer_.Stop();
+  if (minutes <= 0) {
+    sleep_minutes_ = 0;
+    SetStatus(true, std::wstring(podlens::Tr("player.sleep_off")));
+    return;
+  }
+  sleep_minutes_ = minutes;
+  sleep_timer_.Interval(std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
+      std::chrono::minutes{minutes}));
+  sleep_timer_.Start();
+  wchar_t message[128];
+  swprintf(message, 128, podlens::Tr("player.sleep_set").data(), minutes);
+  SetStatus(true, message);
+}
+
+void MainWindow::PlayerAccel_Invoked(
+    Microsoft::UI::Xaml::Input::KeyboardAccelerator const& sender,
+    Microsoft::UI::Xaml::Input::KeyboardAcceleratorInvokedEventArgs const& args) {
+  // Never hijack keystrokes while the user is typing (feed URL, settings)
+  // or picking from a menu.
+  try {
+    auto focused = Microsoft::UI::Xaml::Input::FocusManager::GetFocusedElement();
+    if (focused.try_as<muxc::TextBox>() || focused.try_as<muxc::MenuFlyoutItem>()) {
+      return;
+    }
+  } catch (...) {
+  }
+  // The modifiers enum's owning namespace shifts between Windows SDK
+  // versions; deriving it from the getter keeps the comparison portable.
+  auto const key = sender.Key();
+  auto const modifiers = sender.Modifiers();
+  using Mods = std::remove_const_t<std::remove_reference_t<decltype(modifiers)>>;
+  if (key == winrt::Windows::System::VirtualKey::Space &&
+      modifiers == Mods::None) {
+    TogglePlayPause();
+    args.Handled(true);
+  } else if (key == winrt::Windows::System::VirtualKey::Left &&
+             modifiers == Mods::Control) {
+    if (player_ && player_.PlaybackSession()) {
+      SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) - 15.0);
+    }
+    args.Handled(true);
+  } else if (key == winrt::Windows::System::VirtualKey::Right &&
+             modifiers == Mods::Control) {
+    if (player_ && player_.PlaybackSession()) {
+      SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) + 30.0);
+    }
+    args.Handled(true);
+  }
 }
 
 void MainWindow::SeekSlider_ValueChanged(

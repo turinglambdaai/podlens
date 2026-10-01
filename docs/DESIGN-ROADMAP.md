@@ -102,6 +102,24 @@ macOS：`DesignTokens.swift` 常量。新增颜色/字号必须先进这张表�
 **验收**：两端截图并排对照（`docs/screenshots/`），§3 检查表逐项同构；
 首屏第一眼有品牌感（accent 出现、层级分明、无裸控件感）。
 
+### M1.5 — 播放基础补课：系统媒体集成 + 播放控件 ☑（未发版）
+
+对齐 Apple Podcasts 的「听」轴基础件（逐句稿差异化的「读」轴不追它）：
+
+- [x] macOS 媒体键 + 控制中心 Now Playing（`MPRemoteCommandCenter` +
+      `MPNowPlayingInfoCenter`，带节目封面）；Windows SMTC（任务栏悬浮窗、
+      蓝牙耳机按钮，手动接线，1 Hz 时间线）
+- [x] 两端 PlayerBar 加 ±15/30s skip；键盘：空格播放暂停、⌘←/⌘→（Windows
+      Ctrl+←/→）seek——文本框聚焦时不抢键
+- [x] 倍速扩到 3.0×（对齐 Apple 上限）；macOS 修 1.25× 显示成 1.2× 的格式化
+- [x] 睡眠定时器（5–90 分钟，到点暂停）
+- [x] macOS 跟随滚动只在活动句变化时触发（原先每 5s 重滚）；进度保存节流
+- [x] 修 Windows 播放自 M1 起不可用（`MediaPlayer` 从未构造，调用即抛
+      E_POINTER 显「播放失败」）
+
+**验收**：两端媒体键/悬浮窗可控制播放并显示单集元数据；空格/快捷键/睡眠
+定时可用；`raco rivet build` 两端绿。
+
 ### M2 — 逐句稿即产品：核心体验 ☐
 
 - [ ] 逐句列表控件：句 = 行（时间戳 + 原文 + 译文），替换纯文本流
