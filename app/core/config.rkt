@@ -44,7 +44,9 @@
    (list 'max-transcript-chars 40000 'number
          "Transcript characters sent to the summarizer")
    (list 'check-updates-enabled "true" 'boolean
-         "Automatically check for updates (silent, throttled)")))
+         "Automatically check for updates (silent, throttled)")
+   (list 'search-limit 25 'number
+         "Max results per discovery search (iTunes Search API)")))
 
 (define known-keys (map car schema))
 

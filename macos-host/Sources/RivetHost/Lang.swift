@@ -90,5 +90,8 @@ private let strings: [String: (String, String)] = [
     "catBusiness": ("商业", "Business"),
     "catNews": ("资讯", "News"),
     "fetchFailed": ("操作失败：%@", "Operation failed: %@"),
-    "refreshAllDone": ("刷新完成，新增 %d 集", "Refreshed, %d new episode(s)")
+    "refreshAllDone": ("刷新完成，新增 %d 集", "Refreshed, %d new episode(s)"),
+    "searchPlaceholder": ("搜索全部播客，回车搜索…", "Search all podcasts, press return…"),
+    "searching": ("搜索中…", "Searching…"),
+    "searchFailed": ("搜索失败", "Search failed")
 ]

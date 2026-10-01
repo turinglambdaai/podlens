@@ -73,6 +73,7 @@ scripts/update-keys.sh
 ## 诚实缺口（不要在文档里夸口）
 
 - Windows 播放尚无波形/无缝衔接/章节标记（播放/seek/倍速 1.0–2.0 已有，M1 已追平 macOS）
+- 发现页全目录搜索（`catalog-search` RPC）目前只在 macOS 宿主与 CLI 落地；Windows 发现面板还是纯精选目录，搜索 UI 待跟进
 - Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
 - macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
 - 翻译按句计费，成本由用户的 API key 承担

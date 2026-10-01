@@ -20,6 +20,7 @@
          "core/config.rkt"
          "core/feed.rkt"
          "core/i18n.rkt"
+         "core/itunes.rkt"
          "core/library.rkt"
          "core/paths.rkt"
          "core/pipeline.rkt"
@@ -291,6 +292,36 @@
           (displayln (format "    ~a" (catalog-entry-url e))))
         0)))
 
+(define (cmd-search args)
+  ;; search the full podcast directory (iTunes Search API); add results
+  ;; through the normal `add <url>`
+  (cond
+    [(null? args) (usage! (tr (lang) 'usage))]
+    [else
+     (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
+       (define query (string-join args))
+       (define rows
+         (itunes-search-podcasts query (config-number (config!) 'search-limit)))
+       (if (stdout-json?)
+           (emit-ok
+            (hasheq 'results
+                    (for/list ([r (in-list rows)])
+                      (hasheq 'id (hash-ref r 'id)
+                              'title (hash-ref r 'title)
+                              'artist (hash-ref r 'artist)
+                              'genre (hash-ref r 'genre)
+                              'feedUrl (hash-ref r 'feed-url)
+                              'homepage (hash-ref r 'homepage)))))
+           (begin
+             (when (null? rows) (displayln (tr (lang) 'no-results)))
+             (for ([r (in-list rows)])
+               (displayln (format "~a  [~a]  ~a"
+                                  (hash-ref r 'title)
+                                  (hash-ref r 'genre)
+                                  (hash-ref r 'artist)))
+               (displayln (format "    ~a" (hash-ref r 'feed-url))))
+             0)))]))
+
 (define (cmd-refresh args)
   (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
     (define ids (if (null? args) (map (lambda (f) (hash-ref f 'id)) (feed-all)) args))
@@ -383,6 +414,8 @@
    "  list                       show subscriptions\n"
    "  episodes <feed-id>         list episodes of a feed\n"
    "  refresh [feed-id]…         refresh feeds for new episodes\n"
+   "  catalog [category]         list the curated catalog\n"
+   "  search <terms>             search the full podcast directory\n"
    "  download <episode-id>      cache the episode audio\n"
    "  transcribe <episode-id>    speech-to-text via the ASR API\n"
    "  translate <episode-id>     translate the transcript\n"
@@ -409,6 +442,7 @@
           'episodes cmd-episodes
           'refresh cmd-refresh
           'catalog cmd-catalog
+          'search cmd-search
           'download cmd-download
           'transcribe cmd-transcribe
           'translate cmd-translate

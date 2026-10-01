@@ -5,6 +5,18 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+### Added
+
+- Discovery search: the Discover panel (and `podlens search <terms>`) now
+  search the full podcast directory through the iTunes Search API (free,
+  no key; results carry Apple's authoritative feedUrl). Results reuse the
+  catalog row shape, mark already-subscribed shows, and are added through
+  the normal subscribe path. First launch with an empty library now opens
+  on Discover instead of a blank window (macOS).
+- CLI: `search <terms>` with `--json` output; `catalog` finally appears in
+  `help` (it shipped in 1.1.0 but was never listed).
+- `search-limit` setting (max results per search, default 25).
+
 ### Changed
 
 - Windows window title now carries the product tagline

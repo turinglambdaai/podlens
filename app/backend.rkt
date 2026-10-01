@@ -32,6 +32,7 @@
          "core/config.rkt"
          "core/feed.rkt"
          "core/i18n.rkt"
+         "core/itunes.rkt"
          "core/library.rkt"
          "core/paths.rkt"
          "core/pipeline.rkt"
@@ -127,6 +128,27 @@
           (catalog-entry-url e)
           (catalog-entry-homepage e)
           (if (set-member? subscribed-urls (catalog-entry-url e)) "1" "0"))))
+
+;; Full-directory search over the iTunes Search API (free, no key; results
+;; carry Apple's authoritative feedUrl). Row shape matches catalog-list so
+;; hosts can render both with one component:
+;;   (id category title description url homepage added)
+;;   id is "itunes:<trackId>"; category slot = genre; description = artist.
+;; Adding a result goes through the normal feed-add, like the catalog.
+(define-rpc (catalog-search [query String] : (List (List String)))
+  (define subscribed-urls
+    (list->set (map (lambda (f) (string-trim (hash-ref f 'url ""))) (feed-all))))
+  (define results
+    (itunes-search-podcasts (string-trim query)
+                            (config-number (config!) 'search-limit)))
+  (for/list ([r (in-list results)])
+    (list (hash-ref r 'id)
+          (hash-ref r 'genre "")
+          (hash-ref r 'title)
+          (hash-ref r 'artist "")
+          (hash-ref r 'feed-url)
+          (hash-ref r 'homepage "")
+          (if (set-member? subscribed-urls (hash-ref r 'feed-url)) "1" "0"))))
 
 ;; ---- episodes -------------------------------------------------------------------
 

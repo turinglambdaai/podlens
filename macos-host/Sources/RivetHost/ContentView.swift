@@ -59,6 +59,7 @@ extension UpdateService.Manifest: Identifiable {
 struct DiscoverSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -68,23 +69,47 @@ struct DiscoverSheet: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(categories, id: \.self) { category in
-                        let items = model.store.catalog.filter { $0.category == category }
-                        if !items.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(categoryLabel(category))
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(Color.accentColor)
-                                ForEach(items) { entry in
-                                    CatalogRow(entry: entry)
+            TextField(L("searchPlaceholder"), text: $query)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.search)
+                .onSubmit { model.store.searchDirectory(query) }
+                .padding(.horizontal, 4)
+
+            if model.store.isSearching {
+                ProgressView(L("searching"))
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if model.store.searchError != nil {
+                Text(L("searchFailed") + " \(model.store.searchError!)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            } else if !model.store.searchResults.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(model.store.searchResults) { entry in
+                            CatalogRow(entry: entry)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        ForEach(categories, id: \.self) { category in
+                            let items = model.store.catalog.filter { $0.category == category }
+                            if !items.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(categoryLabel(category))
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Color.accentColor)
+                                    ForEach(items) { entry in
+                                        CatalogRow(entry: entry)
+                                    }
                                 }
                             }
                         }
                     }
+                    .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, 4)
             }
 
             Button(L("cancel")) { dismiss() }

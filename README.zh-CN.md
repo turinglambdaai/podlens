@@ -69,7 +69,8 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 - 结构化总结（TL;DR、要点、引用、话题）
 - 自带 key：OpenAI、DeepSeek、Groq、SiliconFlow、Ollama，任意 OpenAI 兼容端点
 - 内置经典英文播客精选目录（科技/科学/商业/设计），「发现」面板一键添加，绝不自动订阅；每个条目发布前都用 `scripts/verify-catalog.rkt` 实测可达
-- agent 友好的 CLI，与 GUI 共用同一核心（`add`、`episodes`、`transcribe`、`translate`、`summarize`、`show`、`--json`、退出码 0/1/2）
+- 同一「发现」面板支持全目录搜索（iTunes Search API，无需 key）——结果自带 Apple 权威 feed 地址
+- agent 友好的 CLI，与 GUI 共用同一核心（`add`、`episodes`、`transcribe`、`translate`、`summarize`、`show`、`search`、`--json`、退出码 0/1/2）
 - 签名的应用内更新（Ed25519 清单 + SHA-256，见 [docs/UPDATE.md](docs/UPDATE.md)）
 
 ## 快速开始

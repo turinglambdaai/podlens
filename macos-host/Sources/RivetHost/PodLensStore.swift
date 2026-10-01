@@ -66,6 +66,9 @@ final class PodLensStore: ObservableObject {
     @Published var episodes: [Episode] = []
     @Published var catalog: [CatalogEntry] = []
     @Published var showDiscover = false
+    @Published var searchResults: [CatalogEntry] = []
+    @Published var isSearching = false
+    @Published var searchError: String?
     @Published var selectedFeed: Feed?
     @Published var selectedEpisode: Episode?
     @Published var segments: [Segment] = []
@@ -82,6 +85,7 @@ final class PodLensStore: ObservableObject {
 
     private var api: RivetAPI?
     var apiForSettings: RivetAPI? { api }
+    private var didAutoOpenDiscover = false
     private var player: AVPlayer?
     private var positionTimer: Timer?
 
@@ -136,6 +140,33 @@ final class PodLensStore: ObservableObject {
         addFeed(url: entry.url)
     }
 
+    /// Search the full podcast directory (iTunes Search API through the
+    /// backend). Results reuse CatalogEntry so the UI renders one row type.
+    func searchDirectory(_ query: String) {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard let api, !q.isEmpty else { return }
+        isSearching = true
+        searchError = nil
+        Task {
+            do {
+                let rows = try await api.catalog_search(query: q)
+                let entries = rows.map {
+                    CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
+                                 description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1")
+                }
+                await MainActor.run {
+                    self.searchResults = entries
+                    self.isSearching = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.searchError = "\(error)"
+                    self.isSearching = false
+                }
+            }
+        }
+    }
+
     func loadFeeds() {
         guard let api else { return }
         Task {
@@ -144,6 +175,12 @@ final class PodLensStore: ObservableObject {
                 feeds = rows.map {
                     Feed(id: $0[0], title: $0[1], author: $0[2], artworkURL: $0[3],
                          episodeCount: Int($0[4]) ?? 0, latestTitle: $0[5], latestPub: $0[6])
+                }
+                // First launch with an empty library lands on Discover instead
+                // of a blank window — once; a user who closes it is not nagged.
+                if feeds.isEmpty && !didAutoOpenDiscover {
+                    didAutoOpenDiscover = true
+                    showDiscover = true
                 }
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
@@ -175,9 +212,23 @@ final class PodLensStore: ObservableObject {
 
     func addFeed(url: String) {
         guard let api, !url.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let trimmed = url.trimmingCharacters(in: .whitespaces)
         Task {
             do {
                 _ = try await api.feed_add(url: url)
+                await MainActor.run {
+                    // reflect subscription in the catalog/search rows
+                    self.catalog = self.catalog.map { entry in
+                        entry.url == trimmed ? CatalogEntry(id: entry.id, category: entry.category,
+                                                            title: entry.title, description: entry.description,
+                                                            url: entry.url, homepage: entry.homepage, added: true) : entry
+                    }
+                    self.searchResults = self.searchResults.map { entry in
+                        entry.url == trimmed ? CatalogEntry(id: entry.id, category: entry.category,
+                                                            title: entry.title, description: entry.description,
+                                                            url: entry.url, homepage: entry.homepage, added: true) : entry
+                    }
+                }
                 loadFeeds()
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
