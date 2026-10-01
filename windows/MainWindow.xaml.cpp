@@ -1045,12 +1045,19 @@ std::string MainWindow::SelectedEpisodeId() {
 // The backend caches audio under <data-dir>\audio\<episodeId>*; the host
 // resolves the file by id prefix so playback needs no extra RPC. The
 // PODLENS_DATA_DIR override must match the backend's (dev/test only).
+// getenv_s: MSVC deprecates plain getenv (C4996) and the project treats
+// warnings as errors.
 std::wstring MainWindow::FindLocalAudio(std::string const& episode_id) {
   std::filesystem::path base;
-  if (char const* override_dir = std::getenv("PODLENS_DATA_DIR");
-      override_dir && *override_dir) {
-    base = std::filesystem::path(override_dir);
-  } else {
+  size_t required = 0;
+  if (::getenv_s(&required, nullptr, 0, "PODLENS_DATA_DIR") == 0 && required > 0) {
+    std::string value(required, '\0');
+    size_t written = 0;
+    ::getenv_s(&required, value.data(), value.size(), "PODLENS_DATA_DIR");
+    value.resize(written > 0 ? written - 1 : 0); // drop the terminating null
+    base = std::filesystem::path(value);
+  }
+  if (base.empty()) {
     PWSTR profile = nullptr;
     if (::SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &profile) != S_OK) {
       return {};
