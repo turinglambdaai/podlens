@@ -28,6 +28,7 @@
 #include <fstream>
 #include <future>
 #include <thread>
+#include <type_traits>
 
 namespace winrt::RivetHost::implementation {
 namespace {
@@ -364,12 +365,12 @@ MainWindow::MainWindow() {
         }
       }
     }
-    mux::ToolTipService::ToolTip(
+    muxc::ToolTipService::ToolTip(
         SleepButton(), box_value(winrt::hstring(std::wstring(podlens::Tr("player.sleep")))));
-    mux::ToolTipService::ToolTip(
+    muxc::ToolTipService::ToolTip(
         SkipBackButton(),
         box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_back")))));
-    mux::ToolTipService::ToolTip(
+    muxc::ToolTipService::ToolTip(
         SkipForwardButton(),
         box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_forward")))));
   } catch (...) {
@@ -1202,10 +1203,6 @@ void MainWindow::UpdateSmtcTimeline(double position_seconds) {
       timeline.EndTime(SecondsAsTimeSpan(duration_));
       timeline.MaxSeekTime(SecondsAsTimeSpan(duration_));
     }
-    if (auto const entry = RateSelector().SelectedItem().try_as<winrt::hstring>()) {
-      double const rate = std::wcstod(entry->c_str(), nullptr);
-      if (rate > 0) timeline.PlaybackRate(rate);
-    }
     smtc.UpdateTimelineProperties(timeline);
   } catch (...) {
   }
@@ -1758,10 +1755,8 @@ void MainWindow::SleepOption_Click(winrt::Windows::Foundation::IInspectable cons
 }
 
 void MainWindow::PlayerAccel_Invoked(
-    Microsoft::UI::Xaml::Input::KeyboardAccelerator const&,
+    Microsoft::UI::Xaml::Input::KeyboardAccelerator const& sender,
     Microsoft::UI::Xaml::Input::KeyboardAcceleratorInvokedEventArgs const& args) {
-  using winrt::Microsoft::UI::Input::VirtualKeyModifiers;
-  using winrt::Windows::System::VirtualKey;
   // Never hijack keystrokes while the user is typing (feed URL, settings)
   // or picking from a menu.
   try {
@@ -1771,17 +1766,23 @@ void MainWindow::PlayerAccel_Invoked(
     }
   } catch (...) {
   }
-  auto const key = args.Accelerator().Key();
-  auto const modifiers = args.Accelerator().Modifiers();
-  if (key == VirtualKey::Space && modifiers == VirtualKeyModifiers::None) {
+  // The modifiers enum's owning namespace shifts between Windows SDK
+  // versions; deriving it from the getter keeps the comparison portable.
+  auto const key = sender.Key();
+  auto const modifiers = sender.Modifiers();
+  using Mods = std::remove_const_t<std::remove_reference_t<decltype(modifiers)>>;
+  if (key == winrt::Windows::System::VirtualKey::Space &&
+      modifiers == Mods::None) {
     TogglePlayPause();
     args.Handled(true);
-  } else if (key == VirtualKey::Left && modifiers == VirtualKeyModifiers::Control) {
+  } else if (key == winrt::Windows::System::VirtualKey::Left &&
+             modifiers == Mods::Control) {
     if (player_ && player_.PlaybackSession()) {
       SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) - 15.0);
     }
     args.Handled(true);
-  } else if (key == VirtualKey::Right && modifiers == VirtualKeyModifiers::Control) {
+  } else if (key == winrt::Windows::System::VirtualKey::Right &&
+             modifiers == Mods::Control) {
     if (player_ && player_.PlaybackSession()) {
       SeekTo(TimeSpanSeconds(player_.PlaybackSession().Position()) + 30.0);
     }
