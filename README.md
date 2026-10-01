@@ -134,7 +134,7 @@ raco test tests/        # backend tests (no API key needed — fake server)
 
 ## Honest gaps
 
-- **Windows playback has no waveform, gapless or chapter markers yet** — seek and 1.0–2.0× speed are there (M1 closed the layout gap with macOS)
+- **No waveform, gapless playback or chapter markers yet** — seek, ±15/30 s skip, 1.0–3.0× speed, sleep timer and system media keys (media keys / Control Center / SMTC) are there on both hosts
 - **macOS builds are ad-hoc signed** until notarization credentials are configured in CI; first launch needs right-click → Open
 - **Translation cost is unbounded by design** — every sentence of a chosen episode goes through your API; long episodes cost real money
 - **One target language at a time** — the pipeline retranslates when you change `target-lang`

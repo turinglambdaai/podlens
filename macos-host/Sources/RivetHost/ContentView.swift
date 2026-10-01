@@ -464,7 +464,9 @@ struct TranscriptView: View {
                 }
             }
             .onChange(of: model.store.currentTime) { _, _ in
-                if let idx = model.store.currentSegmentIndex() {
+                // follow only when the active sentence changes, so the
+                // half-second ticks don't drag the list under the reader
+                if let idx = model.store.segmentToFollow() {
                     proxy.scrollTo(idx, anchor: .center)
                 }
             }
@@ -560,6 +562,17 @@ struct PlayerBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            sleepMenu
+
+            Button {
+                model.store.skip(by: -15)
+            } label: {
+                Image(systemName: "gobackward.15")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut(.leftArrow, modifiers: [.command])
+            .help(L("skipBack"))
+
             Button {
                 model.store.togglePlay()
             } label: {
@@ -567,6 +580,17 @@ struct PlayerBar: View {
                     .font(.title3)
             }
             .buttonStyle(.borderless)
+            .keyboardShortcut(.space, modifiers: [])
+            .help(model.store.playing ? L("pause") : L("play"))
+
+            Button {
+                model.store.skip(by: 30)
+            } label: {
+                Image(systemName: "goforward.30")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut(.rightArrow, modifiers: [.command])
+            .help(L("skipForward"))
 
             Text(formatTime(model.store.currentTime))
                 .font(.caption.monospacedDigit())
@@ -578,14 +602,32 @@ struct PlayerBar: View {
 
             Picker("", selection: Binding(get: { model.store.rate },
                                           set: { model.store.setRate($0) })) {
-                ForEach([1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { r in
-                    Text("\(r, specifier: "%.2g")×").tag(r)
+                ForEach(PodLensStore.playbackRates, id: \.self) { r in
+                    Text("\(r, specifier: "%g")×").tag(r)
                 }
             }
-            .frame(width: 80)
+            .frame(width: 72)
         }
         .padding(12)
         .background(.bar)
+    }
+
+    @ViewBuilder
+    private var sleepMenu: some View {
+        let remaining = model.store.sleepMinutesRemaining
+        Menu {
+            Button(L("sleepOff")) { model.store.cancelSleepTimer() }
+            ForEach([5, 10, 15, 30, 45, 60, 90], id: \.self) { m in
+                Button(String(format: L("sleepMinutes"), m)) {
+                    model.store.startSleepTimer(minutes: m)
+                }
+            }
+        } label: {
+            Image(systemName: remaining == nil ? "moon.zzz" : "moon.zzz.fill")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(remaining.map { String(format: L("sleepActive"), $0) } ?? L("sleep"))
     }
 
     private func formatTime(_ t: Double) -> String {

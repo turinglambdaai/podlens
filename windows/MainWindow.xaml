@@ -191,26 +191,78 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" x:Name="PlayPauseButton" Width="40" Height="40"
+
+                <Grid.KeyboardAccelerators>
+                    <!--
+                      Space toggles playback and Ctrl+Left/Right seek; the
+                      handler ignores keystrokes while a TextBox owns focus
+                      so typing a feed URL is unaffected.
+                    -->
+                    <KeyboardAccelerator Key="Space" Modifiers="None"
+                                         Invoked="PlayerAccel_Invoked" />
+                    <KeyboardAccelerator Key="Left" Modifiers="Control"
+                                         Invoked="PlayerAccel_Invoked" />
+                    <KeyboardAccelerator Key="Right" Modifiers="Control"
+                                         Invoked="PlayerAccel_Invoked" />
+                </Grid.KeyboardAccelerators>
+
+                <Button Grid.Column="0" x:Name="SleepButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0">
+                    <FontIcon Glyph="&#xE708;" FontSize="14" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="TopEdgeAlignedLeft">
+                            <!-- texts are filled from the i18n table in the
+                                 constructor; Tag is the duration in minutes
+                                 (0 = off) -->
+                            <MenuFlyoutItem Tag="0" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="5" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="10" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="15" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="30" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="45" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="60" Click="SleepOption_Click" />
+                            <MenuFlyoutItem Tag="90" Click="SleepOption_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button Grid.Column="1" x:Name="SkipBackButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0" Click="SkipBack_Click">
+                    <FontIcon Glyph="&#xEB9E;" FontSize="14" />
+                </Button>
+
+                <Button Grid.Column="2" x:Name="PlayPauseButton" Width="40" Height="40"
                         CornerRadius="20" Background="{ThemeResource AppAccentBrush}"
                         Foreground="White" BorderThickness="0" Click="PlayPause_Click">
                     <FontIcon x:Name="PlayPauseGlyph" Glyph="&#xE768;" FontSize="16" />
                 </Button>
-                <TextBlock Grid.Column="1" x:Name="PositionText" FontSize="12"
+
+                <Button Grid.Column="3" x:Name="SkipForwardButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0" Click="SkipForward_Click">
+                    <FontIcon Glyph="&#xEB9D;" FontSize="14" />
+                </Button>
+
+                <TextBlock Grid.Column="4" x:Name="PositionText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <Slider Grid.Column="2" x:Name="SeekSlider" Minimum="0" Maximum="100"
+                <Slider Grid.Column="5" x:Name="SeekSlider" Minimum="0" Maximum="100"
                         StepFrequency="1" VerticalAlignment="Center"
                         ValueChanged="SeekSlider_ValueChanged"
                         PointerPressed="SeekSlider_PointerPressed"
                         PointerCaptureLost="SeekSlider_PointerReleased"
                         PointerReleased="SeekSlider_PointerReleased" />
-                <TextBlock Grid.Column="3" x:Name="DurationText" FontSize="12"
+                <TextBlock Grid.Column="6" x:Name="DurationText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <ComboBox Grid.Column="4" x:Name="RateSelector" MinWidth="92"
+                <ComboBox Grid.Column="7" x:Name="RateSelector" MinWidth="92"
                           VerticalAlignment="Center" SelectionChanged="Rate_SelectionChanged" />
             </Grid>
         </Border>

@@ -51,6 +51,14 @@ struct MainWindow : MainWindowT<MainWindow> {
                                   Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&);
   void Rate_SelectionChanged(winrt::Windows::Foundation::IInspectable const&,
                              Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
+  void SkipBack_Click(winrt::Windows::Foundation::IInspectable const&,
+                      Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void SkipForward_Click(winrt::Windows::Foundation::IInspectable const&,
+                         Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void SleepOption_Click(winrt::Windows::Foundation::IInspectable const&,
+                         Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void PlayerAccel_Invoked(Microsoft::UI::Xaml::Input::KeyboardAccelerator const&,
+                           Microsoft::UI::Xaml::Input::KeyboardAcceleratorInvokedEventArgs const&);
   void TranscriptTab_Click(winrt::Windows::Foundation::IInspectable const&,
                            Microsoft::UI::Xaml::RoutedEventArgs const&);
   void SummaryTab_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -88,6 +96,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   void StopPlayback(bool save);
   void TickPlayer();
   void SavePosition(bool done);
+  void SeekTo(double seconds);
+  void RemotePlay();
+  void RemotePause();
+  void SetSmtcStatus(bool playing);
+  void UpdateSmtcMetadata();
+  void UpdateSmtcTimeline(double position_seconds);
   static std::wstring FormatTime(double seconds);
 
   void StartJob(std::string const& kind, std::string const& episode_id);
@@ -107,6 +121,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   struct FeedRow {
     std::string id;
     std::string title;
+    std::string artwork;
     std::string count;
   };
   struct EpisodeRow {
@@ -145,6 +160,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Windows::Media::Playback::MediaPlayer player_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer position_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer error_bar_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer sleep_timer_{nullptr};
+  int sleep_minutes_ = 0;
   double duration_ = 0;
   bool user_seeking_ = false;
   bool syncing_ui_ = false;
