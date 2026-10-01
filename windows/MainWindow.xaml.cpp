@@ -365,12 +365,12 @@ MainWindow::MainWindow() {
         }
       }
     }
-    muxc::ToolTipService::ToolTip(
+    muxc::ToolTipService::SetToolTip(
         SleepButton(), box_value(winrt::hstring(std::wstring(podlens::Tr("player.sleep")))));
-    muxc::ToolTipService::ToolTip(
+    muxc::ToolTipService::SetToolTip(
         SkipBackButton(),
         box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_back")))));
-    muxc::ToolTipService::ToolTip(
+    muxc::ToolTipService::SetToolTip(
         SkipForwardButton(),
         box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_forward")))));
   } catch (...) {
