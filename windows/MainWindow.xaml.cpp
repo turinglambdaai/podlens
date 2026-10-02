@@ -2019,8 +2019,8 @@ void MainWindow::MarkFromMenu(
     winrt::Windows::Foundation::IInspectable const& sender, wchar_t const* done) {
   auto item = sender.try_as<muxc::MenuFlyoutItem>();
   if (!item || !api_) return;
-  auto const id =
-      to_utf8(winrt::unbox_value_or<winrt::hstring>(item.Tag(), winrt::hstring(L"")));
+  auto const id = to_utf8(std::wstring(
+      winrt::unbox_value_or<winrt::hstring>(item.Tag(), winrt::hstring(L""))));
   if (id.empty()) return;
   (void)api_->episode_set_done_async(
       id, to_utf8(done), [weak = get_weak()](rivet_app::Result<bool>) {
