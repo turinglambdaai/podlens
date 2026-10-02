@@ -142,14 +142,23 @@
                                        TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
                             <TextBlock x:Name="DetailMeta" FontSize="13"
                                        Foreground="{ThemeResource AppInkSoftBrush}" />
+                            <!-- show notes straight from the feed's episode description -->
+                            <TextBlock x:Name="DetailNotes" FontSize="12" Opacity="0.7"
+                                       TextWrapping="Wrap" MaxLines="3"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="DetailEstimate" FontSize="11" Opacity="0.55" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
                                     HorizontalAlignment="Left" Margin="0,4,0,8">
+                            <Button x:Name="PipelineButton" Padding="10,4" Click="Pipeline_Click"
+                                    Background="{ThemeResource AppAccentBrush}" Foreground="White"
+                                    BorderThickness="0" />
                             <Button x:Name="DownloadButton" Padding="10,4" Click="Download_Click" />
                             <Button x:Name="TranscribeButton" Padding="10,4" Click="Transcribe_Click" />
                             <Button x:Name="TranslateButton" Padding="10,4" Click="Translate_Click" />
                             <Button x:Name="SummarizeButton" Padding="10,4" Click="Summarize_Click" />
+                            <Button x:Name="MarkButton" Padding="10,4" Click="MarkToggle_Click" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4"
@@ -189,6 +198,8 @@
                 Background="{ThemeResource AppCardBrush}" Padding="16,10">
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -234,35 +245,47 @@
                     </Button.Flyout>
                 </Button>
 
-                <Button Grid.Column="1" x:Name="SkipBackButton" Width="36" Height="36"
+                <!-- chapter marks: hidden unless the episode carries chapters -->
+                <Button Grid.Column="1" x:Name="ChapterBackButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0" Visibility="Collapsed" Click="ChapterBack_Click">
+                    <FontIcon Glyph="&#xE915;" FontSize="13" />
+                </Button>
+                <Button Grid.Column="2" x:Name="ChapterForwardButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0" Visibility="Collapsed" Click="ChapterForward_Click">
+                    <FontIcon Glyph="&#xE916;" FontSize="13" />
+                </Button>
+
+                <Button Grid.Column="3" x:Name="SkipBackButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Click="SkipBack_Click">
                     <FontIcon Glyph="&#xEB9E;" FontSize="14" />
                 </Button>
 
-                <Button Grid.Column="2" x:Name="PlayPauseButton" Width="40" Height="40"
+                <Button Grid.Column="4" x:Name="PlayPauseButton" Width="40" Height="40"
                         CornerRadius="20" Background="{ThemeResource AppAccentBrush}"
                         Foreground="White" BorderThickness="0" Click="PlayPause_Click">
                     <FontIcon x:Name="PlayPauseGlyph" Glyph="&#xE768;" FontSize="16" />
                 </Button>
 
-                <Button Grid.Column="3" x:Name="SkipForwardButton" Width="36" Height="36"
+                <Button Grid.Column="5" x:Name="SkipForwardButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Click="SkipForward_Click">
                     <FontIcon Glyph="&#xEB9D;" FontSize="14" />
                 </Button>
 
-                <TextBlock Grid.Column="4" x:Name="PositionText" FontSize="12"
+                <TextBlock Grid.Column="6" x:Name="PositionText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <Slider Grid.Column="5" x:Name="SeekSlider" Minimum="0" Maximum="100"
+                <Slider Grid.Column="7" x:Name="SeekSlider" Minimum="0" Maximum="100"
                         StepFrequency="1" VerticalAlignment="Center"
                         ValueChanged="SeekSlider_ValueChanged"
                         PointerPressed="SeekSlider_PointerPressed"
                         PointerCaptureLost="SeekSlider_PointerReleased"
                         PointerReleased="SeekSlider_PointerReleased" />
-                <TextBlock Grid.Column="6" x:Name="DurationText" FontSize="12"
+                <TextBlock Grid.Column="8" x:Name="DurationText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <ComboBox Grid.Column="7" x:Name="RateSelector" MinWidth="92"
+                <ComboBox Grid.Column="9" x:Name="RateSelector" MinWidth="92"
                           VerticalAlignment="Center" SelectionChanged="Rate_SelectionChanged" />
             </Grid>
         </Border>

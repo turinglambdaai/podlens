@@ -201,9 +201,20 @@ struct SidebarView: View {
                         .overlay(Text(String(feed.title.prefix(1))).bold())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(feed.title).lineLimit(1)
-                        Text("\(feed.episodeCount)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("\(feed.episodeCount)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if feed.unplayed > 0 {
+                                Text("\(feed.unplayed)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 1)
+                                    .background(Color.accentColor)
+                                    .clipShape(Capsule())
+                            }
+                        }
                     }
                 }
                 .tag(feed)
@@ -293,7 +304,13 @@ struct EpisodeListView: View {
         List(selection: Binding(get: { model.store.selectedEpisode },
                                 set: { if let e = $0 { model.store.selectEpisode(e) } })) {
             ForEach(model.store.episodes) { episode in
-                EpisodeRow(episode: episode).tag(episode)
+                EpisodeRow(episode: episode)
+                    .tag(episode)
+                    .contextMenu {
+                        Button(episode.done ? L("markUnplayed") : L("markPlayed")) {
+                            model.store.markEpisode(episode, done: !episode.done)
+                        }
+                    }
             }
         }
         .overlay {
@@ -380,7 +397,21 @@ struct EpisodeHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(episode.title).font(.title3.bold())
+            if !episode.description.isEmpty {
+                Text(episode.description)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
             HStack(spacing: 8) {
+                Button {
+                    model.store.startJob("pipeline", episode: episode)
+                } label: {
+                    Label(L("pipeline"), systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.borderedProminent)
+                .help(estimateHint)
+
                 actionButton(L("download"), "arrow.down.circle") {
                     model.store.startJob("download", episode: episode)
                 }
@@ -393,6 +424,9 @@ struct EpisodeHeader: View {
                 actionButton(L("summarize"), "sparkles") {
                     model.store.startJob("summarize", episode: episode)
                 }
+                Button(episode.done ? L("markUnplayed") : L("markPlayed")) {
+                    model.store.markEpisode(episode, done: !episode.done)
+                }
                 if episode.downloaded {
                     actionButton(L("removeAudio"), "trash") {
                         model.store.withEpisode(episode.id) { api in
@@ -402,11 +436,16 @@ struct EpisodeHeader: View {
                 }
                 if let job = activeJob {
                     ProgressView(value: Double(job.pct), total: 100) {
-                        Text("\(L("transcribing")) \(job.pct)%")
+                        Text("\(job.message.isEmpty ? L("transcribing") : job.message) \(job.pct)%")
                             .font(.caption2)
                     }
                     .frame(width: 180)
                 }
+            }
+            if let hint = estimateLine {
+                Text(hint)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -415,6 +454,32 @@ struct EpisodeHeader: View {
 
     private var activeJob: PodLensStore.Job? {
         model.store.jobs.values.first { $0.status == "running" && $0.pct > 0 }
+    }
+
+    private var estimateLine: String? {
+        guard let est = model.store.estimate else { return nil }
+        var parts: [String] = []
+        if let seconds = est.durationSec, seconds > 0 {
+            parts.append(String(format: "%d min", Int(seconds / 60)))
+        }
+        if est.transcriptKnown, let sentences = est.sentences {
+            parts.append(String(format: L("estimateSentences"), sentences))
+        }
+        if let chars = est.chars {
+            parts.append(String(format: L("estimateChars"), chars))
+        }
+        if est.translated { parts.append(L("estimateTranslated")) }
+        if est.summarized { parts.append(L("estimateSummarized")) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var estimateHint: String {
+        guard let est = model.store.estimate else { return L("pipeline") }
+        if est.summarized { return L("pipelineNothingTodo") }
+        if est.transcriptKnown, let chars = est.chars {
+            return String(format: L("pipelineCostKnown"), chars)
+        }
+        return L("pipelineCostUnknown")
     }
 
     private func actionButton(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
@@ -563,6 +628,24 @@ struct PlayerBar: View {
     var body: some View {
         HStack(spacing: 12) {
             sleepMenu
+
+            if !model.store.chapters.isEmpty {
+                Button {
+                    model.store.skipChapter(-1)
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                }
+                .buttonStyle(.borderless)
+                .help(model.store.currentChapter()?.title ?? L("chapterPrev"))
+
+                Button {
+                    model.store.skipChapter(1)
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                }
+                .buttonStyle(.borderless)
+                .help(L("chapterNext"))
+            }
 
             Button {
                 model.store.skip(by: -15)

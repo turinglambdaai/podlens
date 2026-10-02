@@ -76,6 +76,7 @@ final class AppModel: ObservableObject {
                         self?.ready = true
                         self?.bootStatus = L("ready")
                         self?.store.loadFeeds()
+                        self?.store.resumeLast()
                         self?.silentUpdateCheck()
                     }
                 } catch {

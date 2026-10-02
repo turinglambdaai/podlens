@@ -176,6 +176,9 @@
     (define dur-raw (let ([d (find-first "duration" item)]) (and d (element-text d))))
     (define pub-raw (element-text (or (find-first "pubDate" item) '(pubDate () ""))))
     (define epoch (and (non-empty-string? pub-raw) (rfc822->epoch pub-raw)))
+    ;; Podcasting 2.0 chapter marks live outside the enclosure: an inline
+    ;; <podcast:chapters url=… type="application/json+chapters"/> pointer.
+    (define chapters-el (find-first "chapters" item))
     (hasheq 'guid (element-text (or (find-first "guid" item) '(guid () "")))
             'title (element-text (or (find-first "title" item) '(title () "")))
             'pub-date-epoch (or epoch 0)
@@ -185,6 +188,7 @@
             (let ([l (and enc (attr enc "length"))]) (and l (string->number l)))
             'enclosure-type (or (and enc (attr enc "type")) "")
             'duration-sec (and dur-raw (itunes-duration->seconds dur-raw))
+            'chapters-url (or (and chapters-el (attr chapters-el "url")) "")
             'description
             (let ([d (find-first "description" item)])
               (if d (regexp-replace* #rx"<[^>]*>" (element-text d) "") ""))))

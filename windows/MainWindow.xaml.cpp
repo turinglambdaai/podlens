@@ -27,6 +27,7 @@
 #include <cwchar>
 #include <fstream>
 #include <future>
+#include <regex>
 #include <thread>
 #include <type_traits>
 
@@ -94,6 +95,45 @@ std::wstring to_wide(std::string const& utf8_text) {
                           result.data(), size);
   }
   return result;
+}
+
+// The estimate RPC answers with a small JSON object; picking the numbers
+// out with a regex beats carrying a JSON parser in the host.
+std::wstring EstimateSummaryText(std::string const& json) {
+  auto const int_field = [&json](char const* key) -> int {
+    std::regex const re(std::string("\"") + key + "\":([0-9]+)");
+    std::smatch m;
+    if (std::regex_search(json, m, re)) return std::stoi(m[1].str());
+    return -1;
+  };
+  wchar_t buffer[160];
+  std::wstring text;
+  auto const append = [&text](std::wstring piece) {
+    if (!text.empty()) text += L" · ";
+    text += piece;
+  };
+  int const minutes = int_field("durationSec") / 60;
+  if (minutes > 0) {
+    swprintf(buffer, 160, podlens::Tr("estimate.minutes").data(), minutes);
+    append(buffer);
+  }
+  int const sentences = int_field("sentences");
+  if (sentences >= 0) {
+    swprintf(buffer, 160, podlens::Tr("estimate.sentences").data(), sentences);
+    append(buffer);
+  }
+  int const chars = int_field("chars");
+  if (chars >= 0) {
+    swprintf(buffer, 160, podlens::Tr("estimate.chars").data(), chars);
+    append(buffer);
+  }
+  if (json.find("\"translated\":true") != std::string::npos) {
+    append(std::wstring(podlens::Tr("estimate.translated")));
+  }
+  if (json.find("\"summarized\":true") != std::string::npos) {
+    append(std::wstring(podlens::Tr("estimate.summarized")));
+  }
+  return text;
 }
 
 rivet::windows::RacketRuntimeConfig runtime_config() {
@@ -309,6 +349,19 @@ MainWindow::MainWindow() {
     }
   });
 
+  // background subscription refresh; new episodes surface in the status line
+  refresh_timer_ = DispatcherQueue().CreateTimer();
+  refresh_timer_.Interval(std::chrono::minutes{30});
+  refresh_timer_.Tick([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) window->AutoRefreshTick();
+  });
+  refresh_timer_.Start();
+
+  PipelineButton().Content(box_value(
+      winrt::hstring(std::wstring(podlens::Tr("action.pipeline")))));
+  MarkButton().Content(box_value(
+      winrt::hstring(std::wstring(podlens::Tr("action.mark_played")))));
+
   // The player is constructed up front: every call on a null projected
   // MediaPlayer throws, so deferring construction made playback itself
   // fail. SMTC is wired manually — the CommandManager auto-handles
@@ -373,6 +426,12 @@ MainWindow::MainWindow() {
     muxc::ToolTipService::SetToolTip(
         SkipForwardButton(),
         box_value(winrt::hstring(std::wstring(podlens::Tr("player.skip_forward")))));
+    muxc::ToolTipService::SetToolTip(
+        ChapterBackButton(),
+        box_value(winrt::hstring(std::wstring(podlens::Tr("chapter.prev")))));
+    muxc::ToolTipService::SetToolTip(
+        ChapterForwardButton(),
+        box_value(winrt::hstring(std::wstring(podlens::Tr("chapter.next")))));
   } catch (...) {
   }
 
@@ -433,6 +492,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
         window->api_ = std::make_unique<rivet_app::API>(*window->backend_);
         window->SetStatus(true, std::wstring(podlens::Tr("status.ready")));
         window->ReloadFeeds();
+        window->ResumeLast();
       } else {
         // Never destroy the last Backend reference on its own reader thread.
         std::thread([backend = std::move(backend)]() mutable {
@@ -512,12 +572,18 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
     feed.title = row[1];
     feed.artwork = row.size() > 3 ? row[3] : "";
     feed.count = row[4];
+    feed.unplayed = row.size() > 7 ? std::atoi(row[7].c_str()) : 0;
     feeds_.push_back(feed);
 
     muxc::NavigationViewItem item;
     item.Tag(box_value(winrt::hstring(to_wide(feed.id))));
-    item.Content(box_value(winrt::hstring(
-        to_wide(feed.title) + L"  (" + to_wide(feed.count) + L")")));
+    std::wstring label =
+        to_wide(feed.title) + L"  (" + to_wide(feed.count) + L")";
+    if (feed.unplayed > 0) {
+      label += L" · " + std::to_wstring(feed.unplayed) +
+               std::wstring(podlens::Tr("badge.unplayed"));
+    }
+    item.Content(box_value(winrt::hstring(label)));
     muxc::FontIcon icon;
     icon.Glyph(winrt::hstring(L"\xE8F1"));
     item.Icon(icon);
@@ -527,7 +593,17 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
   // silently dropped; SelectedItem goes through the view and fires
   // SelectionChanged reliably.
   if (!feeds_.empty()) {
-    Nav().SelectedItem(Nav().MenuItems().GetAt(0));
+    uint32_t select = 0;
+    if (!pending_resume_feed_id_.empty()) {
+      for (uint32_t i = 0; i < feeds_.size(); ++i) {
+        if (feeds_[i].id == pending_resume_feed_id_) {
+          select = i;
+          break;
+        }
+      }
+      pending_resume_feed_id_.clear();
+    }
+    Nav().SelectedItem(Nav().MenuItems().GetAt(select));
   }
   UpdateDetailVisibility();
 }
@@ -585,7 +661,7 @@ void MainWindow::RenderEpisodes(std::vector<std::vector<std::string>> rows) {
   EpisodeList().Items().Clear();
 
   for (auto const& row : rows) {
-    if (row.size() < 10) continue;
+    if (row.size() < 11) continue;
     EpisodeRow episode;
     episode.id = row[0];
     episode.title = row[1];
@@ -597,6 +673,7 @@ void MainWindow::RenderEpisodes(std::vector<std::vector<std::string>> rows) {
     episode.position_sec = std::wcstod(to_wide(row[7]).c_str(), nullptr);
     episode.done = row[8] == "1";
     episode.has_translation = row[9] == "1";
+    episode.description = row[10];
     episodes_.push_back(episode);
 
     muxc::TextBlock title;
@@ -649,12 +726,43 @@ void MainWindow::RenderEpisodes(std::vector<std::vector<std::string>> rows) {
                         .Resources()
                         .Lookup(box_value(winrt::hstring(L"AppCardBrush")))
                         .as<Microsoft::UI::Xaml::Media::Brush>());
+
+    // right-click / long-press: mark played or unplayed
+    muxc::MenuFlyout flyout;
+    muxc::MenuFlyoutItem played_item;
+    played_item.Text(std::wstring(podlens::Tr("action.mark_played")));
+    played_item.Click([weak = get_weak()](auto&& sender, auto&&) {
+      if (auto window = weak.get()) window->MarkFromMenu(sender, L"1");
+    });
+    muxc::MenuFlyoutItem unplayed_item;
+    unplayed_item.Text(std::wstring(podlens::Tr("action.mark_unplayed")));
+    unplayed_item.Click([weak = get_weak()](auto&& sender, auto&&) {
+      if (auto window = weak.get()) window->MarkFromMenu(sender, L"0");
+    });
+    flyout.Items().Append(played_item);
+    flyout.Items().Append(unplayed_item);
+    card.ContextFlyout(flyout);
+
     EpisodeList().Items().Append(card);
   }
 
   bool const empty = episodes_.empty();
   EpisodesEmpty().Visibility(empty ? Visibility::Visible : Visibility::Collapsed);
   EpisodeList().Visibility(empty ? Visibility::Collapsed : Visibility::Visible);
+
+  // resume-on-launch: jump to the recorded episode once it exists
+  if (!pending_resume_episode_id_.empty()) {
+    for (uint32_t i = 0; i < episodes_.size(); ++i) {
+      if (episodes_[i].id == pending_resume_episode_id_) {
+        EpisodeList().SelectedIndex(i);
+        SetStatus(true, std::wstring(podlens::Tr("status.resumed")) + L" " +
+                            to_wide(episodes_[i].title));
+        break;
+      }
+    }
+    pending_resume_episode_id_.clear();
+  }
+
   UpdateDetailVisibility();
   UpdateActionButtons();
 }
@@ -678,6 +786,11 @@ void MainWindow::RenderDetailHeader() {
             FormatSeconds(episode->position_sec);
   }
   DetailMeta().Text(winrt::hstring(meta));
+  DetailNotes().Text(episode->description.empty()
+                         ? L""
+                         : winrt::hstring(to_wide(episode->description)));
+  MarkButton().Content(box_value(winrt::hstring(std::wstring(podlens::Tr(
+      episode->done ? "action.mark_unplayed" : "action.mark_played")))));
   DurationText().Text(winrt::hstring(FormatSeconds(episode->duration_sec)));
 }
 
@@ -690,14 +803,17 @@ void MainWindow::UpdateActionButtons() {
     }
   }
   if (!episode) {
+    PipelineButton().IsEnabled(false);
     DownloadButton().IsEnabled(false);
     TranscribeButton().IsEnabled(false);
     TranslateButton().IsEnabled(false);
     SummarizeButton().IsEnabled(false);
+    MarkButton().IsEnabled(false);
     return;
   }
   bool const transcript_running = episode->transcript_status == "running";
   bool const summary_running = episode->summary_status == "running";
+  PipelineButton().IsEnabled(true);
   DownloadButton().IsEnabled(!episode->downloaded);
   TranscribeButton().IsEnabled(!transcript_running &&
                                episode->transcript_status != "done");
@@ -705,6 +821,7 @@ void MainWindow::UpdateActionButtons() {
                               !episode->has_translation);
   SummarizeButton().IsEnabled(episode->transcript_status == "done" &&
                               !summary_running && episode->summary_status != "done");
+  MarkButton().IsEnabled(true);
 }
 
 // ---- transcript ----------------------------------------------------------------
@@ -1073,6 +1190,15 @@ void MainWindow::TickPlayer() {
     SetSmtcStatus(false);
     SetStatus(true, std::wstring(podlens::Tr("status.playback_done")));
     ReloadEpisodes();
+    // continuous playback: roll into the next (older) episode of the feed
+    for (size_t i = 0; i + 1 < episodes_.size(); ++i) {
+      if (episodes_[i].id == selected_episode_id_) {
+        SetStatus(true, std::wstring(podlens::Tr("status.autoplay_next")));
+        EpisodeList().SelectedIndex(static_cast<uint32_t>(i + 1));
+        StartPlayback();
+        break;
+      }
+    }
     return;
   }
   if (++ticks_since_save_ >= 5) {
@@ -1206,6 +1332,149 @@ void MainWindow::UpdateSmtcTimeline(double position_seconds) {
     smtc.UpdateTimelineProperties(timeline);
   } catch (...) {
   }
+}
+
+// ---- episode extras -----------------------------------------------------------
+
+void MainWindow::LoadChapters() {
+  chapters_.clear();
+  UpdateChapterButtons();
+  if (!api_ || selected_episode_id_.empty()) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  auto const episode_id = selected_episode_id_;
+  (void)api_->episode_chapters_async(
+      episode_id,
+      [dispatcher, weak, episode_id](
+          rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+        dispatcher.TryEnqueue([weak, result, episode_id]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              if (window->selected_episode_id_ != episode_id) return;
+              window->chapters_.clear();
+              for (auto const& row : result.get()) {
+                if (row.size() < 2) continue;
+                ChapterMark mark;
+                mark.start = std::wcstod(to_wide(row[0]).c_str(), nullptr);
+                mark.title = to_wide(row[1]);
+                window->chapters_.push_back(mark);
+              }
+              window->UpdateChapterButtons();
+            } catch (std::exception const&) {
+            }
+          }
+        });
+      });
+}
+
+void MainWindow::UpdateChapterButtons() {
+  bool const has = !chapters_.empty();
+  ChapterBackButton().Visibility(has ? Visibility::Visible : Visibility::Collapsed);
+  ChapterForwardButton().Visibility(has ? Visibility::Visible
+                                        : Visibility::Collapsed);
+}
+
+void MainWindow::SkipChapter(int direction) {
+  if (chapters_.empty() || !player_ || !player_.Source()) return;
+  double const position = TimeSpanSeconds(player_.PlaybackSession().Position());
+  if (direction > 0) {
+    for (auto const& mark : chapters_) {
+      if (mark.start > position + 0.5) {
+        SeekTo(mark.start);
+        return;
+      }
+    }
+    return;
+  }
+  // backward: to the current chapter's start, or the previous one when
+  // already near the beginning of this chapter
+  size_t idx = 0;
+  double current_start = chapters_.front().start;
+  for (size_t i = 0; i < chapters_.size(); ++i) {
+    if (chapters_[i].start <= position) {
+      current_start = chapters_[i].start;
+      idx = i;
+    } else {
+      break;
+    }
+  }
+  SeekTo(position - current_start < 5 && idx > 0 ? chapters_[idx - 1].start
+                                                 : current_start);
+}
+
+void MainWindow::LoadEstimate() {
+  DetailEstimate().Text(L"");
+  if (!api_ || selected_episode_id_.empty()) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  auto const episode_id = selected_episode_id_;
+  (void)api_->episode_estimate_async(
+      episode_id, [dispatcher, weak, episode_id](rivet_app::Result<std::string> result) {
+        dispatcher.TryEnqueue([weak, result, episode_id]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              if (window->selected_episode_id_ != episode_id) return;
+              std::string const json = result.get();
+              window->DetailEstimate().Text(
+                  winrt::hstring(EstimateSummaryText(json)));
+            } catch (std::exception const&) {
+            }
+          }
+        });
+      });
+}
+
+void MainWindow::ResumeLast() {
+  if (!api_) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  (void)api_->resume_last_async(
+      [dispatcher, weak](rivet_app::Result<std::vector<std::string>> result) {
+        dispatcher.TryEnqueue([weak, result]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              auto const row = result.get();
+              if (row.size() < 3) return;
+              window->pending_resume_feed_id_ = row[0];
+              window->pending_resume_episode_id_ = row[1];
+              bool selected = false;
+              for (uint32_t i = 0; i < window->feeds_.size(); ++i) {
+                if (window->feeds_[i].id == row[0]) {
+                  window->Nav().SelectedItem(window->Nav().MenuItems().GetAt(i));
+                  selected = true;
+                  break;
+                }
+              }
+              if (!selected) window->ReloadFeeds();
+            } catch (std::exception const&) {
+            }
+          }
+        });
+      });
+}
+
+void MainWindow::AutoRefreshTick() {
+  if (!api_) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  (void)api_->feed_refresh_all_async(
+      [dispatcher, weak](rivet_app::Result<std::int64_t> result) {
+        dispatcher.TryEnqueue([weak, result]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              auto const added = result.get();
+              window->ReloadFeeds();
+              if (added > 0) {
+                window->SetStatus(true,
+                                  std::wstring(podlens::Tr("status.refreshed")) +
+                                      to_wide(std::to_string(added)) +
+                                      std::wstring(podlens::Tr("status.refreshed_suffix")));
+              }
+            } catch (std::exception const&) {
+            }
+          }
+        });
+      });
 }
 
 std::wstring MainWindow::FormatTime(double seconds) {
@@ -1378,6 +1647,8 @@ void MainWindow::EpisodeList_SelectionChanged(
   if (!selected_episode_id_.empty()) {
     LoadTranscript();
     LoadSummary(selected_episode_id_);
+    LoadChapters();
+    LoadEstimate();
   }
 }
 
@@ -1716,6 +1987,58 @@ void MainWindow::Summarize_Click(winrt::Windows::Foundation::IInspectable const&
 void MainWindow::PlayPause_Click(winrt::Windows::Foundation::IInspectable const&,
                                  Microsoft::UI::Xaml::RoutedEventArgs const&) {
   TogglePlayPause();
+}
+
+void MainWindow::Pipeline_Click(winrt::Windows::Foundation::IInspectable const&,
+                                Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  StartJob("pipeline", SelectedEpisodeId());
+}
+
+void MainWindow::MarkToggle_Click(winrt::Windows::Foundation::IInspectable const&,
+                                  Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  EpisodeRow const* episode = nullptr;
+  for (auto const& candidate : episodes_) {
+    if (candidate.id == selected_episode_id_) {
+      episode = &candidate;
+      break;
+    }
+  }
+  if (!episode || !api_) return;
+  auto const id = episode->id;
+  auto const done = episode->done ? "0" : "1";
+  (void)api_->episode_set_done_async(
+      id, done, [weak = get_weak()](rivet_app::Result<bool>) {
+        if (auto window = weak.get()) {
+          window->ReloadEpisodes();
+          window->ReloadFeeds();
+        }
+      });
+}
+
+void MainWindow::MarkFromMenu(
+    winrt::Windows::Foundation::IInspectable const& sender, wchar_t const* done) {
+  auto item = sender.try_as<muxc::MenuFlyoutItem>();
+  if (!item || !api_) return;
+  auto const id = to_utf8(std::wstring(
+      winrt::unbox_value_or<winrt::hstring>(item.Tag(), winrt::hstring(L""))));
+  if (id.empty()) return;
+  (void)api_->episode_set_done_async(
+      id, to_utf8(done), [weak = get_weak()](rivet_app::Result<bool>) {
+        if (auto window = weak.get()) {
+          window->ReloadEpisodes();
+          window->ReloadFeeds();
+        }
+      });
+}
+
+void MainWindow::ChapterBack_Click(winrt::Windows::Foundation::IInspectable const&,
+                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  SkipChapter(-1);
+}
+
+void MainWindow::ChapterForward_Click(winrt::Windows::Foundation::IInspectable const&,
+                                      Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  SkipChapter(1);
 }
 
 void MainWindow::SkipBack_Click(winrt::Windows::Foundation::IInspectable const&,

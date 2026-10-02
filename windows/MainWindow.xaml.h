@@ -31,6 +31,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                         Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Download_Click(winrt::Windows::Foundation::IInspectable const&,
                       Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void Pipeline_Click(winrt::Windows::Foundation::IInspectable const&,
+                      Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void MarkToggle_Click(winrt::Windows::Foundation::IInspectable const&,
+                        Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Transcribe_Click(winrt::Windows::Foundation::IInspectable const&,
                         Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Translate_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -55,6 +59,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                       Microsoft::UI::Xaml::RoutedEventArgs const&);
   void SkipForward_Click(winrt::Windows::Foundation::IInspectable const&,
                          Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ChapterBack_Click(winrt::Windows::Foundation::IInspectable const&,
+                         Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ChapterForward_Click(winrt::Windows::Foundation::IInspectable const&,
+                            Microsoft::UI::Xaml::RoutedEventArgs const&);
   void SleepOption_Click(winrt::Windows::Foundation::IInspectable const&,
                          Microsoft::UI::Xaml::RoutedEventArgs const&);
   void PlayerAccel_Invoked(Microsoft::UI::Xaml::Input::KeyboardAccelerator const&,
@@ -104,6 +112,14 @@ struct MainWindow : MainWindowT<MainWindow> {
   void UpdateSmtcTimeline(double position_seconds);
   static std::wstring FormatTime(double seconds);
 
+  // episode extras (chapters, cost estimate, resume, auto refresh)
+  void LoadChapters();
+  void UpdateChapterButtons();
+  void SkipChapter(int direction);
+  void LoadEstimate();
+  void ResumeLast();
+  void AutoRefreshTick();
+
   void StartJob(std::string const& kind, std::string const& episode_id);
   std::string SelectedFeedId();
   std::string SelectedEpisodeId();
@@ -117,17 +133,21 @@ struct MainWindow : MainWindowT<MainWindow> {
   void RunUpdateCheck();
   void ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
                           std::string const& error);
+  void MarkFromMenu(winrt::Windows::Foundation::IInspectable const& sender,
+                    wchar_t const* done);
 
   struct FeedRow {
     std::string id;
     std::string title;
     std::string artwork;
     std::string count;
+    int unplayed = 0;
   };
   struct EpisodeRow {
     std::string id;
     std::string title;
     std::string pub;
+    std::string description;
     double position_sec = 0;
     double duration_sec = 0;
     bool downloaded = false;
@@ -135,6 +155,10 @@ struct MainWindow : MainWindowT<MainWindow> {
     bool has_translation = false;
     std::string transcript_status;
     std::string summary_status;
+  };
+  struct ChapterMark {
+    double start = 0;
+    std::wstring title;
   };
 
   std::shared_ptr<rivet::windows::Backend> backend_;
@@ -161,7 +185,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer position_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer error_bar_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer sleep_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer refresh_timer_{nullptr};
   int sleep_minutes_ = 0;
+  std::vector<ChapterMark> chapters_;
+  // resume-on-launch: feed/episode ids waiting for their lists to render
+  std::string pending_resume_feed_id_;
+  std::string pending_resume_episode_id_;
   double duration_ = 0;
   bool user_seeking_ = false;
   bool syncing_ui_ = false;

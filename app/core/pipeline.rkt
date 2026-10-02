@@ -24,6 +24,8 @@
          run-transcribe!
          run-translate!
          run-summarize!
+         run-pipeline!
+         estimate-episode
          make-job-manager
          job-start!
          job-get
@@ -270,6 +272,58 @@
     (episode-set-status! id 'summary-status "done")
     (on-progress 100 "summary ready")
     #t))
+
+;; ---- one-click pipeline -----------------------------------------------------
+;;
+;; "Understand this episode" = download → transcribe → translate → summarize
+;; as one job. Finished stages are skipped: a re-run after a failure pays
+;; only for what is still missing, and a done episode costs nothing.
+
+;; Returns the stage names that actually RAN (in order) — an empty list
+;; means the episode was already fully understood and cost nothing.
+(define (run-pipeline! cfg episode on-progress)
+  (define id (hash-ref episode 'id))
+  (define ran '())
+  (define (slice from to)
+    (lambda (p m)
+      (on-progress (+ from (quotient (* (- to from) (min p 100)) 100)) m)))
+  (let ([t (transcript-load id)])
+    (unless (and t (pair? (hash-ref t 'segments '())))
+      (run-transcribe! cfg episode (slice 0 45))
+      (set! ran (cons 'transcribe ran))))
+  (let ([t (transcript-load id)])
+    (unless (and (pair? (hash-ref t 'translation '()))
+                 (equal? (hash-ref t 'target-lang "")
+                         (hash-ref cfg 'target-lang)))
+      (run-translate! cfg (episode-get id) (slice 45 85))
+      (set! ran (cons 'translate ran))))
+  (let ([t (transcript-load id)])
+    (unless (hash-ref t 'summary #f)
+      (run-summarize! cfg (episode-get id) (slice 85 100))
+      (set! ran (cons 'summarize ran))))
+  (reverse ran))
+
+;; What a "understand this episode" run would cost, for display before the
+;; user commits. chars is the translate/summarize input size — the BYOK
+;; bill is roughly proportional to it. transcript-known is #f before ASR:
+;; sentence counts simply don't exist yet.
+(define (estimate-episode cfg episode)
+  (define id (hash-ref episode 'id))
+  (define t (transcript-load id))
+  (hasheq 'durationSec (hash-ref episode 'duration-sec #f)
+          'transcriptKnown (and t (pair? (hash-ref t 'segments '())))
+          'sentences (and t (length (hash-ref t 'segments '())))
+          'chars
+          (and t
+               (for/sum ([s (in-list (hash-ref t 'segments '()))])
+                 (string-length (hash-ref s 'text ""))))
+          'targetLang (hash-ref cfg 'target-lang)
+          'translated
+          (and t
+               (pair? (hash-ref t 'translation '()))
+               (equal? (hash-ref t 'target-lang "") (hash-ref cfg 'target-lang))
+               #t)
+          'summarized (and t (hash-ref t 'summary #f) #t)))
 
 ;; ---- jobs ---------------------------------------------------------------------------
 
