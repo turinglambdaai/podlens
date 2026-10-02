@@ -17,6 +17,7 @@
          read-json-file
          write-json-file!
          trim-or-empty
+         blank-string?
          now-epoch)
 
 ;; Run thunk while holding sem; the post always fires, even on exception.
@@ -64,6 +65,10 @@
 
 (define (trim-or-empty v)
   (if (string? v) (string-trim v) ""))
+
+;; whitespace-only (or non-string) → #t; racket/string has no string-blank?
+(define (blank-string? s)
+  (not (and (string? s) (non-empty-string? (string-trim s)))))
 
 (define (now-epoch)
   (current-seconds))

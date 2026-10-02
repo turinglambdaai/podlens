@@ -58,16 +58,32 @@ public struct RivetAPI: Sendable {
         let result = try await client.call("catalog-search", arguments: [encode_String(query)])
         return try decode__List_List_String_(result)
     }
+    public func episode_chapters(id: String) async throws -> [[String]] {
+        let result = try await client.call("episode-chapters", arguments: [encode_String(id)])
+        return try decode__List_List_String_(result)
+    }
     public func episode_download(id: String) async throws -> String {
         let result = try await client.call("episode-download", arguments: [encode_String(id)])
+        return try decode_String(result)
+    }
+    public func episode_estimate(id: String) async throws -> String {
+        let result = try await client.call("episode-estimate", arguments: [encode_String(id)])
         return try decode_String(result)
     }
     public func episode_list(feed_id: String) async throws -> [[String]] {
         let result = try await client.call("episode-list", arguments: [encode_String(feed_id)])
         return try decode__List_List_String_(result)
     }
+    public func episode_pipeline(id: String) async throws -> String {
+        let result = try await client.call("episode-pipeline", arguments: [encode_String(id)])
+        return try decode_String(result)
+    }
     public func episode_remove_audio(id: String) async throws -> Bool {
         let result = try await client.call("episode-remove-audio", arguments: [encode_String(id)])
+        return try decode_Bool(result)
+    }
+    public func episode_set_done(id: String, done: String) async throws -> Bool {
+        let result = try await client.call("episode-set-done", arguments: [encode_String(id), encode_String(done)])
         return try decode_Bool(result)
     }
     public func episode_summarize(id: String) async throws -> String {
@@ -125,6 +141,10 @@ public struct RivetAPI: Sendable {
     public func position_save(id: String, seconds: String, done: String) async throws -> Bool {
         let result = try await client.call("position-save", arguments: [encode_String(id), encode_String(seconds), encode_String(done)])
         return try decode_Bool(result)
+    }
+    public func resume_last() async throws -> [String] {
+        let result = try await client.call("resume-last", arguments: [])
+        return try decode__List_String_(result)
     }
     public func settings_list() async throws -> [[String]] {
         let result = try await client.call("settings-list", arguments: [])

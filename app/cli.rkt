@@ -11,6 +11,7 @@
 ;; Run with:  racket app/cli.rkt <command> …   (see `help`)
 
 (require json
+         racket/format
          racket/list
          racket/match
          racket/port
@@ -214,6 +215,146 @@
             (displayln (tr (lang) 'summarized)))
         0))]))
 
+(define (cmd-pipeline args)
+  ;; one-click "understand this episode": download → transcribe → translate
+  ;; → summarize; finished stages are skipped, so a rerun is cheap
+  (cond
+    [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
+    [else
+     (with-episode
+      (car args)
+      (lambda (e)
+        (define stages
+          (run-pipeline! (cfg-snapshot (config!)) e (progress->stderr "pipeline")))
+        (if (stdout-json?)
+            (emit-ok (hasheq 'stages stages))
+            (begin
+              (displayln (tr (lang) 'pipelined))
+              (for ([s (in-list stages)])
+                (displayln (format "  ✓ ~a" s)))))
+        0))]))
+
+(define (cmd-estimate args)
+  ;; what a pipeline run would cost — sentence/char counts before committing
+  (cond
+    [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
+    [else
+     (define e (episode-get (car args)))
+     (cond
+       [(not e) (fail! 1 (tr (lang) 'no-episode))]
+       [else
+        (define est (estimate-episode (cfg-snapshot (config!)) e))
+        (if (stdout-json?)
+            (emit-ok (hasheq 'estimate est))
+            (begin
+              (displayln (format "duration-sec: ~a" (hash-ref est 'durationSec)))
+              (displayln (format "transcript:   ~a"
+                                 (if (hash-ref est 'transcriptKnown) "yes" "no")))
+              (displayln (format "sentences:    ~a" (hash-ref est 'sentences)))
+              (displayln (format "chars:        ~a" (hash-ref est 'chars)))
+              (displayln (format "translated:   ~a" (hash-ref est 'translated)))
+              (displayln (format "summarized:   ~a" (hash-ref est 'summarized)))
+              0))])]))
+
+(define (cmd-done args)
+  ;; mark played / unplayed; unplayed resets the position
+  (cond
+    [(or (< (length args) 1) (> (length args) 2)) (usage! (tr (lang) 'usage))]
+    [else
+     (define id (car args))
+     (define done?
+       (if (= (length args) 2)
+           (member (cadr args) '("1" "true" "yes"))
+           #t))
+     (cond
+       [(not (episode-get id)) (fail! 1 (tr (lang) 'no-episode))]
+       [else
+        (episode-set-done! id done?)
+        (unless done? (episode-set-position! id 0))
+        (if (stdout-json?)
+            (emit-ok (hasheq 'id id 'done done?))
+            (displayln (if done? (tr (lang) 'marked-done) (tr (lang) 'marked-undone))))
+        0])]))
+
+(define (cmd-export args)
+  ;; timestamped transcript (+ summary) as Markdown — the citation format
+  ;; agents paste into notes
+  (cond
+    [(or (< (length args) 1) (> (length args) 2)) (usage! (tr (lang) 'usage))]
+    [else
+     (define id (car args))
+     (define e (episode-get id))
+     (cond
+       [(not e) (fail! 1 (tr (lang) 'no-episode))]
+       [else
+        (define t (transcript-load id))
+        (cond
+          [(not (and t (pair? (hash-ref t 'segments '()))))
+           (fail! 1 (tr (lang) 'export-no-transcript))]
+          [else
+           (define feed (feed-get (hash-ref e 'feed-id)))
+           (define md (export-markdown e feed t))
+           (define path
+             (if (= (length args) 2)
+                 (cadr args)
+                 (format "podlens-~a.md" (substring id 0 12))))
+           (with-output-to-file path (lambda () (display md)) #:exists 'replace)
+           (if (stdout-json?)
+               (emit-ok (hasheq 'path path))
+               (displayln (tr (lang) 'exported path)))
+           0])])]))
+
+(define (mmss sec)
+  (define s (inexact->exact (floor sec)))
+  (format "~a:~a" (quotient s 60) (~r (remainder s 60) #:min-width 2 #:pad-string "0")))
+
+(define (export-markdown e feed t)
+  (define summary (hash-ref t 'summary #f))
+  (string-join
+   (append
+    (list (format "# ~a" (hash-ref e 'title ""))
+          ""
+          (format "- Podcast: ~a" (if feed (hash-ref feed 'title "") ""))
+          (format "- Published: ~a" (hash-ref e 'pub-date-display ""))
+          "")
+    (if summary
+        (append
+         (list "## TL;DR" "" (hash-ref summary 'tldr "") "")
+         (if (pair? (hash-ref summary 'key-points '()))
+             (append (list "## Key points" "")
+                     (for/list ([p (in-list (hash-ref summary 'key-points))])
+                       (format "- ~a" p))
+                     (list ""))
+             '())
+         (if (pair? (hash-ref summary 'quotes '()))
+             (append (list "## Notable quotes" "")
+                     (for/list ([q (in-list (hash-ref summary 'quotes))])
+                       (format "> ~a~a"
+                               (hash-ref q 'text "")
+                               (let ([tr-q (hash-ref q 'translation "")])
+                                 (if (blank-string? tr-q) "" (format "\n> — ~a" tr-q)))))
+                     (list ""))
+             '())
+         (if (pair? (hash-ref summary 'topics '()))
+             (append (list "## Topics" ""
+                           (string-join
+                            (for/list ([tp (in-list (hash-ref summary 'topics))])
+                              (format "`~a`" tp))
+                            " · ")
+                           "")
+                     (list ""))
+             '()))
+        '())
+    (list "## Transcript" "")
+    (append*
+     (let ([trans (hash-ref t 'translation '())])
+       (for/list ([s (in-list (hash-ref t 'segments '()))] [i (in-naturals)])
+         (define tr-line (if (< i (length trans)) (list-ref trans i) ""))
+         (list (format "- `~a` ~a" (mmss (hash-ref s 'start 0)) (hash-ref s 'text ""))
+               (if (blank-string? tr-line) "" (format "  ~a" tr-line))))))
+    (list ""))
+   "\n"))
+
 (define (cmd-show args)
   (cond
     [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
@@ -322,6 +463,43 @@
                (displayln (format "    ~a" (hash-ref r 'feed-url))))
              0)))]))
 
+(define (cmd-find args)
+  ;; full-text search across every subscription's transcripts; answers
+  ;; "what did they say about X, at which minute" with sentence timestamps
+  (cond
+    [(null? args) (usage! (tr (lang) 'usage))]
+    [else
+     (define terms
+       (for/list ([a (in-list args)])
+         (string-downcase (string-trim a))))
+     (define matches
+       (for*/list ([e (in-list (episode-all))]
+                   [t (in-value (transcript-load (hash-ref e 'id)))]
+                   #:when t
+                   [s (in-list (hash-ref t 'segments '()))]
+                   #:do [(define text
+                           (string-downcase (hash-ref s 'text "")))
+                         (define hit?
+                           (for/and ([term (in-list terms)])
+                             (string-contains? text term)))]
+                   #:when hit?)
+         (hasheq 'episodeId (hash-ref e 'id)
+                 'episodeTitle (hash-ref e 'title "")
+                 'start (hash-ref s 'start 0)
+                 'end (hash-ref s 'end 0)
+                 'text (hash-ref s 'text ""))))
+     (define limited (take matches (min (length matches) 200)))
+     (if (stdout-json?)
+         (emit-ok (hasheq 'total (length matches) 'matches limited))
+         (begin
+           (when (null? matches) (displayln (tr (lang) 'no-results)))
+           (for ([m (in-list limited)])
+             (displayln (format "~a  ~a  ~a"
+                                (mmss (hash-ref m 'start))
+                                (substring (hash-ref m 'episodeId) 0 12)
+                                (hash-ref m 'text))))
+           0))]))
+
 (define (cmd-refresh args)
   (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
     (define ids (if (null? args) (map (lambda (f) (hash-ref f 'id)) (feed-all)) args))
@@ -417,10 +595,15 @@
    "  catalog [category]         list the curated catalog\n"
    "  search <terms>             search the full podcast directory\n"
    "  download <episode-id>      cache the episode audio\n"
+   "  pipeline <episode-id>      download+transcribe+translate+summarize\n"
+   "  estimate <episode-id>      what a pipeline run would cost\n"
    "  transcribe <episode-id>    speech-to-text via the ASR API\n"
    "  translate <episode-id>     translate the transcript\n"
    "  summarize <episode-id>     TL;DR + key points + quotes\n"
    "  show <episode-id>          print transcript and summary\n"
+   "  export <episode-id> [file] transcript+summary as Markdown (@mm:ss)\n"
+   "  find <terms>…              full-text search across transcripts\n"
+   "  done <episode-id> [0|1]    mark played (1, default) or unplayed (0)\n"
    "  position <episode-id> <s>  remember a playback position\n"
    "  config [key [value]]       read or set settings\n"
    "  check-updates              signed update check\n"
@@ -444,10 +627,15 @@
           'catalog cmd-catalog
           'search cmd-search
           'download cmd-download
+          'pipeline cmd-pipeline
+          'estimate cmd-estimate
           'transcribe cmd-transcribe
           'translate cmd-translate
           'summarize cmd-summarize
           'show cmd-show
+          'export cmd-export
+          'find cmd-find
+          'done cmd-done
           'position cmd-position
           'config cmd-config
           'check-updates cmd-check-updates

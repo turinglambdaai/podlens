@@ -73,7 +73,9 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Bring-your-own-key: OpenAI, DeepSeek, Groq, SiliconFlow, Ollama, any OpenAI-compatible endpoint
 - Curated catalog of classic English podcasts (tech, science, business, design) in a Discover panel — one tap to add, never auto-subscribed; every entry is verified live by `scripts/verify-catalog.rkt` at release time
 - Full-directory search in the same Discover panel (iTunes Search API, no key needed) — results come with Apple's authoritative feed URLs
-- Agent-friendly CLI over the same core (`add`, `episodes`, `transcribe`, `translate`, `summarize`, `show`, `search`, `--json`, exit codes 0/1/2)
+- Agent-friendly CLI over the same core (`add`, `episodes`, `pipeline`,
+  `estimate`, `transcribe`, `translate`, `summarize`, `show`, `export`,
+  `find`, `done`, `search`, `--json`, exit codes 0/1/2)
 - Signed in-app updates (Ed25519 manifest + SHA-256, see [docs/UPDATE.md](docs/UPDATE.md))
 
 ## Quick Start
@@ -111,7 +113,7 @@ podlens/
 │   ├── backend.rkt         # the RVT1 wire contract (21 RPCs, 5 events, 1 state)
 │   ├── update.rkt          # signed-manifest update checks
 │   ├── cli.rkt             # agent-facing CLI (--json, exit codes)
-│   └── core/               # feeds, library, config, openai, pipeline, i18n
+│   └── core/               # feeds, library, config, openai, pipeline, chapters, i18n
 ├── macos-host/             # SwiftUI host (player, transcript, updater)
 ├── windows/                # WinUI 3 host (C++/WinRT code-behind)
 ├── tests/                  # 19 backend tests incl. a fake OpenAI server
@@ -134,10 +136,11 @@ raco test tests/        # backend tests (no API key needed — fake server)
 
 ## Honest gaps
 
-- **No waveform, gapless playback or chapter markers yet** — seek, ±15/30 s skip, 1.0–3.0× speed, sleep timer and system media keys (media keys / Control Center / SMTC) are there on both hosts
-- **macOS builds are ad-hoc signed** until notarization credentials are configured in CI; first launch needs right-click → Open
-- **Translation cost is unbounded by design** — every sentence of a chosen episode goes through your API; long episodes cost real money
+- **No waveform, gapless playback or Up Next queue** — seek, ±15/30 s skip, 1.0–3.0× speed, sleep timer, chapter jumps and continuous playback are there; a drag-reorderable queue is not
+- **Chapters only via Podcasting 2.0 feed pointers** — embedded ID3/M4A chapter atoms are not parsed; per-chapter summaries are deliberately not built (N× the LLM bill)
+- **Translation cost is bounded only by your usage** — every sentence of a chosen episode goes through your API; long episodes cost real money. The header shows a sentence/character estimate before you start, and `podlens estimate <id>` prints it
 - **One target language at a time** — the pipeline retranslates when you change `target-lang`
+- **macOS builds are ad-hoc signed** until notarization credentials are configured in CI; first launch needs right-click → Open
 
 ## Roadmap
 
@@ -145,11 +148,13 @@ The full design roadmap (M1 consistency baseline → M2 transcript-as-product �
 
 - [x] RSS subscription + episode cache + playback positions
 - [x] ASR / translation / summary pipeline with job progress events
+- [x] One-click "understand this episode" (pipeline RPC) + cost estimates
 - [x] SwiftUI + WinUI 3 hosts over one RVT1 contract
 - [x] Ed25519-signed update channel
+- [x] System media keys (Control Center / SMTC), skip, sleep timer, 3× speed
+- [x] Chapter marks (Podcasting 2.0), mark played, unplayed badges, continuous playback, resume on launch
 - [ ] Notarized macOS + Authenticode-signed Windows releases
-- [ ] Chapter markers and per-chapter summaries
-- [ ] Listening stats and vocabulary export
+- [ ] Per-chapter summaries, listening stats and vocabulary export
 
 ## License
 

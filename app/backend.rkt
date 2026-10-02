@@ -9,12 +9,14 @@
 ;; from app/core/library.rkt.
 ;;
 ;;   feed-list row    = (id title author artwork-url episode-count
-;;                       latest-title latest-pub)
+;;                       latest-title latest-pub unplayed-count)
 ;;   episode-list row = (id title pub-display duration-sec downloaded
 ;;                       transcript-status summary-status position-sec done
-;;                       has-translation)
+;;                       has-translation description)
 ;;   catalog-list row = (id category title description url homepage added)
 ;;   transcript row   = (start end text translation)
+;;   chapters row     = (start-sec title)
+;;   resume-last row  = (feed-id episode-id position-sec) or empty
 ;;
 ;; Lifecycle: the embedded runtime calls `start` with the two RVT1 fds.
 ;; library/config managers are built once here and shared by every request
@@ -29,6 +31,7 @@
          racket/string
          rivet/backend
          "core/catalog.rkt"
+         "core/chapters.rkt"
          "core/config.rkt"
          "core/feed.rkt"
          "core/i18n.rkt"
@@ -96,7 +99,8 @@
           (hash-ref f 'artwork-url "")
           (format "~a" (length eps))
           (if latest (hash-ref latest 'title "") "")
-          (if latest (hash-ref latest 'pub-date-display "") ""))))
+          (if latest (hash-ref latest 'pub-date-display "") "")
+          (format "~a" (feed-unplayed-count (hash-ref f 'id))))))
 
 (define-rpc (feed-refresh [id String] : Int64)
   (define f (feed-get id))
@@ -164,7 +168,8 @@
           (hash-ref e 'summary-status "none")
           (format "~a" (hash-ref e 'position-sec 0))
           (if (hash-ref e 'done #f) "1" "0")
-          (if (and t (pair? (hash-ref t 'translation '()))) "1" "0"))))
+          (if (and t (pair? (hash-ref t 'translation '()))) "1" "0")
+          (hash-ref e 'description ""))))
 
 (define-rpc (episode-download [id String] : String)
   (define e (episode-get id))
@@ -207,6 +212,54 @@
            (with-handlers ([exn:fail? void]) (delete-file p)))
          (episode-set-download! id #f #f)
          #t)))
+
+;; One-click "understand this episode": download → transcribe → translate →
+;; summarize as a single job; finished stages are skipped, so re-running
+;; after a failure only pays for the missing pieces.
+(define-rpc (episode-pipeline [id String] : String)
+  (define e (episode-get id))
+  (unless e (error 'episode-pipeline "no such episode: ~a" id))
+  (job-start! (current-jobs) "pipeline" id
+              (lambda (progress)
+                (run-pipeline! (cfg!) e (lambda (p m) (progress p m)))
+                (notify (tr (lang!) 'pipelined)))))
+
+;; What a pipeline run would cost (sentence/char counts for the BYOK bill).
+;; Returns a JSON object; empty string when the episode does not exist.
+(define-rpc (episode-estimate [id String] : String)
+  (define e (episode-get id))
+  (if e
+      (jsexpr->string (estimate-episode (cfg!) e))
+      ""))
+
+;; Mark played / unplayed. Unplayed also resets the position, matching what
+;; a listener expects from "mark as new".
+(define-rpc (episode-set-done [id String] [done String] : Bool)
+  (and (episode-get id)
+       (let ([done? (member (string-trim done) '("1" "true"))])
+         (episode-set-done! id done?)
+         (unless done? (episode-set-position! id 0))
+         #t)))
+
+;; The episode to reopen at launch: whichever episode last saved a real
+;; playback position. Empty row when there is nothing to resume.
+(define-rpc (resume-last : (List String))
+  (define last (last-episode-get))
+  (if last
+      (let ([e (episode-get (hash-ref last 'episode-id))])
+        (if e
+            (list (hash-ref e 'feed-id)
+                  (hash-ref e 'id)
+                  (format "~a" (hash-ref e 'position-sec 0)))
+            '()))
+      '()))
+
+;; Chapter marks for the slider (Podcasting 2.0 chapters JSON), cached on
+;; disk; empty when the episode carries no chapters pointer.
+(define-rpc (episode-chapters [id String] : (List (List String)))
+  (for/list ([c (in-list (chapters-load! id))])
+    (list (format "~a" (hash-ref c 'start))
+          (hash-ref c 'title ""))))
 
 (define-rpc (episode-transcript [id String] : (List (List String)))
   (define t (transcript-load id))

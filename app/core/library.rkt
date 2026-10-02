@@ -8,13 +8,15 @@
 ;;              added-epoch last-refreshed-epoch}
 ;;   episode = {id feed-id guid title enclosure-url enclosure-length
 ;;              enclosure-type pub-date-epoch pub-date-display duration-sec
-;;              position-sec done downloaded-path downloaded-size
+;;              chapters-url position-sec done downloaded-path downloaded-size
 ;;              transcript-status summary-status error}
 ;; transcript file = {episode-id language segments translation target-lang
 ;;                    summary asr-model chat-model updated-epoch}
 ;;   segments     = list of {start end text}   (start/end in seconds)
 ;;   translation  = list of strings, 1:1 with segments (or empty)
 ;;   summary      = {tldr key-points quotes topics} (or #f)
+;; library.json also carries last-episode = {episode-id feed-id} (or absent),
+;; the episode the position-saver touched last — what "resume" reopens.
 
 (require json
          racket/file
@@ -32,6 +34,7 @@
          feed-remove!
          feed-all
          feed-get
+         feed-unplayed-count
          episode-all
          episodes-for-feed
          episode-get
@@ -39,6 +42,7 @@
          episode-set-done!
          episode-set-download!
          episode-set-status!
+         last-episode-get
          transcript-load
          transcript-save!
          feed-artwork-of
@@ -57,6 +61,8 @@
       (define v (read-json-file (library-path)))
       (hash-set! lib 'feeds (if (and v (hash? v)) (hash-ref v 'feeds '()) '()))
       (hash-set! lib 'episodes (if (and v (hash? v)) (hash-ref v 'episodes '()) '()))
+      (hash-set! lib 'last-episode
+                 (if (and v (hash? v)) (hash-ref v 'last-episode #f) #f))
       (void))))
 
 (define (library-save!)
@@ -69,7 +75,8 @@
   (write-json-file!
    (library-path)
    (hasheq 'feeds (hash-ref lib 'feeds)
-           'episodes (hash-ref lib 'episodes))))
+           'episodes (hash-ref lib 'episodes)
+           'last-episode (hash-ref lib 'last-episode #f))))
 
 ;; ---- feeds -------------------------------------------------------------------
 
@@ -115,7 +122,8 @@
               ;; refresh content fields; keep user state (position, done, download, status)
               (let ([e (make-hash (hash->list old))])
                 (for ([k '(title enclosure-url enclosure-length enclosure-type
-                                pub-date-epoch pub-date-display duration-sec)])
+                                pub-date-epoch pub-date-display duration-sec
+                                chapters-url)])
                   (hash-set! e k (hash-ref it k #f)))
                 (make-immutable-hash (hash->list e)))
               (make-episode id it))))
@@ -144,6 +152,7 @@
           'pub-date-epoch (hash-ref item 'pub-date-epoch 0)
           'pub-date-display (hash-ref item 'pub-date-display "")
           'duration-sec (hash-ref item 'duration-sec #f)
+          'chapters-url (hash-ref item 'chapters-url "")
           'position-sec 0
           'done #f
           'downloaded-path #f
@@ -171,6 +180,12 @@
         >
         #:key (lambda (e) (hash-ref e 'pub-date-epoch 0))))
 
+;; Episodes not yet marked played — the sidebar badge number.
+(define (feed-unplayed-count feed-id)
+  (for/sum ([e (in-list (episodes-for-feed feed-id))]
+            #:unless (hash-ref e 'done #f))
+    1))
+
 (define (episode-get id)
   (findf (lambda (e) (equal? (hash-ref e 'id) id)) (episode-all)))
 
@@ -193,7 +208,19 @@
       updated)))
 
 (define (episode-set-position! id seconds)
-  (update-episode! id (lambda (e) (hash-set! e 'position-sec seconds) e)))
+  (update-episode! id (lambda (e) (hash-set! e 'position-sec seconds) e))
+  ;; the position saver is the heartbeat of actual listening — whoever
+  ;; saved a real position last (not a reset-to-zero) is what "resume" reopens
+  (when (> seconds 0)
+    (let ([e (episode-get id)])
+      (when e
+        (with-lock lib-sem
+          (lambda ()
+            (hash-set! lib 'last-episode
+                       (hasheq 'episode-id id 'feed-id (hash-ref e 'feed-id)))
+            (save-unlocked!)))))))
+
+(define (last-episode-get) (hash-ref lib 'last-episode #f))
 
 (define (episode-set-done! id done?)
   (update-episode! id (lambda (e) (hash-set! e 'done done?) e)))

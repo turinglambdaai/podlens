@@ -1,6 +1,7 @@
 import AVFoundation
 import MediaPlayer
 import SwiftUI
+import UserNotifications
 
 /// All client state lives here; views stay dumb. Every backend round trip
 /// goes through the generated RivetAPI; backend events arrive via
@@ -15,6 +16,7 @@ final class PodLensStore: ObservableObject {
         let episodeCount: Int
         let latestTitle: String
         let latestPub: String
+        let unplayed: Int
     }
 
     struct Episode: Identifiable, Hashable {
@@ -28,6 +30,23 @@ final class PodLensStore: ObservableObject {
         let positionSec: Double
         let done: Bool
         let hasTranslation: Bool
+        let description: String
+    }
+
+    struct Chapter: Identifiable, Hashable {
+        let id: Int
+        let start: Double
+        let title: String
+    }
+
+    /// What a "understand this episode" run would cost, for the header hint.
+    struct Estimate {
+        let durationSec: Double?
+        let transcriptKnown: Bool
+        let sentences: Int?
+        let chars: Int?
+        let translated: Bool
+        let summarized: Bool
     }
 
     struct Segment: Identifiable, Hashable {
@@ -74,6 +93,8 @@ final class PodLensStore: ObservableObject {
     @Published var selectedEpisode: Episode?
     @Published var segments: [Segment] = []
     @Published var summary: Summary?
+    @Published var chapters: [Chapter] = []
+    @Published var estimate: Estimate?
     @Published var jobs: [String: Job] = [:]
     @Published var statusLine = ""
     @Published var bootStatus = ""
@@ -109,6 +130,7 @@ final class PodLensStore: ObservableObject {
     func bind(api: RivetAPI) {
         self.api = api
         setupSystemMediaControls()
+        scheduleAutoRefresh()
     }
 
     func handleEvent(_ event: RivetEvent) {
@@ -190,7 +212,8 @@ final class PodLensStore: ObservableObject {
                 let rows = try await api.feed_list()
                 feeds = rows.map {
                     Feed(id: $0[0], title: $0[1], author: $0[2], artworkURL: $0[3],
-                         episodeCount: Int($0[4]) ?? 0, latestTitle: $0[5], latestPub: $0[6])
+                         episodeCount: Int($0[4]) ?? 0, latestTitle: $0[5], latestPub: $0[6],
+                         unplayed: Int($0[7]) ?? 0)
                 }
                 // First launch with an empty library lands on Discover instead
                 // of a blank window — once; a user who closes it is not nagged.
@@ -218,7 +241,8 @@ final class PodLensStore: ObservableObject {
                     Episode(id: $0[0], title: $0[1], pubDisplay: $0[2], durationSec: $0[3],
                             downloaded: $0[4] == "1", transcriptStatus: $0[5],
                             summaryStatus: $0[6], positionSec: Double($0[7]) ?? 0,
-                            done: $0[8] == "1", hasTranslation: $0[9] == "1")
+                            done: $0[8] == "1", hasTranslation: $0[9] == "1",
+                            description: $0[10])
                 }
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
@@ -280,6 +304,8 @@ final class PodLensStore: ObservableObject {
         selectedEpisode = episode
         loadTranscript(episode)
         loadSummary(episode)
+        loadChapters(episode)
+        loadEstimate(episode)
         startPlayback(for: episode)
     }
 
@@ -299,6 +325,7 @@ final class PodLensStore: ObservableObject {
             case "download": jobId = try await api.episode_download(id: episode.id)
             case "transcribe": jobId = try await api.episode_transcribe(id: episode.id)
             case "translate": jobId = try await api.episode_translate(id: episode.id)
+            case "pipeline": jobId = try await api.episode_pipeline(id: episode.id)
             default: jobId = try await api.episode_summarize(id: episode.id)
             }
             await MainActor.run {
@@ -359,6 +386,99 @@ final class PodLensStore: ObservableObject {
         }
     }
 
+    func loadChapters(_ episode: Episode) {
+        withEpisode(episode.id) { [weak self] api in
+            let rows = try await api.episode_chapters(id: episode.id)
+            let marks = rows.enumerated().map { i, row in
+                Chapter(id: i, start: Double(row[0]) ?? 0, title: row[1])
+            }
+            await MainActor.run { self?.chapters = marks }
+        }
+    }
+
+    func loadEstimate(_ episode: Episode) {
+        withEpisode(episode.id) { [weak self] api in
+            let json = try await api.episode_estimate(id: episode.id)
+            var parsed: Estimate?
+            if let data = json.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                parsed = Estimate(
+                    durationSec: obj["durationSec"] as? Double,
+                    transcriptKnown: (obj["transcriptKnown"] as? Bool) ?? false,
+                    sentences: obj["sentences"] as? Int,
+                    chars: obj["chars"] as? Int,
+                    translated: (obj["translated"] as? Bool) ?? false,
+                    summarized: (obj["summarized"] as? Bool) ?? false)
+            }
+            await MainActor.run { self?.estimate = parsed }
+        }
+    }
+
+    func markEpisode(_ episode: Episode, done: Bool) {
+        withEpisode(episode.id) { [weak self] api in
+            _ = try? await api.episode_set_done(id: episode.id, done: done ? "1" : "0")
+            await MainActor.run {
+                if let feedId = self?.selectedFeed?.id { self?.loadEpisodes(feedId: feedId) }
+                self?.loadFeeds()
+            }
+        }
+    }
+
+    /// Reopen whatever episode last saved a playback position. Selects and
+    /// seeks but does not autoplay — the listener decides when to press play.
+    func resumeLast() {
+        guard let api else { return }
+        Task {
+            let row = (try? await api.resume_last()) ?? []
+            guard row.count >= 3 else { return }
+            let feedId = row[0], episodeId = row[1]
+            let position = Double(row[2]) ?? 0
+            await MainActor.run {
+                guard let feed = self.feeds.first(where: { $0.id == feedId }) else { return }
+                self.selectFeed(feed)
+                Task {
+                    // episode_list lands asynchronously; wait once, then select
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard let episode = self.episodes.first(where: { $0.id == episodeId }) else { return }
+                    self.selectedEpisode = episode
+                    self.loadTranscript(episode)
+                    self.loadSummary(episode)
+                    self.loadChapters(episode)
+                    self.loadEstimate(episode)
+                    self.startPlayback(for: episode, autoplay: false)
+                    self.statusLine = L("resumed") + " " + episode.title
+                }
+            }
+        }
+    }
+
+    /// The older episode right after the current one in the selected feed —
+    /// what "autoplay next" moves to when this one ends.
+    private var nextEpisodeToAutoplay: Episode? {
+        guard let current = selectedEpisode,
+              let idx = episodes.firstIndex(where: { $0.id == current.id }),
+              idx + 1 < episodes.count
+        else { return nil }
+        return episodes[idx + 1]
+    }
+
+    func currentChapter() -> Chapter? {
+        chapters.last { currentTime >= $0.start }
+    }
+
+    func skipChapter(_ direction: Int) {
+        guard !chapters.isEmpty else { return }
+        if direction < 0,
+           let current = chapters.last(where: { $0.start < currentTime - 2 }),
+           let idx = chapters.firstIndex(where: { $0.id == current.id }) {
+            seek(to: chapters[max(0, idx - (currentTime - chapters[idx].start < 5 ? 1 : 0))].start)
+        } else if let next = chapters.first(where: { $0.start > currentTime + 0.5 }) {
+            seek(to: next.start)
+        } else if direction < 0, let first = chapters.first {
+            seek(to: first.start)
+        }
+    }
+
     func savePosition(_ seconds: Double, done: Bool) {
         guard let episode = selectedEpisode else { return }
         withEpisode(episode.id) { api in
@@ -390,7 +510,7 @@ final class PodLensStore: ObservableObject {
         return audioDir.appendingPathComponent(name)
     }
 
-    func startPlayback(for episode: Episode) {
+    func startPlayback(for episode: Episode, autoplay: Bool = true) {
         if let url = localAudioURL(for: episode.id) {
             let item = AVPlayerItem(url: url)
             let player = player ?? AVPlayer()
@@ -400,8 +520,15 @@ final class PodLensStore: ObservableObject {
             if episode.positionSec > 5 {
                 player.seek(to: CMTime(seconds: episode.positionSec, preferredTimescale: 600))
             }
-            player.playImmediately(atRate: rate)
-            playing = true
+            if autoplay {
+                player.playImmediately(atRate: rate)
+                playing = true
+            } else {
+                player.pause()
+                playing = false
+                duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
+                currentTime = episode.positionSec
+            }
             saveTicks = 0
             lastFollowedSegment = nil
 
@@ -446,10 +573,16 @@ final class PodLensStore: ObservableObject {
     }
 
     private func playedToEnd() {
-        guard player != nil else { return }
+        guard player != nil, selectedEpisode != nil else { return }
         playing = false
         savePosition(duration > 0 ? duration : currentTime, done: true)
         updateNowPlayingInfo()
+        // continuous playback: roll into the next (older) episode of the
+        // same feed, like Apple Podcasts without an Up Next queue
+        if let next = nextEpisodeToAutoplay {
+            statusLine = L("autoplayNext")
+            selectEpisode(next)
+        }
     }
 
     func togglePlay() {
@@ -538,5 +671,54 @@ final class PodLensStore: ObservableObject {
         if idx == lastFollowedSegment { return nil }
         lastFollowedSegment = idx
         return idx
+    }
+
+    // MARK: auto refresh + notifications
+
+    private var refreshTimer: Timer?
+    private var notificationsAllowed = false
+
+    /// Refresh every subscription on a fixed cadence and surface new
+    /// episodes as system notifications. Off-interval churn (and the
+    /// permission prompt) never blocks startup: authorization is asked on
+    /// the first tick, and a denial just means quieter operation.
+    private func scheduleAutoRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.autoRefreshTick() }
+        }
+    }
+
+    private func autoRefreshTick() {
+        guard let api else { return }
+        requestNotificationPermission()
+        Task {
+            let added = (try? await api.feed_refresh_all()) ?? 0
+            await MainActor.run {
+                self.loadFeeds()
+                if added > 0 {
+                    self.statusLine = String(format: L("refreshAllDone"), Int(added))
+                    self.notifyNewEpisodes(Int(added))
+                }
+            }
+        }
+    }
+
+    private func requestNotificationPermission() {
+        guard !notificationsAllowed else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert]) { granted, _ in
+            Task { @MainActor in self.notificationsAllowed = granted }
+        }
+    }
+
+    private func notifyNewEpisodes(_ count: Int) {
+        guard notificationsAllowed else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "PodLens"
+        content.body = String(format: L("notifyNewEpisodes"), count)
+        let request = UNNotificationRequest(identifier: UUID().uuidString,
+                                            content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 }

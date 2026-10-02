@@ -11,6 +11,7 @@
          racket/port
          racket/string
          racket/tcp
+         (file "../app/core/chapters.rkt")
          (file "../app/core/config.rkt")
          (file "../app/core/feed.rkt")
          (file "../app/core/http.rkt")
@@ -25,15 +26,27 @@
 (define rss-body
   (string->bytes/utf-8
    (string-append
-    "<?xml version=\"1.0\"?>\n<rss xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\" version=\"2.0\">\n<channel>\n"
+    "<?xml version=\"1.0\"?>\n<rss xmlns:itunes=\"http://www.itunes.com/dtds/podcast-1.0.dtd\" xmlns:podcast=\"https://podcastindex.org/namespace/1.0\" version=\"2.0\">\n<channel>\n"
     "<title>Fixture Feed</title><description>test</description><itunes:author>Tester</itunes:author>\n"
     "<item><title>Episode One</title><guid>f-1</guid><pubDate>Mon, 03 Jul 2023 08:00:00 +0000</pubDate>"
     "<itunes:duration>60</itunes:duration>"
     "<enclosure url=\"http://127.0.0.1:0/audio.mp3\" length=\"2048\" type=\"audio/mpeg\"/></item>\n"
+    "<item><title>Episode Two</title><guid>f-2</guid><pubDate>Mon, 05 Jun 2023 08:00:00 +0000</pubDate>"
+    "<itunes:duration>90</itunes:duration>"
+    "<enclosure url=\"http://127.0.0.1:0/audio.mp3\" length=\"2048\" type=\"audio/mpeg\"/>"
+    "<podcast:chapters url=\"http://127.0.0.1:0/chapters.json\" type=\"application/json+chapters\"/></item>\n"
     "</channel></rss>")))
 
 ;; real container-ish bytes; small enough to skip ffmpeg chunking
 (define audio-body (make-bytes 2048 65))
+
+(define chapters-body
+  (jsexpr->bytes
+   (hasheq 'version "1"
+           'chapters (list (hasheq 'startTime 0 'title "Intro")
+                           (hasheq 'startTime 30 'title "Deep dive")
+                           ;; shipped as milliseconds by some producers
+                           (hasheq 'startTime 90000 'title "Sponsors")))))
 
 (define (chat-response body-bytes)
   (define req (with-input-from-bytes body-bytes (lambda () (read-json))))
@@ -94,6 +107,7 @@
       (cond
         [(equal? path "/feed.xml") (http-ok rss-body)]
         [(equal? path "/audio.mp3") (http-ok audio-body)]
+        [(equal? path "/chapters.json") (http-ok chapters-body)]
         [(equal? path "/v1/audio/transcriptions") (http-ok (asr-response body))]
         [(equal? path "/v1/chat/completions") (http-ok (chat-response body))]
         [else
@@ -122,6 +136,10 @@
       (string->bytes/utf-8
        (string-replace (bytes->string/utf-8 rss-body) "http://127.0.0.1:0/audio.mp3"
                        (format "http://127.0.0.1:~a/audio.mp3" port))))
+(set! rss-body
+      (string->bytes/utf-8
+       (string-replace (bytes->string/utf-8 rss-body) "http://127.0.0.1:0/chapters.json"
+                       (format "http://127.0.0.1:~a/chapters.json" port))))
 (set! rss-body
       (string->bytes/utf-8
        (string-replace (bytes->string/utf-8 rss-body) "127.0.0.1:0/feed.xml"
@@ -162,6 +180,56 @@
   (check-true (run-summarize! cfg (episode-get eid) (lambda (p m) (void))))
   (define t (transcript-load eid))
   (check-equal? (hash-ref (hash-ref t 'summary) 'tldr) "一句总结。"))
+
+(define episode-two (second (episodes-for-feed feed-id)))
+
+(test-case "pipeline runs all stages on a fresh episode"
+  (define stages
+    (run-pipeline! cfg episode-two (lambda (p m) (void))))
+  (check-equal? stages '(transcribe translate summarize))
+  (define t (transcript-load (hash-ref episode-two 'id)))
+  (check-equal? (length (hash-ref t 'translation)) 2)
+  (check-equal? (hash-ref (hash-ref t 'summary) 'tldr) "一句总结。"))
+
+(test-case "pipeline skips finished stages"
+  (define stages
+    (run-pipeline! cfg (episode-get (hash-ref episode-two 'id)) (lambda (p m) (void))))
+  (check-equal? stages '()))
+
+(test-case "estimate reflects finished work"
+  (define est (estimate-episode cfg (episode-get eid)))
+  (check-true (hash-ref est 'transcriptKnown))
+  (check-true (hash-ref est 'summarized))
+  (check-equal? (hash-ref est 'sentences) 2)
+  (check-equal? (hash-ref est 'chars) 27) ; "Hello world." + "This is a test."
+  (check-equal? (hash-ref est 'durationSec) 60))
+
+(test-case "chapters load, parse ms timestamps and cache"
+  (define marks (chapters-load! (hash-ref episode-two 'id)))
+  (check-equal? (length marks) 3)
+  (check-equal? (hash-ref (first marks) 'title) "Intro")
+  (check-equal? (hash-ref (third marks) 'start) 90.0)
+  ;; second load is served from the on-disk cache
+  (check-equal? (length (chapters-load! (hash-ref episode-two 'id))) 3))
+
+(test-case "episode without a chapters pointer has none"
+  (check-equal? (chapters-load! eid) '()))
+
+(test-case "position save tracks the last-played episode"
+  (episode-set-position! eid 42)
+  (define last (last-episode-get))
+  (check-equal? (hash-ref last 'episode-id) eid)
+  (check-equal? (hash-ref last 'feed-id) feed-id))
+
+(test-case "mark unplayed clears the done flag"
+  (episode-set-done! eid #t)
+  (check-true (hash-ref (episode-get eid) 'done))
+  (episode-set-done! eid #f)
+  (check-false (hash-ref (episode-get eid) 'done)))
+
+(test-case "unplayed count per feed"
+  (episode-set-done! (hash-ref episode-two 'id) #t)
+  (check-equal? (feed-unplayed-count feed-id) 1))
 
 ;; raco test waits for all threads; the fake server must not outlive the test
 (kill-thread server-thread)

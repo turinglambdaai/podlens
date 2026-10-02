@@ -7,6 +7,44 @@ All notable changes to PodLens are documented here. Format follows
 
 ### Added
 
+- One-click "understand this episode": a `episode-pipeline` RPC (and
+  `podlens pipeline <id>` on the CLI) chains download → transcribe →
+  translate → summarize as a single job with one progress bar. Finished
+  stages are skipped, so re-running after a failure only pays for what is
+  missing. A prominent "一键听懂" button leads the episode header on both
+  hosts.
+- Cost visibility before committing (BYOK bills are real money): a new
+  `episode-estimate` RPC returns duration/sentence/character counts and
+  which stages are already done; the macOS header and Windows detail show
+  the estimate under the action row, and `podlens estimate <id>` prints it.
+- Show notes: the feed's episode description rides along in the
+  `episode-list` row (11th column) and renders under the detail header on
+  both hosts.
+- Resume on launch: the backend records whichever episode last saved a real
+  playback position (`resume-last` RPC); both hosts reopen that feed +
+  episode at startup, seek to the recorded position and leave playback
+  paused.
+- Continuous playback: when an episode plays to its end, both hosts roll
+  into the next (older) episode of the same feed — Apple-Podcasts style,
+  without pretending there is an Up Next queue.
+- Mark played / unplayed: `episode-set-done` RPC, a header toggle button on
+  both hosts, and a right-click context menu on episode rows (Windows) /
+  context menu (macOS). Unplayed resets the position.
+- Unplayed counts: `feed-list` rows carry the per-feed unplayed count
+  (8th column); the sidebar shows a badge next to the episode total.
+- Chapter marks (Podcasting 2.0): feeds pointing at a
+  `<podcast:chapters url=…>` JSON get their marks fetched and cached; new
+  `episode-chapters` RPC; both player bars grow prev/next chapter buttons
+  (hidden when the episode has no chapters).
+- Auto refresh: both hosts refresh every subscription every 30 minutes.
+  macOS posts a system notification when new episodes arrive; Windows
+  surfaces the count in the status line (toasts need package identity —
+  in-app notice only, honestly).
+- CLI: `pipeline`, `estimate`, `done <id> [0|1]`, `export <id> [file]`
+  (timestamped Markdown with translation, ready for notes) and
+  `find <terms>…` (full-text search across every subscription's
+  transcripts with sentence timestamps — "what did they say about X, at
+  which minute" in one command).
 - System media integration on both hosts: macOS routes hardware media keys
   and the Control Center now-playing widget through `MPRemoteCommandCenter`
   (play/pause, ±15/30 s skip, absolute seek, playback rate) with episode
