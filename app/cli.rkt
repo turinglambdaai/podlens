@@ -29,6 +29,8 @@
          "update.rkt"
          "version.rkt")
 
+(provide resolve-feed resolve-episode)
+
 ;; the version mirrors rivet.rktd (see app/version.rkt)
 (define cli-version app-version)
 
@@ -86,6 +88,21 @@
     [(episode-get id) => values]
     [else (stopped 1)]))
 
+;; ---- id resolution -------------------------------------------------------------
+;; Text output prints 12-char id prefixes; accept the full 40-char id or an
+;; unambiguous prefix wherever a feed/episode id is expected. Returns the
+;; record, #f, or 'ambiguous.
+(define (resolve-row id rows)
+  (or (findf (lambda (r) (equal? (hash-ref r 'id) id)) rows)
+      (let ([hits (filter (lambda (r) (string-prefix? (hash-ref r 'id) id)) rows)])
+        (case (length hits)
+          [(0) #f]
+          [(1) (car hits)]
+          [else 'ambiguous]))))
+
+(define (resolve-feed id) (resolve-row id (feed-all)))
+(define (resolve-episode id) (resolve-row id (episode-all)))
+
 (define (run-command command-name args command-body)
   command-body)
 
@@ -128,35 +145,40 @@
 (define (cmd-episodes args)
   (cond
     [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
-    [(not (feed-get (car args))) (usage! (tr (lang) 'no-feed))]
     [else
-     (define eps (episodes-for-feed (car args)))
-     (if (stdout-json?)
-         (emit-ok
-          (hasheq 'episodes
-                  (for/list ([e (in-list eps)])
-                    (hasheq 'id (hash-ref e 'id)
-                            'title (hash-ref e 'title)
-                            'pubDate (hash-ref e 'pub-date-display)
-                            'durationSec (hash-ref e 'duration-sec #f)
-                            'downloaded (hash-ref e 'downloaded-path #f)
-                            'transcript (hash-ref e 'transcript-status "none")
-                            'positionSec (hash-ref e 'position-sec 0)))))
-         (begin
-           (for ([e (in-list eps)])
-             (displayln (format "~a  ~a  ~a"
-                                (substring (hash-ref e 'id) 0 12)
-                                (hash-ref e 'title)
-                                (hash-ref e 'pub-date-display))))
-           0))]))
+     (define f (resolve-feed (car args)))
+     (cond
+       [(eq? f 'ambiguous) (usage! (tr (lang) 'ambiguous-id (car args)))]
+       [(not f) (usage! (tr (lang) 'no-feed))]
+       [else
+        (define eps (episodes-for-feed (hash-ref f 'id)))
+        (if (stdout-json?)
+            (emit-ok
+             (hasheq 'episodes
+                     (for/list ([e (in-list eps)])
+                       (hasheq 'id (hash-ref e 'id)
+                               'title (hash-ref e 'title)
+                               'pubDate (hash-ref e 'pub-date-display)
+                               'durationSec (hash-ref e 'duration-sec #f)
+                               'downloaded (hash-ref e 'downloaded-path #f)
+                               'transcript (hash-ref e 'transcript-status "none")
+                               'positionSec (hash-ref e 'position-sec 0)))))
+            (begin
+              (for ([e (in-list eps)])
+                (displayln (format "~a  ~a  ~a"
+                                   (substring (hash-ref e 'id) 0 12)
+                                   (hash-ref e 'title)
+                                   (hash-ref e 'pub-date-display))))
+              0))])]))
 
 ;; shared body for the three transcript-pipeline commands
 (define (with-episode id body)
   (cond
     [(not (= 1 (length (list id)))) (usage! (tr (lang) 'usage))]
     [else
-     (define e (episode-get id))
+     (define e (resolve-episode id))
      (cond
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id id))]
        [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
         (with-handlers ([exn:fail? (lambda (err) (fail! 1 (exn-message err)))])
@@ -239,8 +261,9 @@
   (cond
     [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
     [else
-     (define e (episode-get (car args)))
+     (define e (resolve-episode (car args)))
      (cond
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id (car args)))]
        [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
         (define est (estimate-episode (cfg-snapshot (config!)) e))
@@ -262,17 +285,22 @@
     [(or (< (length args) 1) (> (length args) 2)) (usage! (tr (lang) 'usage))]
     [else
      (define id (car args))
+     ;; member returns the list tail, not a boolean — coerce so the stored
+     ;; `done` field is a real boolean
      (define done?
        (if (= (length args) 2)
-           (member (cadr args) '("1" "true" "yes"))
+           (if (member (cadr args) '("1" "true" "yes")) #t #f)
            #t))
+     (define e (resolve-episode id))
      (cond
-       [(not (episode-get id)) (fail! 1 (tr (lang) 'no-episode))]
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id id))]
+       [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
-        (episode-set-done! id done?)
-        (unless done? (episode-set-position! id 0))
+        (define rid (hash-ref e 'id))
+        (episode-set-done! rid done?)
+        (unless done? (episode-set-position! rid 0))
         (if (stdout-json?)
-            (emit-ok (hasheq 'id id 'done done?))
+            (emit-ok (hasheq 'id rid 'done done?))
             (displayln (if done? (tr (lang) 'marked-done) (tr (lang) 'marked-undone))))
         0])]))
 
@@ -282,11 +310,12 @@
   (cond
     [(or (< (length args) 1) (> (length args) 2)) (usage! (tr (lang) 'usage))]
     [else
-     (define id (car args))
-     (define e (episode-get id))
+     (define e (resolve-episode (car args)))
      (cond
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id (car args)))]
        [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
+        (define id (hash-ref e 'id))
         (define t (transcript-load id))
         (cond
           [(not (and t (pair? (hash-ref t 'segments '()))))
@@ -359,11 +388,12 @@
   (cond
     [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
     [else
-     (define id (car args))
-     (define e (episode-get id))
+     (define e (resolve-episode (car args)))
      (cond
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id (car args)))]
        [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
+        (define id (hash-ref e 'id))
         (define t (transcript-load id))
         (if (stdout-json?)
             (begin
@@ -396,11 +426,13 @@
     [(not (= 2 (length args))) (usage! (tr (lang) 'usage))]
     [else
      (define id (car args))
-     (define e (episode-get id))
+     (define e (resolve-episode id))
      (cond
+       [(eq? e 'ambiguous) (fail! 1 (tr (lang) 'ambiguous-id id))]
        [(not e) (fail! 1 (tr (lang) 'no-episode))]
        [else
-        (episode-set-position! id (or (string->number (cadr args)) 0))
+        (define rid (hash-ref e 'id))
+        (episode-set-position! rid (or (string->number (cadr args)) 0))
         (if (stdout-json?)
             (emit-ok (hasheq 'positionSec (or (string->number (cadr args)) 0)))
             (displayln (tr (lang) 'position-saved)))
@@ -505,11 +537,13 @@
     (define ids (if (null? args) (map (lambda (f) (hash-ref f 'id)) (feed-all)) args))
     (define total
       (for/sum ([id (in-list ids)])
-        (define f (feed-get id))
+        (define f (resolve-feed id))
         (unless f (error 'refresh (tr (lang) 'no-feed)))
-        (define before (length (episodes-for-feed id)))
+        (when (eq? f 'ambiguous) (error 'refresh (tr (lang) 'ambiguous-id id)))
+        (define fid (hash-ref f 'id))
+        (define before (length (episodes-for-feed fid)))
         (feed-add! (hash-ref f 'url) (fetch-feed (hash-ref f 'url)))
-        (- (length (episodes-for-feed id)) before)))
+        (- (length (episodes-for-feed fid)) before)))
     (if (stdout-json?)
         (emit-ok (hasheq 'newEpisodes total))
         (displayln (tr (lang) 'refreshed total)))
@@ -609,6 +643,9 @@
    "  check-updates              signed update check\n"
    "  doctor                     health check\n"
    "  --json                     machine-readable output\n"
+   "\n"
+   "Feed and episode ids accept the full 40-char id or an unambiguous\n"
+   "prefix (the 12-char form shown by list/episodes/find).\n"
    "\n"
    "Exit codes: 0 ok, 1 operation failed, 2 usage error.\n"
    "Data lives in ~/.podlens (override with PODLENS_DATA_DIR).\n"))
