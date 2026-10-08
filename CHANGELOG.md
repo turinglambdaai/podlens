@@ -85,6 +85,20 @@ All notable changes to PodLens are documented here. Format follows
 
 ### Fixed
 
+- CLI ids are usable as printed: `list`/`episodes`/`find` show 12-char id
+  prefixes, but every lookup required the full 40-char id, so the id a user
+  copied from the output never worked. All id-taking commands (`episodes`,
+  `refresh`, `download`, `pipeline`, `estimate`, `transcribe`, `translate`,
+  `summarize`, `show`, `export`, `done`, `position`) now accept the full id
+  or an unambiguous prefix; an ambiguous prefix fails with a distinct
+  "ID 前缀不唯一 / Ambiguous id prefix" message.
+- `podlens done <id> 1` stored the raw `member` result (a list) as the
+  episode's `done` field instead of `#t` — `--json` answered
+  `"done":["1","true","yes"]` and library.json carried a list where the
+  hosts expect a boolean.
+- New `tests/cli-test.rkt` covers the resolvers (exact / prefix /
+  ambiguous / missing) and the real dispatch over a subprocess.
+
 - Windows playback never worked (including 1.2.0): the `MediaPlayer` object
   was declared but never constructed, so every call in `StartPlayback`
   threw on the null projected object and surfaced as "playback failed".
