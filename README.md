@@ -6,6 +6,23 @@ Podcasts, in your language. A cross-platform desktop podcast player that transcr
 
 **English** · [中文](README.zh-CN.md)
 
+## Install
+
+Download from [Releases](https://github.com/turinglambdaai/podlens/releases/latest):
+
+| Platform | Download | Updates |
+|---|---|---|
+| macOS 14+ (Apple Silicon) | `PodLens-v<version>-macos.dmg` (ad-hoc signed — first launch: right-click → Open) | in-app (signed manifest), or reinstall the newer DMG |
+| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` installer (start-menu & desktop shortcuts), or `PodLens-v<version>-windows-x64.zip` portable | re-run the newer MSI to upgrade in place; portable: re-extract |
+
+Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
+(`gh attestation verify <file> -R turinglambdaai/podlens`).
+
+The macOS build is ad-hoc signed — on first launch, right-click the app and
+choose Open to clear the Gatekeeper prompt. Updates arrive in-app through an
+Ed25519-signed manifest ([docs/UPDATE.md](docs/UPDATE.md)).
+
+## Why PodLens?
 
 Listening comprehension is the last wall for most non-native English speakers. Feeds have no translation, nobody summarizes an hour of talk, and pausing to look things up kills the flow. PodLens fixes this with a per-episode pipeline:
 
