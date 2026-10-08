@@ -17,7 +17,16 @@
       <a href="#screenshots" data-i18n="nav.screens">界面</a>
       <a href="#download" data-i18n="nav.download">下载</a>
       <a href="https://github.com/turinglambdaai/podlens" data-i18n="nav.github">GitHub</a>
-      <button id="lang-toggle" class="lang-btn" title="Switch language">EN</button>
+      <div class="lang-dropdown-wrapper">
+        <button class="lang-btn" type="button" onclick="void 0" aria-label="Switch language">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span id="current-lang-label">English</span>
+        </button>
+        <ul class="lang-menu">
+          <li onclick="setLanguage('en')">English</li>
+          <li onclick="setLanguage('zh')">简体中文</li>
+        </ul>
+      </div>
     </nav>
   </div>
 </header>
@@ -180,27 +189,47 @@
     "download.note": "Windows: the MSI installer adds start-menu and desktop shortcuts; the zip is the portable build. macOS: first launch of an unnotarized build — right-click → Open. Updates ship through an Ed25519-signed manifest.",
     "footer.built": "Built on Rivet"
   };
-  var btn = document.getElementById("lang-toggle");
-  var saved = localStorage.getItem("podlens-site-lang");
-  var state = saved === "en" ? "en" : "zh";
+  // language dropdown: unified family policy (explicit choice wins; otherwise browser locale)
+  var LANGUAGE_OVERRIDE_KEY = "podlens-lang-override-v2";
+  var LANGUAGE_LEGACY_KEYS = ["podlens-site-lang", "site-lang"];
+
+  function readLanguageOverride() {
+    try {
+      var v = localStorage.getItem(LANGUAGE_OVERRIDE_KEY);
+      if (v !== "zh" && v !== "en") {
+        for (var i = 0; i < LANGUAGE_LEGACY_KEYS.length; i++) {
+          var legacy = localStorage.getItem(LANGUAGE_LEGACY_KEYS[i]);
+          if (legacy === "zh" || legacy === "en") { v = legacy; try { localStorage.setItem(LANGUAGE_OVERRIDE_KEY, v); } catch (e) {} break; }
+        }
+      }
+      return v === "zh" || v === "en" ? v : null;
+    } catch (e) { return null; }
+  }
+  function detectBrowserLanguage() {
+    var locale = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    return String(locale).toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
+  }
   function apply(lang) {
     var table = lang === "en" ? en : zh;
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
       var k = el.getAttribute("data-i18n");
       if (table[k]) el.textContent = table[k];
     });
-    document.documentElement.lang = lang === "en" ? "en" : "zh";
-    btn.textContent = lang === "en" ? "中" : "EN";
+    document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+    document.documentElement.setAttribute("data-language", lang);
+    var label = document.getElementById("current-lang-label");
+    if (label) label.textContent = lang === "en" ? "English" : "简体中文";
   }
-  btn.addEventListener("click", function () {
-    state = state === "en" ? "zh" : "en";
-    localStorage.setItem("podlens-site-lang", state);
-    apply(state);
+  window.setLanguage = function (lang) {
+    if (lang !== "zh" && lang !== "en") return;
+    try { localStorage.setItem(LANGUAGE_OVERRIDE_KEY, lang); } catch (e) {}
+    apply(lang);
+  };
+  apply(readLanguageOverride() || detectBrowserLanguage());
+  LANGUAGE_LEGACY_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+  window.addEventListener("languagechange", function () {
+    if (!readLanguageOverride()) apply(detectBrowserLanguage());
   });
-  if (!saved && (navigator.language || "").indexOf("en") === 0) {
-    state = "en";
-  }
-  apply(state);
 })();
 </script>
 </body>
