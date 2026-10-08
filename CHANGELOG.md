@@ -3,6 +3,20 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## Unreleased
+
+### Fixed
+
+- The CLI/backend update check never verified a signature successfully:
+  `raw-key->pem` appended a stray `#f` to the base64 body (this Racket
+  build's `base64-encode` concatenates its second argument verbatim), and
+  the signature file was written with `write-to-file`, which embeds the
+  byte-string reader representation instead of raw bytes. Both paths write
+  raw bytes now; a live check against the v1.3.0 release verifies the
+  Ed25519 signature and reports correctly. The macOS host was unaffected
+  (it verifies in-process via Swift); the Windows host and the CLI go
+  through this code.
+
 ## 1.3.0 - 2026-10-08
 
 ### Added
