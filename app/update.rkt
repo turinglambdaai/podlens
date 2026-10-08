@@ -53,7 +53,9 @@
 ;; raw 32-byte key → SubjectPublicKeyInfo PEM
 (define (raw-key->pem raw-32)
   (define der (bytes-append ed25519-spki-prefix raw-32))
-  (define b64 (bytes->string/latin-1 (base64-encode der #f)))
+  ;; net/base64 appends a CRLF by default and treats any second argument as
+  ;; literal suffix text on this Racket build — so take the default and trim
+  (define b64 (string-trim (bytes->string/latin-1 (base64-encode der))))
   (define wrapped (regexp-match* #px".{1,64}" b64))
   (string-append
    "-----BEGIN PUBLIC KEY-----\n"
@@ -125,7 +127,7 @@
          (lambda () (void))
          (lambda ()
            (display-to-file manifest-bytes manifest-file #:exists 'replace)
-           (write-to-file sig-bytes sig-file #:exists 'replace)
+           (display-to-file sig-bytes sig-file #:exists 'replace)
            (display-to-file (raw-key->pem key-raw) pem-file #:exists 'replace)
            (define out
              (with-output-to-string
