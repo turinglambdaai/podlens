@@ -6,6 +6,23 @@
 
 [English](README.md) · **中文**
 
+## 安装
+
+从 [Releases](https://github.com/turinglambdaai/podlens/releases/latest) 下载：
+
+| 平台 | 下载 | 更新 |
+|---|---|---|
+| macOS 14+（Apple Silicon） | `PodLens-v<version>-macos.dmg`（ad-hoc 签名——首次启动右键 → 打开） | 应用内更新（签名清单），或重新安装新版 DMG |
+| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式），或 `PodLens-v<version>-windows-x64.zip` 便携版 | 重新运行新版 MSI 覆盖升级；便携版解压替换 |
+
+每个发布都带 `SHA256SUMS` 校验清单和 Sigstore 构建来源证明（`gh attestation verify <file> -R turinglambdaai/podlens`）。
+
+macOS 版本仅为 ad-hoc 签名——首次启动若被 Gatekeeper 拦截，右键应用选「打开」。应用内通过 Ed25519 签名清单自动更新（[docs/UPDATE.md](docs/UPDATE.md)）。
+
+## 为什么做 PodLens？
+
+听力是多数非英语母语者最后一堵墙：播客没有翻译，没人帮你总结一小时的内容，停下来查词又毁掉节奏。PodLens 用一条逐集流水线解决：
+
 - **转写**——调用任意 OpenAI 兼容的 `/audio/transcriptions` 端点（Whisper 等），输出带时间戳的逐句稿
 - **翻译**——逐句对齐翻译成中文（或英文），与原文对照显示
 - **总结**——每集自动生成一句话总结、5–8 条要点、值得记的话和话题标签
