@@ -61,18 +61,16 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Playback uses the platform media stack; the audio cache lives in `~/.podlens/audio/`
 - The UI talks only to the typed contract in `app/backend.rkt` — changing it is a cross-platform release
 
-## What ships in 1.2
+## What ships in 1.3
 
-- Native Windows redesign (roadmap M1): three-pane navigation, episode rows with status chips, tabbed detail (transcript | summary), empty states, and a bottom player bar with seek and 1.0–2.0× speed — closing the gap with macOS
-- One design-token sheet consumed by both hosts, plus real app icons on both platforms
-- Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection
-- Download episodes to a local cache; play with speed control (1.0–2.0×), resume from last position
-- Sentence-level transcript with follow-along highlighting (tap a line to seek)
-- Sentence-aligned translation, bilingual / translation-only / original-only views
-- Structured summaries (TL;DR, key points, quotes, topics)
+- **One-click Understand**: download → transcribe → translate → summarize as a single job — finished stages are skipped on re-run, and a cost estimate (sentences/characters) shows before you start
+- Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection, auto-refresh every 30 minutes with new-episode notifications (macOS)
+- Playback: 1.0–3.0× speed, ±15/30 s skip, sleep timer, chapter jumps (Podcasting 2.0 `podcast:chapters`), continuous playback into the next episode, resume-on-launch, media keys + Control Center (macOS) / SMTC (Windows)
+- Sentence-level transcript with follow-along highlighting (tap a line to seek); sentence-aligned translation in bilingual / translation-only / original-only views
+- Structured summaries (TL;DR, key points, quotes, topics) plus show notes from the feed
+- Library basics: mark played/unplayed, unplayed badges per show, per-episode job progress
+- Discover panel: curated catalog of classic English shows plus full-directory search (iTunes Search API, no key needed, results carry Apple's authoritative feed URLs) — nothing is ever auto-subscribed
 - Bring-your-own-key: OpenAI, DeepSeek, Groq, SiliconFlow, Ollama, any OpenAI-compatible endpoint
-- Curated catalog of classic English podcasts (tech, science, business, design) in a Discover panel — one tap to add, never auto-subscribed; every entry is verified live by `scripts/verify-catalog.rkt` at release time
-- Full-directory search in the same Discover panel (iTunes Search API, no key needed) — results come with Apple's authoritative feed URLs
 - Agent-friendly CLI over the same core (`add`, `episodes`, `pipeline`,
   `estimate`, `transcribe`, `translate`, `summarize`, `show`, `export`,
   `find`, `done`, `search`, `--json`, exit codes 0/1/2)
