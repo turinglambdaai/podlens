@@ -7,4 +7,4 @@
 
 (provide app-version)
 
-(define app-version "1.3.0")
+(define app-version "1.3.2")

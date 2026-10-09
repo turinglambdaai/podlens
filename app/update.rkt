@@ -35,7 +35,7 @@
 
 ;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
 ;; #f keeps developer builds honest about update availability.
-(define current-update-public-key-hex "eWk+MVBTRUkcf3O4HSKek5yZ+cEv1oyx4QEErjC4opA=")
+(define current-update-public-key-hex "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0=")
 (define current-update-key-id "release-2026")
 
 (define releases-api "https://api.github.com/repos/turinglambdaai/podlens/releases/latest")
@@ -53,9 +53,10 @@
 ;; raw 32-byte key → SubjectPublicKeyInfo PEM
 (define (raw-key->pem raw-32)
   (define der (bytes-append ed25519-spki-prefix raw-32))
-  ;; net/base64 appends a CRLF by default and treats any second argument as
-  ;; literal suffix text on this Racket build — so take the default and trim
-  (define b64 (string-trim (bytes->string/latin-1 (base64-encode der))))
+  ;; net/base64 on this Racket build appends its second argument verbatim
+  ;; and the default value is garbage (a temp-file-shaped string) — pass ""
+  ;; explicitly and trim the trailing newline
+  (define b64 (string-trim (bytes->string/latin-1 (base64-encode der ""))))
   (define wrapped (regexp-match* #px".{1,64}" b64))
   (string-append
    "-----BEGIN PUBLIC KEY-----\n"

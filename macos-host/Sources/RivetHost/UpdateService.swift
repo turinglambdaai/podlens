@@ -18,7 +18,7 @@ import Foundation
 /// build") instead of pretending to check.
 struct UpdateService {
     // Base64 of the raw 32-byte Ed25519 public key (scripts/update-keys.sh).
-    static let publicKeyBase64 = "eWk+MVBTRUkcf3O4HSKek5yZ+cEv1oyx4QEErjC4opA="
+    static let publicKeyBase64 = "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0="
     static let releasesAPI = "https://api.github.com/repos/turinglambdaai/podlens/releases/latest"
     static let releasesPage = "https://github.com/turinglambdaai/podlens/releases/latest"
     static let throttleSeconds: TimeInterval = 4 * 60 * 60

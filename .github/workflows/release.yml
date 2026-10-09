@@ -95,7 +95,7 @@ jobs:
       - name: Package + MSI (rivet release, development signing)
         env:
           RIVET_UPDATE_BASE_URL: https://github.com/turinglambdaai/podlens/releases/download/${{ github.ref_name }}
-          RIVET_UPDATE_KEY_ID: podlens-2026-09
+          RIVET_UPDATE_KEY_ID: podlens-2026-10
           UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
           KEY_DER="$(mktemp -d)/update-ed25519-private.der"

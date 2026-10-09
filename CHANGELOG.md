@@ -5,6 +5,27 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 1.3.2
+
+### Security
+
+- **Updater key rotated** (the previous private key had no vault backup —
+  it lived only in CI — so the rotation also brings it into the keys
+  vault). This build embeds the new public key; the published manifest
+  and signatures are produced by the new key. Installs of 1.3.1 and
+  older pin the retired key and must update manually.
+
+### Fixed
+
+- The artifact download now follows HTTP redirects (up to 5) — release
+  assets answer with a 30x to their CDN, so the download leg of the
+  in-app updater failed after a successful check. The manifest check
+  already chased redirects.
+- `raw-key->pem` passes an explicit empty line-terminator to
+  `base64-encode`: this Racket build appends its second argument
+  verbatim and the default value is garbage, which corrupted the
+  embedded-key PEM round-trip.
+
 ## 1.3.1
 
 ### Fixed

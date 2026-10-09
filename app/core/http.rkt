@@ -128,16 +128,31 @@
 ;; Returns (values code bytes-written). Raises on network failure only;
 ;; non-200 responses still write nothing and return the code.
 (define (http-download-file url-string dest-path [on-progress (lambda (_a _b) (void))])
-  (define-values (ssl? host port path) (split-url url-string))
-  (define conn (http-conn-open host #:ssl? ssl? #:port port))
-  (define-values (status resp-headers body-port)
-    (http-conn-sendrecv! conn path
-                         #:method "GET"
-                         #:headers (list (format "User-Agent: ~a" http-user-agent)
-                                         "Accept: */*"
-                                         "Connection: close")))
-  (define code (status-code status))
-  (define total (content-length-or-#f (headers->strings resp-headers)))
+  ;; release assets answer with a 30x to their CDN — chase up to 5 hops,
+  ;; mirroring http-get-bytes
+  (let download-loop ([url url-string] [hops 0])
+    (define-values (ssl? host port path) (split-url url-string))
+    (define conn (http-conn-open host #:ssl? ssl? #:port port))
+    (define-values (status resp-headers body-port)
+      (http-conn-sendrecv! conn path
+                           #:method "GET"
+                           #:headers (list (format "User-Agent: ~a" http-user-agent)
+                                           "Accept: */*"
+                                           "Connection: close")))
+    (define code (status-code status))
+    (define resp-headers-strs (headers->strings resp-headers))
+    (cond
+      [(and (member code '(301 302 303 307 308)) (< hops 5))
+       (define location (header-value resp-headers-strs "location"))
+       (close-input-port body-port)
+       (unless location
+         (error 'http-download-file "redirect without Location from ~a" url))
+       (download-loop location (add1 hops))]
+      [else
+       (download-into! conn code resp-headers-strs body-port dest-path on-progress)])))
+
+(define (download-into! conn code resp-headers-strs body-port dest-path on-progress)
+  (define total (content-length-or-#f resp-headers-strs))
   (define written 0)
   (define last-reported 0)
   (if (not (= code 200))
