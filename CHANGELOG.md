@@ -5,6 +5,16 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 1.3.1
+
+### Fixed
+
+- The update check follows HTTP redirects (rivet#153): GitHub release
+  assets answer with a 302 to their CDN, and the previous fetch verified
+  an empty redirect body — every in-app update check failed at signature
+  verification. No app changes; rebuilt on the fixed rivet.
+
+
 ### Fixed
 
 - The CLI/backend update check never verified a signature successfully:
