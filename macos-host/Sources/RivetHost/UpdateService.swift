@@ -2,15 +2,17 @@ import AppKit
 import CryptoKit
 import Foundation
 
-/// PodLens updater — the Taskly scheme.
+/// PodLens updater — the family signed-wrapper scheme (docs/UPDATE.md).
 ///
-/// Trust model: HTTPS only protects transport. The update feed is a pair of
-/// GitHub release assets, `update-manifest.json` and `manifest.sig` (a raw
-/// 64-byte Ed25519 signature over the exact manifest bytes). The manifest is
-/// trusted only after signature verification against the embedded public
-/// key; the downloaded archive must then match the signed SHA-256. The
-/// swapped-in bundle's Info.plist version must equal the manifest version
-/// before the old bundle is replaced (with rollback on failure).
+/// Trust model: HTTPS only protects transport. The update feed is a single
+/// GitHub release asset, `update-manifest.json`: a self-contained wrapper
+/// (schema + base64 payload + Ed25519 signature block, the same
+/// rivet/distribution format the backend verifies). The payload is the
+/// inner manifest; the signature is trusted only after verification against
+/// the embedded public key, and the downloaded archive must then match the
+/// signed SHA-256. The swapped-in bundle's Info.plist version must equal
+/// the manifest version before the old bundle is replaced (with rollback
+/// on failure).
 ///
 /// Developer builds run from `.rivet/stage` or the build directory are
 /// detected and update install is refused — they would replace nothing
@@ -19,20 +21,27 @@ import Foundation
 struct UpdateService {
     // Base64 of the raw 32-byte Ed25519 public key (scripts/update-keys.sh).
     static let publicKeyBase64 = "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0="
+
+    /// The manifest must carry this key id — rotation ships a build that
+    /// trusts the next key before releases stop being signed with this one.
+    static let expectedKeyID = "podlens-2026-10"
+
+    static let manifestURL = URL(string:
+        "https://github.com/turinglambdaai/podlens/releases/latest/download/update-manifest.json")!
     static let releasesAPI = "https://api.github.com/repos/turinglambdaai/podlens/releases/latest"
     static let releasesPage = "https://github.com/turinglambdaai/podlens/releases/latest"
     static let throttleSeconds: TimeInterval = 4 * 60 * 60
 
-    private let apiURL: URL
     private let sessionConfiguration: URLSessionConfiguration
     private let keyBase64: String?
     private let currentVersion: String
 
-    init(apiURL: URL = URL(string: UpdateService.releasesAPI)!,
+    /// Feed URL; injectable only for future URLProtocol test stubs —
+    /// production callers use the default (the moving "latest" location).
+    init(feedURL: URL = UpdateService.manifestURL,
          sessionConfiguration: URLSessionConfiguration = .ephemeral,
          keyBase64: String? = UpdateService.publicKeyBase64,
          currentVersion: String? = nil) {
-        self.apiURL = apiURL
         let cfg = sessionConfiguration
         cfg.timeoutIntervalForRequest = 30
         cfg.timeoutIntervalForResource = 600
@@ -41,7 +50,10 @@ struct UpdateService {
         self.currentVersion = currentVersion
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "0"
+        self.feedURL = feedURL
     }
+
+    private let feedURL: URL
 
     enum UpdateError: LocalizedError {
         case notInstalled
@@ -70,15 +82,48 @@ struct UpdateService {
         case available(Manifest)
     }
 
+    /// The signed wrapper: the inner manifest travels base64-encoded so the
+    /// Ed25519 signature covers the exact bytes every client verifies
+    /// (rivet/distribution's signed-wrapper format).
+    struct SignedWrapper: Decodable {
+        struct SignatureBlock: Decodable {
+            let algorithm: String
+            let keyId: String
+            let value: String
+        }
+        let schema: Int
+        let payload: String
+        let signature: SignatureBlock
+    }
+
     struct Manifest: Decodable, Equatable {
-        struct PlatformArtifact: Decodable, Equatable {
+        struct Artifact: Decodable, Equatable {
+            let platform: String
+            let architecture: String
             let url: URL
             let sha256: String
             let size: Int
         }
         let version: String
-        let notesUrl: String
-        let platforms: [String: PlatformArtifact]
+        let artifacts: [Artifact]
+
+        /// The release feed carries one artifact per platform × architecture;
+        /// each built host targets exactly one architecture, so the match is
+        /// compile-time ("x64" on Intel builds, "arm64" on Apple silicon).
+        static let hostArchitecture: String = {
+            #if arch(x86_64)
+            return "x64"
+            #elseif arch(arm64)
+            return "arm64"
+            #else
+            #error("unsupported macOS architecture")
+            #endif
+        }()
+
+        func artifact(forPlatform platform: String) -> Artifact? {
+            artifacts.first { $0.platform == platform
+                && $0.architecture == Self.hostArchitecture }
+        }
     }
 
     // MARK: check
@@ -98,28 +143,14 @@ struct UpdateService {
             }
             guard installedBundleURL != nil else { return .failure(UpdateError.notInstalled) }
 
-            var req = URLRequest(url: apiURL)
-            req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await session(from: sessionConfiguration).data(for: req)
+            let (wrapperBytes, response) = try await session(from: sessionConfiguration)
+                .data(from: feedURL)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 throw UpdateError.manifestMissing
             }
-            struct Release: Decodable { struct Asset: Decodable { let name: String; let browser_download_url: URL }
-                let assets: [Asset] }
-            let release = try JSONDecoder().decode(Release.self, from: data)
-            guard
-                let manifestAsset = release.assets.first(where: { $0.name == "update-manifest.json" }),
-                let sigAsset = release.assets.first(where: { $0.name == "manifest.sig" })
-            else { throw UpdateError.manifestMissing }
+            let manifest = try Self.verifyManifest(wrapperBytes, keyBase64: keyBase64!)
 
-            async let manifestBytes = downloadBytes(manifestAsset.browser_download_url)
-            async let sigBytes = downloadBytes(sigAsset.browser_download_url)
-            let (m, s) = try await (manifestBytes, sigBytes)
-
-            try verifyManifest(m, signature: s, keyBase64: keyBase64!)
-            let manifest = try JSONDecoder().decode(Manifest.self, from: m)
-
-            if isVersion(manifest.version, greaterThan: currentVersion) {
+            if Self.isVersion(manifest.version, greaterThan: currentVersion) {
                 return .success(.available(manifest))
             }
             return .success(.upToDate)
@@ -132,15 +163,26 @@ struct UpdateService {
         URLSession(configuration: configuration)
     }
 
-    private func downloadBytes(_ url: URL) async throws -> Data {
-        let (data, response) = try await session(from: sessionConfiguration).data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+    /// Verifies the signed wrapper (schema, key id, Ed25519 over the exact
+    /// payload bytes) and decodes the inner manifest.
+    static func verifyManifest(_ wrapperBytes: Data, keyBase64: String) throws -> Manifest {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let wrapper: SignedWrapper
+        do {
+            wrapper = try decoder.decode(SignedWrapper.self, from: wrapperBytes)
+        } catch {
             throw UpdateError.manifestMissing
         }
-        return data
-    }
-
-    private func verifyManifest(_ manifestBytes: Data, signature: Data, keyBase64: String) throws {
+        guard wrapper.schema == 1 else { throw UpdateError.manifestMissing }
+        guard wrapper.signature.algorithm == "ed25519",
+              wrapper.signature.keyId == expectedKeyID else {
+            throw UpdateError.signatureInvalid
+        }
+        guard let payload = Data(base64Encoded: wrapper.payload),
+              let signature = Data(base64Encoded: wrapper.signature.value) else {
+            throw UpdateError.signatureInvalid
+        }
         guard signature.count == 64 else { throw UpdateError.signatureInvalid }
         guard let keyRaw = Data(base64Encoded: keyBase64), keyRaw.count == 32 else {
             throw UpdateError.badPublicKey
@@ -148,12 +190,21 @@ struct UpdateService {
         guard let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: keyRaw) else {
             throw UpdateError.badPublicKey
         }
-        guard publicKey.isValidSignature(signature, for: manifestBytes) else {
+        guard publicKey.isValidSignature(signature, for: payload) else {
             throw UpdateError.signatureInvalid
+        }
+        do {
+            return try decoder.decode(Manifest.self, from: payload)
+        } catch {
+            throw UpdateError.manifestMissing
         }
     }
 
     private func isVersion(_ a: String, greaterThan b: String) -> Bool {
+        Self.isVersion(a, greaterThan: b)
+    }
+
+    static func isVersion(_ a: String, greaterThan b: String) -> Bool {
         func segments(_ v: String) -> [Int] {
             v.split(separator: ".").map { Int($0) ?? 0 }
         }
@@ -185,7 +236,9 @@ struct UpdateService {
     @MainActor
     func downloadAndInstall(_ manifest: Manifest) async throws {
         guard let bundleURL = installedBundleURL else { throw UpdateError.notInstalled }
-        guard let artifact = manifest.platforms["macos"] else { throw UpdateError.manifestMissing }
+        guard let artifact = manifest.artifact(forPlatform: "macos") else {
+            throw UpdateError.manifestMissing
+        }
 
         let workDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("podlens-update-\(UUID().uuidString)")

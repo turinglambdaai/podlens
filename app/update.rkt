@@ -1,14 +1,17 @@
 #lang racket/base
 
-;; PodLens update wiring — the Taskly scheme: the GitHub Releases API of
-;; this repo carries two assets, `update-manifest.json` and `manifest.sig`
-;; (raw 64-byte Ed25519 signature over the exact manifest bytes). The
-;; manifest maps platform → {url, sha256, size}.
+;; PodLens update wiring — the family signed-wrapper scheme (docs/UPDATE.md).
+;; The update feed is a single GitHub release asset, `update-manifest.json`:
+;; a self-contained wrapper (schema + base64 payload + Ed25519 signature
+;; block, the rivet/distribution format). The payload is the inner manifest;
+;; the signature covers the exact payload bytes every client verifies.
 ;;
-;; The native hosts verify with platform crypto (CryptoKit on macOS); this
-;; module gives the CLI the same check by shelling out to OpenSSL 3. The
-;; public key is embedded raw (last 32 bytes of the SPKI DER, base64) —
-;; the same bytes the Swift host embeds — and rebuilt into a PEM here.
+;; The native macOS host verifies with CryptoKit (UpdateService.swift); this
+;; module gives the CLI, the backend RPC and the Windows host the same check
+;; by shelling out to OpenSSL 3 (the backend runs in an embedded runtime, so
+;; rivet/distribution's crypto factories are deliberately not loaded here).
+;; The public key is embedded raw (base64 of the 32 bytes) — the same bytes
+;; the Swift host embeds — and rebuilt into a PEM for OpenSSL.
 ;;
 ;; Key management lives in docs/UPDATE.md; `scripts/update-keys.sh`
 ;; generates the pair. Rotation: ship a client trusting the next key
@@ -29,17 +32,28 @@
          update-configured?
          current-update-public-key-hex
          current-update-key-id
+         current-update-application-id
          releases-api
          releases-page
-         raw-key->pem)
+         manifest-url
+         raw-key->pem
+         parse-signed-wrapper
+         verify-wrapper-signature
+         select-artifact)
 
 ;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
 ;; #f keeps developer builds honest about update availability.
 (define current-update-public-key-hex "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0=")
-(define current-update-key-id "release-2026")
+(define current-update-key-id "podlens-2026-10")
+(define current-update-application-id "site.jrtx.podlens")
 
 (define releases-api "https://api.github.com/repos/turinglambdaai/podlens/releases/latest")
 (define releases-page "https://github.com/turinglambdaai/podlens/releases/latest")
+
+;; The moving "latest" location; redirect-following is mandatory — release
+;; assets answer with a 302 to the CDN (rivet#153, followed in core/http).
+(define (manifest-url)
+  "https://github.com/turinglambdaai/podlens/releases/latest/download/update-manifest.json")
 
 ;; Fixed SPKI prefix bytes for an Ed25519 public key (12 bytes) followed by
 ;; the raw 32-byte key = full SubjectPublicKeyInfo DER.
@@ -80,12 +94,103 @@
               (system* path "version"))))
         "OpenSSL 3")))
 
+;; ---- signed wrapper (pure parsing, shared with the tests) -----------------
+
+;; jsexpr → (values payload key-id signature); raises when the envelope is
+;; not the family signed-wrapper format (schema 1, ed25519, base64 parts).
+(define (parse-signed-wrapper wrapper)
+  (unless (hash? wrapper)
+    (error 'parse-signed-wrapper "manifest is not a JSON object"))
+  (define schema (hash-ref wrapper 'schema
+                           (lambda () (error 'parse-signed-wrapper "schema field missing"))))
+  (unless (equal? schema 1)
+    (error 'parse-signed-wrapper "unsupported wrapper schema: ~a" schema))
+  (define sig-block (hash-ref wrapper 'signature
+                              (lambda () (error 'parse-signed-wrapper "signature block missing"))))
+  (unless (hash? sig-block)
+    (error 'parse-signed-wrapper "signature block is not an object"))
+  (define algorithm (hash-ref sig-block 'algorithm #f))
+  (unless (equal? algorithm "ed25519")
+    (error 'parse-signed-wrapper "unsupported signature algorithm: ~a" algorithm))
+  (define key-id (hash-ref sig-block 'key_id #f))
+  (define payload
+    (or (and (hash-has-key? wrapper 'payload)
+             (let ([v (hash-ref wrapper 'payload)])
+               (and (string? v) (base64-decode (string->bytes/latin-1 v)))))
+        (error 'parse-signed-wrapper "payload is not valid base64")))
+  (define signature
+    (or (and (hash-has-key? sig-block 'value)
+             (let ([v (hash-ref sig-block 'value)])
+               (and (string? v) (base64-decode (string->bytes/latin-1 v)))))
+        (error 'parse-signed-wrapper "signature value is not valid base64")))
+  (unless (= 64 (bytes-length signature))
+    (error 'parse-signed-wrapper "signature is not a 64-byte Ed25519 signature"))
+  (values payload (and (string? key-id) key-id) signature))
+
+;; Ed25519 verify via OpenSSL 3: signature over the exact payload bytes,
+;; against the embedded raw public key. Raises when verification fails or
+;; no OpenSSL 3 is available.
+(define (verify-wrapper-signature payload signature key-raw)
+  (unless (and (bytes? key-raw) (= 32 (bytes-length key-raw)))
+    (error 'verify-wrapper-signature "embedded update key is malformed"))
+  (define openssl (find-openssl))
+  (unless (openssl3? openssl)
+    (error 'verify-wrapper-signature "OpenSSL 3 not found for signature verification"))
+  (define tmp (make-temporary-file "podlens-update~a"))
+  (define payload-file (path-replace-extension tmp #".payload"))
+  (define sig-file (path-replace-extension tmp #".sig"))
+  (define pem-file (path-replace-extension tmp #".pem"))
+  (dynamic-wind
+    (lambda () (void))
+    (lambda ()
+      (display-to-file payload payload-file #:exists 'replace)
+      (display-to-file signature sig-file #:exists 'replace)
+      (display-to-file (raw-key->pem key-raw) pem-file #:exists 'replace)
+      (define out
+        (with-output-to-string
+          (lambda ()
+            (system* openssl "pkeyutl" "-verify" "-pubin"
+                     "-inkey" pem-file "-rawin"
+                     "-in" payload-file "-sigfile" sig-file))))
+      (unless (string-contains? out "Signature Verified Successfully")
+        (error 'verify-wrapper-signature "manifest signature invalid")))
+    (lambda ()
+      (with-handlers ([exn:fail? void])
+        (delete-file payload-file)
+        (delete-file sig-file)
+        (delete-file pem-file)))))
+
+;; inner manifest jsexpr × platform symbol × architecture symbol → artifact
+;; jsexpr or #f. The feed carries one artifact per platform × architecture.
+(define (select-artifact manifest platform architecture)
+  (define platform-s (symbol->string platform))
+  (define arch-s (symbol->string architecture))
+  (for/or ([artifact (in-list (hash-ref manifest 'artifacts '()))]
+           #:when (hash? artifact))
+    (and (equal? (hash-ref artifact 'platform #f) platform-s)
+         (equal? (hash-ref artifact 'architecture #f) arch-s)
+         artifact)))
+
+;; rivet release tooling emits these exact platform/architecture names into
+;; update manifests (same mapping the rivet MSI tooling uses).
+(define (host-platform)
+  (case (system-type 'os)
+    [(macosx) 'macos]
+    [(windows) 'windows]
+    [else 'linux]))
+
+(define (host-architecture)
+  (case (system-type 'arch)
+    [(aarch64 arm64) 'arm64]
+    [else 'x64]))
+
 ;; → structured result the callers localize:
 ;;   '(up-to-date) | (list 'available version)
 ;;   (list 'unavailable reason) | (list 'failed reason)
 ;;
 ;; The macOS host runs the same contract natively; this module gives the
-;; CLI and the backend RPC the same check by shelling out to OpenSSL 3.
+;; CLI, the backend RPC and the Windows host the same check by shelling
+;; out to OpenSSL 3.
 (define (update-check-result current-version)
   (cond
     [(not (update-configured?))
@@ -93,61 +198,27 @@
     [else
      (with-handlers
          ([exn:fail? (lambda (e) (list 'failed (exn-message e)))])
-       (define (get-json url)
-         (define-values (code _h body)
-           (http-get-bytes url (list "Accept: application/vnd.github+json")))
-         (unless (= code 200)
-           (error 'update-check "~a returned ~a" url code))
-         (bytes->jsexpr body))
-       (define release (get-json releases-api))
-       (define assets (hash-ref release 'assets '()))
-       (define (asset-url name)
-         (for/or ([a (in-list assets)])
-           (and (equal? (hash-ref a 'name "") name)
-                (hash-ref a 'browser_download_url #f))))
-       (define manifest-url (asset-url "update-manifest.json"))
-       (define sig-url (asset-url "manifest.sig"))
-       (unless (and manifest-url sig-url)
-         (error 'update-check "release ~a carries no update manifest"
-                (hash-ref release 'tag_name "?")))
-       (define manifest-bytes (let-values ([(_c _h b) (http-get-bytes manifest-url)]) b))
-       (define sig-bytes (let-values ([(_c _h b) (http-get-bytes sig-url)]) b))
-       ;; Ed25519 verify via OpenSSL 3
-       (define openssl (find-openssl))
-       (unless (openssl3? openssl)
-         (error 'update-check "OpenSSL 3 not found for signature verification"))
-       (define key-raw
-         (base64-decode (string->bytes/latin-1 current-update-public-key-hex)))
-       (unless (and (bytes? key-raw) (= 32 (bytes-length key-raw)))
-         (error 'update-check "embedded update key is malformed"))
-       (define tmp (make-temporary-file "podlens-update~a"))
-       (define manifest-file (path-replace-extension tmp #".json"))
-       (define sig-file (path-replace-extension tmp #".sig"))
-       (define pem-file (path-replace-extension tmp #".pem"))
-       (dynamic-wind
-         (lambda () (void))
-         (lambda ()
-           (display-to-file manifest-bytes manifest-file #:exists 'replace)
-           (display-to-file sig-bytes sig-file #:exists 'replace)
-           (display-to-file (raw-key->pem key-raw) pem-file #:exists 'replace)
-           (define out
-             (with-output-to-string
-               (lambda ()
-                 (system* openssl "pkeyutl" "-verify" "-pubin"
-                          "-inkey" pem-file "-rawin"
-                          "-in" manifest-file "-sigfile" sig-file))))
-           (unless (string-contains? out "Signature Verified Successfully")
-             (error 'update-check "manifest signature invalid"))
-           (define manifest (with-input-from-file manifest-file read-json))
-           (define latest (hash-ref manifest 'version "0"))
-           (if (version-newer? current-version latest)
-               (list 'available latest)
-               (list 'up-to-date)))
-         (lambda ()
-           (with-handlers ([exn:fail? void])
-             (delete-file manifest-file)
-             (delete-file sig-file)
-             (delete-file pem-file)))))]))
+       (define-values (code _h body)
+         (http-get-bytes (manifest-url) (list "Accept: application/vnd.github+json")))
+       (unless (= code 200)
+         (error 'update-check "~a returned ~a" (manifest-url) code))
+       (define wrapper (bytes->jsexpr body))
+       (define-values (payload key-id signature) (parse-signed-wrapper wrapper))
+       (unless (equal? key-id current-update-key-id)
+         (error 'update-check "manifest signed by unexpected key ~a" key-id))
+       (verify-wrapper-signature
+        payload signature
+        (base64-decode (string->bytes/latin-1 current-update-public-key-hex)))
+       (define manifest (bytes->jsexpr payload))
+       (unless (equal? (hash-ref manifest 'application_id #f)
+                       current-update-application-id)
+         (error 'update-check "manifest is for a different application"))
+       (unless (select-artifact manifest (host-platform) (host-architecture))
+         (error 'update-check "feed carries no artifact for this platform"))
+       (define latest (hash-ref manifest 'version "0"))
+       (if (version-newer? current-version latest)
+           (list 'available latest)
+           (list 'up-to-date)))]))
 
 (define (version-newer? current latest)
   (define (segs v)

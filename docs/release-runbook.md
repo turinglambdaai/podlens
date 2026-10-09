@@ -16,32 +16,39 @@ explains the trust model.
 
 ## 1. Version bump
 
-`rivet.rktd` is the single source of truth: bump `version` (SemVer) and
+The root `VERSION` file, `rivet.rktd` and `app/version.rkt` carry the same
+version; bump all three (`scripts/check-release-version.sh` enforces the
+alignment locally, in CI and in the release pipeline). Bump `rivet.rktd`'s
 `build` (integer, never reuse). Add a matching `## X.Y.Z` section to
 CHANGELOG.md — the tag validator rejects a tag without one.
 
 ## 2. Tagged pipeline
 
 ```bash
-git tag -s v1.0.1 -m "PodLens 1.0.1"
-git push origin v1.0.1
+git tag -s v1.4.0 -m "PodLens 1.4.0"
+git push origin v1.4.0
 ```
 
 `.github/workflows/release.yml` then:
 
-1. validates tag == rivet.rktd version == CHANGELOG section;
-2. macOS: `raco rivet package` → DMG (human installer) + ditto zip (update feed);
-3. Windows: `raco rivet package` → x64 zip;
-4. release job: SHA256SUMS over all artifacts, `make-update-manifest.sh`
-   signs the manifest with the CI secret, `gh release create --generate-notes`,
-   Sigstore provenance attestation.
+1. validates tag == VERSION == rivet.rktd == app/version.rkt == CHANGELOG section;
+2. macOS (arm64 + x64 matrix): `raco rivet package` → DMG (human installer)
+   + ditto zip (update feed) + per-artifact sha256;
+3. Windows: `raco rivet release` → x64 MSI + portable zip + sha256;
+4. release job: `make-update-manifest.sh` signs the single-file wrapper
+   (`update-manifest.json`) with the CI secret, SHA256SUMS from the
+   per-artifact sums, `gh release create --generate-notes`, Sigstore
+   provenance attestation.
 
 ## 3. Publish checklist
 
-- [ ] Release page lists DMG + zip + `update-manifest.json` + `manifest.sig` + `SHA256SUMS`
-- [ ] `openssl pkeyutl -verify` passes with the PUBLIC key only
+- [ ] Release page lists per-arch DMG + zip (`podlens-<ver>-macos-{arm64,x64}.{dmg,zip}`),
+      `podlens-<ver>-windows-x64.{msi,zip}`, per-artifact `.sha256`,
+      the signed `update-manifest.json` wrapper and `SHA256SUMS`
+- [ ] `openssl pkeyutl -verify` over the wrapper **payload** passes with the
+      PUBLIC key only (extract the payload from the wrapper JSON first)
 - [ ] Previous-version install reports "update available" on manual check
-- [ ] Site download links match the release
+- [ ] Site download copy matches the release (platform/arch coverage)
 
 ## 4. Rollback
 

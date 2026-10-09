@@ -5,6 +5,38 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 1.4.0 - 2026-10-09
+
+### Changed
+
+- **Update feed converges to the family signed-wrapper format**: the two
+  assets (`update-manifest.json` + `manifest.sig`) collapse into one
+  self-contained signed wrapper under the same name — the inner manifest
+  travels base64-encoded and the Ed25519 signature covers its exact bytes
+  (signed by `rivet/distribution`'s `write-signed-manifest`). The macOS
+  host parses the wrapper directly (key-id check included); the CLI,
+  backend RPC and Windows report path verify through the same scheme.
+  **Users of 1.3.2 and older update manually once** — their updaters read
+  the old two-file format and now report a missing manifest (honest
+  failure, never a false "up to date"); from 1.4.0 on the feed is
+  self-contained again.
+- Release artifacts renamed to the family scheme, all lowercase with the
+  architecture spelled out: `podlens-<version>-macos-{arm64,x64}.dmg/.zip`
+  (was `PodLens-v<version>-macos.dmg/.zip`), `podlens-<version>-windows-x64.zip`
+  portable (was `PodLens-v<version>-windows-x64.zip`); per-artifact
+  `.sha256` files ship beside them. The unused rivet-native
+  `update-stable-windows.json` is no longer uploaded.
+
+### Added
+
+- **macOS Intel build**: the release pipeline builds both architectures
+  (`macos-15-intel` for x64), and the macOS updater picks its feed entry
+  by compile-time architecture, so Intel Macs get a native install path.
+- Release version gate: a root `VERSION` file plus
+  `scripts/check-release-version.sh` enforcing
+  VERSION == rivet.rktd == app/version.rkt (and optionally == tag) in CI
+  and before every release job.
+
 ## 1.3.2
 
 ### Security

@@ -19,6 +19,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Version preflight (VERSION == rivet.rktd == app/version.rkt)
+        run: bash scripts/check-release-version.sh
+        shell: bash
       - name: Install Racket (CS)
         uses: Bogdanp/setup-racket@v1.15
         with:

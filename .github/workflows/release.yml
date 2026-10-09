@@ -9,6 +9,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     name: Validate release tag
@@ -17,23 +21,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install Racket
-        uses: Bogdanp/setup-racket@v1.15
-        with:
-          version: stable
-          distribution: full
-      - name: Check tag matches rivet.rktd and CHANGELOG
+      - name: Check tag matches VERSION, rivet.rktd, app/version.rkt
+        run: bash scripts/check-release-version.sh "${{ github.ref_name }}"
+      - name: Check CHANGELOG
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          VERSION=$(racket -e '(begin (require racket/file) (hash-ref (file->value "rivet.rktd") (quote version) #f))' | tr -d '"')
-          echo "tag=$TAG rivet.rktd=$VERSION"
-          test "$TAG" = "$VERSION" || { echo "::error::tag $TAG != rivet.rktd version $VERSION"; exit 1; }
           grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
 
   macos:
-    name: macOS build
+    name: macOS build (${{ matrix.arch }})
     needs: validate
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+            racket-arch: arm64
+          - arch: x64
+            runner: macos-15-intel
+            racket-arch: x64
     steps:
       - uses: actions/checkout@v4
       - name: Checkout Rivet
@@ -41,30 +49,38 @@ jobs:
         with:
           repository: turinglambdaai/rivet
           path: rivet
-      - name: Install Racket (arm64)
+      - name: Install Racket (${{ matrix.racket-arch }})
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
-          architecture: arm64
+          architecture: ${{ matrix.racket-arch }}
       - name: Link Rivet
         run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
       - name: Package (ad-hoc; notarization activates when secrets exist)
         run: raco rivet package
-      - name: Human installer (DMG)
+      - name: Update-feed zip + checksum
         run: |
-          hdiutil create -volname PodLens -srcfolder dist/podlens.app -ov -format UDZO \
-            "PodLens-${{ github.ref_name }}-macos.dmg"
-      - name: Update-feed zip
-        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           ditto -c -k --keepParent dist/podlens.app \
-            "PodLens-${{ github.ref_name }}-macos.zip"
+            "podlens-${VERSION}-macos-${{ matrix.arch }}.zip"
+          shasum -a 256 "podlens-${VERSION}-macos-${{ matrix.arch }}.zip" \
+            > "podlens-${VERSION}-macos-${{ matrix.arch }}.zip.sha256"
+      - name: Human installer (DMG) + checksum
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          hdiutil create -volname PodLens -srcfolder dist/podlens.app -ov -format UDZO \
+            "podlens-${VERSION}-macos-${{ matrix.arch }}.dmg"
+          shasum -a 256 "podlens-${VERSION}-macos-${{ matrix.arch }}.dmg" \
+            > "podlens-${VERSION}-macos-${{ matrix.arch }}.dmg.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos
+          name: macos-${{ matrix.arch }}
           path: |
-            PodLens-*-macos.dmg
-            PodLens-*-macos.zip
+            podlens-*-macos-*.dmg
+            podlens-*-macos-*.dmg.sha256
+            podlens-*-macos-*.zip
+            podlens-*-macos-*.zip.sha256
           if-no-files-found: error
 
   windows:
@@ -106,21 +122,25 @@ jobs:
           export RIVET_UPDATE_PRIVATE_KEY="$KEY_DER"
           raco rivet release --development
           rm -f "$KEY_DER"
+          # podlens ships one merged signed feed from the publish job; the
+          # per-windows manifest rivet emits here is not shipped.
+          rm -f dist/update-*.json
         shell: bash
-      - name: Collect MSI + per-platform manifest + portable zip
+      - name: Collect MSI + portable zip + checksums
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           Move-Item dist/podlens-*-windows-x64.msi "podlens-$version-windows-x64.msi"
-          Move-Item dist/update-stable.json update-stable-windows.json
-          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "PodLens-$env:GITHUB_REF_NAME-windows-x64.zip"
+          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "podlens-$version-windows-x64.zip"
+          $msi = (Get-FileHash "podlens-$version-windows-x64.msi" -Algorithm SHA256).Hash.ToLower()
+          "$msi  podlens-$version-windows-x64.msi" | Set-Content "podlens-$version-windows-x64.msi.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             podlens-*-windows-x64.msi
-            update-stable-windows.json
-            PodLens-*-windows-x64.zip
+            podlens-*-windows-x64.msi.sha256
+            podlens-*-windows-x64.zip
           if-no-files-found: error
 
   release:
@@ -131,18 +151,26 @@ jobs:
       HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Checkout Rivet (manifest signer)
+        uses: actions/checkout@v4
         with:
-          path: dist
-      - name: Install Racket (version check helper)
+          repository: turinglambdaai/rivet
+          path: rivet
+      - name: Install Racket
         if: env.HAS_UPDATE_KEY == 'true'
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
+      - name: Link Rivet (rivet/distribution signs the wrapper)
+        if: env.HAS_UPDATE_KEY == 'true'
+        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
       - name: Install OpenSSL 3
         if: env.HAS_UPDATE_KEY == 'true'
         run: brew install openssl@3
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
       - name: Flatten artifact dirs
         run: |
           find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
@@ -159,11 +187,10 @@ jobs:
           rm -f "$KEY_FILE"
         # a release without the update key still ships; clients simply see
         # no manifest and stay on their version (::warning:: marks it)
-      - name: Ensure SHA256SUMS
-        if: env.HAS_UPDATE_KEY != 'true'
+      - name: SHA256SUMS
         run: |
           cd dist
-          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+          cat *.sha256 > SHA256SUMS
           shasum -a 256 --check SHA256SUMS
       - name: Publish release
         env:
