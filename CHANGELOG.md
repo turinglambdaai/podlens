@@ -37,6 +37,16 @@ All notable changes to PodLens are documented here. Format follows
   VERSION == rivet.rktd == app/version.rkt (and optionally == tag) in CI
   and before every release job.
 
+### Fixed
+
+- Backend boot no longer violates Swift 6 sendability: the startup ran
+  `Task.detached { [backend, weak self] in … MainActor.run { self?.… } }`,
+  which the older Xcode on the Intel release runner rejects ("sending
+  'self' risks causing data races"). The boot now follows the family
+  pattern: `backend.start()` is called synchronously (it only wires pipes
+  and spawns the Racket thread — the runtime still boots off-main) and a
+  plain `Task` inherits the main-actor isolation for boot completion.
+
 ## 1.3.2
 
 ### Security

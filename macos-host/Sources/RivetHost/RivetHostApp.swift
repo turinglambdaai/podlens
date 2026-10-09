@@ -62,33 +62,36 @@ final class AppModel: ObservableObject {
             let backend = EmbeddedRacketBackend(configuration: config)
             self.backend = backend
 
-            Task.detached { [backend, weak self] in
-                do {
-                    try backend.start(onEvent: { name, value in
-                        guard let event = try? RivetEvent.decode(name: name, value: value) else { return }
-                        Task { @MainActor in
-                            self?.store.handleEvent(event)
-                        }
-                    })
-                    let api = RivetAPI(client: backend.client)
-                    await MainActor.run {
-                        self?.store.bind(api: api)
-                        self?.ready = true
-                        self?.bootStatus = L("ready")
-                        self?.store.loadFeeds()
-                        self?.store.resumeLast()
-                        self?.silentUpdateCheck()
-                    }
-                } catch {
-                    await MainActor.run {
-                        self?.ready = false
-                        self?.bootStatus = L("backendError") + " \(error)"
-                    }
+            // start() only wires pipes and spawns the Racket thread (the
+            // runtime boots off-main), so it is safe to call synchronously;
+            // the plain Task below inherits start()'s MainActor isolation —
+            // nothing non-Sendable crosses an actor boundary. The previous
+            // Task.detached + MainActor.run form fails Swift 6.1's sendability
+            // rules on the Intel (macos-15-intel) release runner.
+            try backend.start(onEvent: { [weak self] name, value in
+                guard let event = try? RivetEvent.decode(name: name, value: value) else { return }
+                Task { @MainActor [weak self] in
+                    self?.store.handleEvent(event)
                 }
+            })
+            let api = RivetAPI(client: backend.client)
+            Task { [weak self] in
+                await self?.finishBoot(api: api)
             }
         } catch {
-            bootStatus = "config: \(error)"
+            ready = false
+            bootStatus = L("backendError") + " \(error)"
         }
+    }
+
+    /// Main-actor boot completion (Task { } above inherits the isolation).
+    private func finishBoot(api: RivetAPI) async {
+        store.bind(api: api)
+        ready = true
+        bootStatus = L("ready")
+        store.loadFeeds()
+        store.resumeLast()
+        silentUpdateCheck()
     }
 
     func checkForUpdates(manual: Bool) {
