@@ -133,7 +133,9 @@ jobs:
           Move-Item dist/podlens-*-windows-x64.msi "podlens-$version-windows-x64.msi"
           Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "podlens-$version-windows-x64.zip"
           $msi = (Get-FileHash "podlens-$version-windows-x64.msi" -Algorithm SHA256).Hash.ToLower()
-          "$msi  podlens-$version-windows-x64.msi" | Set-Content "podlens-$version-windows-x64.msi.sha256"
+          # LF line ending on purpose — the publish job's shasum --check
+          # mis-parses the filename with a trailing CR.
+          [IO.File]::WriteAllText("podlens-$version-windows-x64.msi.sha256", "$msi  podlens-$version-windows-x64.msi`n")
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -190,7 +192,8 @@ jobs:
       - name: SHA256SUMS
         run: |
           cd dist
-          cat *.sha256 > SHA256SUMS
+          # strip stray CR from Windows-authored sums before checking
+          cat *.sha256 | tr -d '\r' > SHA256SUMS
           shasum -a 256 --check SHA256SUMS
       - name: Publish release
         env:
