@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PodLens — 听得懂的英文播客</title>
 <meta name="description" content="PodLens: 用你自己的大模型 API 把英文播客转写、逐句翻译、总结。macOS 与 Windows 原生应用。">
+<script>
+  (function () {
+    var t = localStorage.getItem('podlens-theme');
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,6 +34,7 @@
           <li onclick="setLanguage('zh')">简体中文</li>
         </ul>
       </div>
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle theme">◐</button>
     </nav>
   </div>
 </header>
@@ -231,6 +239,13 @@
     if (!readLanguageOverride()) apply(detectBrowserLanguage());
   });
 })();
+</script>
+<script>
+  document.getElementById('theme-btn').addEventListener('click', function () {
+    var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('podlens-theme', next);
+  });
 </script>
 </body>
 </html>

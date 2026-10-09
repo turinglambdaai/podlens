@@ -116,3 +116,25 @@ a { color: inherit; text-decoration: none; }
 
 .footer { border-top: 1px solid var(--line); padding: 28px 24px; text-align: center; font-size: 13.5px; color: var(--muted); }
 .footer a { color: var(--accent); }
+
+/* theme: data-theme is set by the inline head script — from localStorage
+   when the user has picked manually, otherwise from the system preference. */
+:root[data-theme="dark"] {
+  --bg: #1f1d1a;
+  --surface: #2b2926;
+  --ink: #f0ede8;
+  --muted: #a8a29a;
+  --line: #3a3835;
+  --accent: #d97a55;
+  --accent-soft: rgba(217, 122, 85, 0.16);
+}
+:root[data-theme="dark"] .nav { background: rgba(31, 29, 26, 0.88); }
+:root[data-theme="light"] .nav { background: rgba(250, 247, 242, 0.88); }
+
+.theme-btn {
+  display: inline-flex; align-items: center;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 14px; color: var(--muted); padding: 6px 10px; border-radius: 8px;
+  transition: color .15s, background .15s;
+}
+.theme-btn:hover { color: var(--accent); background: var(--accent-soft); }
