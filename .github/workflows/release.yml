@@ -136,6 +136,8 @@ jobs:
           # LF line ending on purpose — the publish job's shasum --check
           # mis-parses the filename with a trailing CR.
           [IO.File]::WriteAllText("podlens-$version-windows-x64.msi.sha256", "$msi  podlens-$version-windows-x64.msi`n")
+          $zip = (Get-FileHash "podlens-$version-windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("podlens-$version-windows-x64.zip.sha256", "$zip  podlens-$version-windows-x64.zip`n")
       - uses: actions/upload-artifact@v4
         with:
           name: windows
