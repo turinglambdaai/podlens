@@ -145,6 +145,7 @@ jobs:
             podlens-*-windows-x64.msi
             podlens-*-windows-x64.msi.sha256
             podlens-*-windows-x64.zip
+            podlens-*-windows-x64.zip.sha256
           if-no-files-found: error
 
   release:
