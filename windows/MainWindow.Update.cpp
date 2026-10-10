@@ -329,9 +329,8 @@ void MainWindow::RecordUpdateCheck() {
   if (backend_ == nullptr || !backend_->running()) {
     return;
   }
-  auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
-  std::thread([weak, dispatcher]() mutable {
+  std::thread([weak]() mutable {
     if (!weak.get()) {
       return;
     }
