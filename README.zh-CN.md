@@ -13,7 +13,8 @@
 | 平台 | 下载 | 更新 |
 |---|---|---|
 | macOS 14+（Apple Silicon 与 Intel） | `podlens-<version>-macos-<arch>.dmg`——`arm64` / `x64`（ad-hoc 签名——首次启动右键 → 打开） | 应用内更新（签名清单），或重新安装新版 DMG |
-| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式），或 `podlens-<version>-windows-x64.zip` 便携版 | 重新运行新版 MSI 覆盖升级；便携版解压替换 |
+| Windows 10+ x64 | `podlens-<version>-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式），或 `podlens-<version>-windows-x64.zip` 便携版 | 便携版：应用内下载并换装（签名清单）；MSI：重新运行新版安装器（应用内会提示） |
+| Linux | 规划中——暂无下载；GTK4 宿主已列入路线图，排在 Windows 应用内更新专项之后 | — |
 
 每个发布都带 `SHA256SUMS` 校验清单和 Sigstore 构建来源证明（`gh attestation verify <file> -R turinglambdaai/podlens`）。
 

@@ -56,7 +56,8 @@ Inner manifest (decoded `payload`) — rivet's manifest schema:
   `VERSION` file (release preflight checks it, along with `rivet.rktd` and
   `app/version.rkt`)
 - `artifacts` carries one entry per platform × architecture; there is no
-  Linux entry (no Linux host is a product decision, not an omission)
+  Linux entry yet (no Linux host ships today — the GTK4 host is planned,
+  and a feed entry follows when it exists)
 - asset naming: `podlens-<version>-{macos-arm64,macos-x64,windows-x64}.zip`
   are the update archives (all lowercase, arch-suffixed). Human installers
   ship beside them: `podlens-<version>-macos-<arch>.dmg` and
@@ -92,7 +93,7 @@ update.
 | macOS Apple silicon | `macos`/`arm64` zip | zip → sha256 → `UpdateService.swift` swap: verify bundle version → old aside → new in → relaunch; rollback on failure | Ed25519 wrapper signature (CryptoKit) + artifact sha256 | 已换装 since 1.0 |
 | macOS Intel | `macos`/`x64` zip | same swap on the x64 build (hosts match their compile-time architecture) | same | 已换装 since 1.4.0 |
 | Windows x64 | `windows`/`x64` zip | backend downloads + verifies (size + sha256) → host `update-install.cmd` handoff: wait for app exit → `tar -xf` extract → swap install dir in place (`.old` fallback) → relaunch; failure marker (`%TEMP%\podlens-update\update-failed.txt`) reported on next launch. MSI installs under Program Files and dev copies get guidance to the releases page instead of a swap they cannot make | Ed25519 wrapper signature (backend, OpenSSL 3) + artifact sha256 | 已换装 since 0.1.0 (guidance-only in 1.4.0) |
-| Linux | — | no Linux host is a product decision, not an omission | — | n/a |
+| Linux | — | no host exists yet — a GTK4 shell is on the product roadmap (scheduled after the Windows in-app update work); there is nothing to feed, download, or install today | — | 规划中 / planned |
 
 The macOS host picks its feed entry by compile-time architecture
 (`arch(x86_64)` → `x64`, `arch(arm64)` → `arm64`), so an Intel build never
