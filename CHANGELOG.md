@@ -5,7 +5,11 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
-## 1.5.0 - 2026-10-10
+## 0.1.0 - 2026-10-10
+
+> The family moves to the 0.x churn era (rivet itself is still 0.6.x), so
+> this is a version reset from the 1.x line — 1.x clients see it as "up to
+> date" (downgrades never nag) and update manually if they want to follow.
 
 ### Added
 

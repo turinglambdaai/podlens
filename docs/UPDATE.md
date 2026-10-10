@@ -33,8 +33,8 @@ Inner manifest (decoded `payload`) — rivet's manifest schema:
 {
   "schema": 1,
   "application_id": "site.jrtx.podlens",
-  "version": "1.5.0",
-  "build": 10,
+  "version": "0.1.0",
+  "build": 1,
   "channel": "stable",
   "published_at": "2026-10-10T12:00:00Z",
   "minimum_version": "0.0.0",
@@ -43,7 +43,7 @@ Inner manifest (decoded `payload`) — rivet's manifest schema:
   "rollout": 100,
   "artifacts": [
     { "platform": "macos", "architecture": "arm64",
-      "url": "https://github.com/…/podlens-1.5.0-macos-arm64.zip",
+      "url": "https://github.com/…/podlens-0.1.0-macos-arm64.zip",
       "sha256": "<lowercase hex>", "size": 12345678,
       "installer": "zip", "arguments": [] },
     { "platform": "macos", "architecture": "x64", "…": "…" },
@@ -91,7 +91,7 @@ update.
 |---|---|---|---|---|
 | macOS Apple silicon | `macos`/`arm64` zip | zip → sha256 → `UpdateService.swift` swap: verify bundle version → old aside → new in → relaunch; rollback on failure | Ed25519 wrapper signature (CryptoKit) + artifact sha256 | 已换装 since 1.0 |
 | macOS Intel | `macos`/`x64` zip | same swap on the x64 build (hosts match their compile-time architecture) | same | 已换装 since 1.4.0 |
-| Windows x64 | `windows`/`x64` zip | backend downloads + verifies (size + sha256) → host `update-install.cmd` handoff: wait for app exit → `tar -xf` extract → swap install dir in place (`.old` fallback) → relaunch; failure marker (`%TEMP%\podlens-update\update-failed.txt`) reported on next launch. MSI installs under Program Files and dev copies get guidance to the releases page instead of a swap they cannot make | Ed25519 wrapper signature (backend, OpenSSL 3) + artifact sha256 | 已换装 since 1.5.0 (guidance-only in 1.4.0) |
+| Windows x64 | `windows`/`x64` zip | backend downloads + verifies (size + sha256) → host `update-install.cmd` handoff: wait for app exit → `tar -xf` extract → swap install dir in place (`.old` fallback) → relaunch; failure marker (`%TEMP%\podlens-update\update-failed.txt`) reported on next launch. MSI installs under Program Files and dev copies get guidance to the releases page instead of a swap they cannot make | Ed25519 wrapper signature (backend, OpenSSL 3) + artifact sha256 | 已换装 since 0.1.0 (guidance-only in 1.4.0) |
 | Linux | — | no Linux host is a product decision, not an omission | — | n/a |
 
 The macOS host picks its feed entry by compile-time architecture
