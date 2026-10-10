@@ -33,17 +33,17 @@ Inner manifest (decoded `payload`) — rivet's manifest schema:
 {
   "schema": 1,
   "application_id": "site.jrtx.podlens",
-  "version": "1.4.0",
-  "build": 9,
+  "version": "1.5.0",
+  "build": 10,
   "channel": "stable",
-  "published_at": "2026-10-09T12:00:00Z",
+  "published_at": "2026-10-10T12:00:00Z",
   "minimum_version": "0.0.0",
   "previous_version": null,
   "rollback_allowed": true,
   "rollout": 100,
   "artifacts": [
     { "platform": "macos", "architecture": "arm64",
-      "url": "https://github.com/…/podlens-1.4.0-macos-arm64.zip",
+      "url": "https://github.com/…/podlens-1.5.0-macos-arm64.zip",
       "sha256": "<lowercase hex>", "size": 12345678,
       "installer": "zip", "arguments": [] },
     { "platform": "macos", "architecture": "x64", "…": "…" },
@@ -81,13 +81,24 @@ Inner manifest (decoded `payload`) — rivet's manifest schema:
 
 Failed installs roll back: the macOS updater swaps atomically via a shell
 script (`mv` old aside → `mv` new in → relaunch; on failure the old bundle
-is restored). `~/.podlens/` is never touched by an update.
+is restored); on Windows the handoff script keeps a `.old` copy of the
+previous install for the same reason. `~/.podlens/` is never touched by an
+update.
+
+## Host status
+
+| Platform | Feed entry | Install | Integrity | Status |
+|---|---|---|---|---|
+| macOS Apple silicon | `macos`/`arm64` zip | zip → sha256 → `UpdateService.swift` swap: verify bundle version → old aside → new in → relaunch; rollback on failure | Ed25519 wrapper signature (CryptoKit) + artifact sha256 | 已换装 since 1.0 |
+| macOS Intel | `macos`/`x64` zip | same swap on the x64 build (hosts match their compile-time architecture) | same | 已换装 since 1.4.0 |
+| Windows x64 | `windows`/`x64` zip | backend downloads + verifies (size + sha256) → host `update-install.cmd` handoff: wait for app exit → `tar -xf` extract → swap install dir in place (`.old` fallback) → relaunch; failure marker (`%TEMP%\podlens-update\update-failed.txt`) reported on next launch. MSI installs under Program Files and dev copies get guidance to the releases page instead of a swap they cannot make | Ed25519 wrapper signature (backend, OpenSSL 3) + artifact sha256 | 已换装 since 1.5.0 (guidance-only in 1.4.0) |
+| Linux | — | no Linux host is a product decision, not an omission | — | n/a |
 
 The macOS host picks its feed entry by compile-time architecture
 (`arch(x86_64)` → `x64`, `arch(arm64)` → `arm64`), so an Intel build never
-installs the arm64 archive. The Windows host reports the available version
-and guides the user to reinstall (MSI or portable zip); it does not swap
-itself yet — that is honest by design until the swap lands.
+installs the arm64 archive. The Windows host's check and download run in
+the backend (the same OpenSSL 3 path as the CLI); the host drives download
+consent, 400 ms `update-state` progress polling and the install handoff.
 
 ## Keys
 
@@ -106,10 +117,18 @@ itself yet — that is honest by design until the swap lands.
 ## Client behavior
 
 - Manual check: menu "检查更新…" / CLI `check-updates` — always reports the outcome
-- Silent check (macOS): at most once per 4 h after launch; never nags; a
-  found update shows a confirm dialog before installing
-- Developer builds (no embedded key, or app not in /Applications) report
-  honestly that updates are unavailable instead of pretending to check
+- Silent check (macOS and Windows): at most once per 4 h after launch
+  (persisted as the `last-update-check` config key, unix epoch seconds;
+  Windows also honors `check-updates-enabled`); never nags; a found update
+  shows a confirm dialog before downloading
+- Download: backend-side only (`start-download` RPC, worker thread) after
+  the user consents; hosts poll `update-state` (phase: idle | checking |
+  downloading | downloaded | error) and show progress
+- Install: host-owned — macOS swaps the bundle in place; Windows hands off
+  to `update-install.cmd` ("退出并安装" consent first)
+- Developer builds (no embedded key, app not in /Applications, or a dev
+  layout without `res/core.zo`) report honestly that updates are
+  unavailable instead of pretending to check
 
 ## Migration note (v1.4.0)
 

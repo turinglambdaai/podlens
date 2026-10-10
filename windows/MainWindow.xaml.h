@@ -4,12 +4,20 @@
 #include "MainWindow.g.h"
 #include "GeneratedBackend.hpp"
 
+#include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace winrt::RivetHost::implementation {
+
+// Host helpers shared with MainWindow.Update.cpp (taskly's HostHelpers
+// pattern): executable path and UTF conversion. Defined in
+// MainWindow.xaml.cpp.
+std::filesystem::path executable_path();
+std::wstring to_wide(std::string const& text);
 
 struct MainWindow : MainWindowT<MainWindow> {
   MainWindow();
@@ -130,11 +138,33 @@ struct MainWindow : MainWindowT<MainWindow> {
   void LoadDiscover();
   void AddFromCatalog(std::string const& url);
   void RunSettingsDialog();
-  void RunUpdateCheck();
   void ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
                           std::string const& error);
   void MarkFromMenu(winrt::Windows::Foundation::IInspectable const& sender,
                     wchar_t const* done);
+
+  // updates (docs/UPDATE.md; flow lives in MainWindow.Update.cpp)
+  void StartAutoUpdateCheck();
+  void RunSilentUpdateCheck();
+  void RunUpdateCheck(bool silent);
+  void HandleUpdateCheckResult(bool ok, rivet_app::UpdateCheck const& check,
+                               std::string const& failure, bool silent);
+  void RecordUpdateCheck();
+  void StartDownload();
+  void PollUpdateState(
+      std::shared_ptr<rivet::windows::Backend> const& backend);
+  void HandleUpdatePoll(std::optional<rivet_app::UpdateState> const& state);
+  void StopUpdateTimer();
+  void FailDownload(std::string const& message);
+  void ShowInstallConsent(std::wstring const& path);
+  void InstallDownloadedUpdate(std::wstring const& zip_path);
+  void HandleInstallMarkers();
+  bool IsDevCopy();
+  bool IsMsiInstall();
+  void ShowUpdateDialog(std::wstring const& title, std::wstring const& body,
+                        std::wstring const& primary_button,
+                        std::wstring const& close_button,
+                        std::function<void()> on_primary);
 
   struct FeedRow {
     std::string id;
@@ -186,6 +216,13 @@ struct MainWindow : MainWindowT<MainWindow> {
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer error_bar_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer sleep_timer_{nullptr};
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer refresh_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer check_timer_{nullptr};
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer update_timer_{nullptr};
+  // update flow state (MainWindow.Update.cpp): silent-check settings cached
+  // from settings-list at startup, and the download that is in flight
+  bool check_updates_enabled_ = true;
+  std::int64_t last_update_check_ = 0;
+  bool update_downloading_ = false;
   int sleep_minutes_ = 0;
   std::vector<ChapterMark> chapters_;
   // resume-on-launch: feed/episode ids waiting for their lists to render

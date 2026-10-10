@@ -32,11 +32,14 @@
 #include <type_traits>
 
 namespace winrt::RivetHost::implementation {
-namespace {
 
 using Microsoft::UI::Xaml::Visibility;
 namespace mux = winrt::Microsoft::UI::Xaml;
 namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
+
+// Host helpers shared with MainWindow.Update.cpp (declared in
+// MainWindow.xaml.h, taskly's HostHelpers pattern); everything else
+// file-local stays in the anonymous namespaces.
 
 std::filesystem::path executable_path() {
   std::wstring buffer(32768, L'\0');
@@ -96,6 +99,8 @@ std::wstring to_wide(std::string const& utf8_text) {
   }
   return result;
 }
+
+namespace {
 
 // The estimate RPC answers with a small JSON object; picking the numbers
 // out with a regex beats carrying a JSON parser in the host.
@@ -473,7 +478,9 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
                               SW_SHOWNORMAL);
             } else if (auto const update =
                            std::get_if<rivet_app::Update_availableEvent>(&event)) {
-              window->SetStatus(true, to_wide(update->value));
+              // the version travels on the wire for compat; the Windows flow
+              // surfaces through the update-check dialog instead
+              (void)update;
             } else if (auto const changed =
                            std::get_if<rivet_app::Episodes_changedEvent>(&event)) {
               window->ReloadFeeds();
@@ -493,6 +500,10 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
         window->SetStatus(true, std::wstring(podlens::Tr("status.ready")));
         window->ReloadFeeds();
         window->ResumeLast();
+        // A previous update run may have left a failure report
+        // (docs/UPDATE.md); surface it once, then start the throttled
+        // silent check.
+        window->StartAutoUpdateCheck();
       } else {
         // Never destroy the last Backend reference on its own reader thread.
         std::thread([backend = std::move(backend)]() mutable {
@@ -1617,7 +1628,7 @@ void MainWindow::Nav_SelectionChanged(
     return;
   }
   if (key == L"updates") {
-    RunUpdateCheck();
+    RunUpdateCheck(/*silent=*/false);
     return;
   }
   // a feed: load its episodes and show the detail view
@@ -2158,33 +2169,7 @@ void MainWindow::Settings_Click(winrt::Windows::Foundation::IInspectable const&,
 
 void MainWindow::CheckUpdates_Click(winrt::Windows::Foundation::IInspectable const&,
                                     Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  RunUpdateCheck();
-}
-
-void MainWindow::RunUpdateCheck() {
-  if (!api_) return;
-  auto const dispatcher = DispatcherQueue();
-  auto const weak = get_weak();
-  std::thread([weak, dispatcher]() mutable {
-    std::string status;
-    std::string error;
-    if (weak.get()) {
-      try {
-        status = weak.get()->api_->update_check().get();
-      } catch (std::exception const& e) {
-        error = e.what();
-      }
-    }
-    dispatcher.TryEnqueue([weak, status, error] {
-      if (auto window = weak.get()) {
-        if (error.empty()) {
-          window->SetStatus(true, to_wide(status));
-        } else {
-          window->SetStatus(false, to_wide(error));
-        }
-      }
-    });
-  }).detach();
+  RunUpdateCheck(/*silent=*/false);
 }
 
 void MainWindow::RunSettingsDialog() {

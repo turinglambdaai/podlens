@@ -5,6 +5,37 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 1.5.0 - 2026-10-10
+
+### Added
+
+- **Windows host in-app updates** (the last host without them): the full
+  family flow behind the existing "检查更新…" entry — silent throttled
+  check at launch (at most once per 4 h, honoring `check-updates-enabled`),
+  an available-update consent dialog, download with progress in the status
+  line, and a "退出并安装" handoff script that waits for process exit,
+  unpacks the portable zip, swaps the install directory (`.old` fallback),
+  relaunches, and reports a failed install on the next launch. Portable
+  (zip) installs update in place; MSI installs (Program Files) and dev
+  copies keep the manual path — a dialog pointing at the releases page.
+- Backend download channel: `update-check` now returns the typed
+  `UpdateCheck` record (status/version/build/installer/size — no more
+  localized strings on the wire), and new `start-download` / `update-state`
+  RPCs run the artifact download on a backend worker thread with progress
+  published to a state box. Downloads land under `~/.podlens/updates/`
+  (never touching the data files) and are held to the signed manifest's
+  size + SHA-256 before being trusted. The 4-hour throttle persists as the
+  `last-update-check` config key, shared across hosts.
+- `docs/UPDATE.md` status table: the Windows row is now "已换装".
+
+### Fixed
+
+- Downloads written through a text-mode port on Windows corrupt binary
+  data (`\n` → `\r\n` expansion): `core/http.rkt`'s downloader now writes
+  in binary mode — this affected episode audio too, and the updater's
+  SHA-256 check would have rejected every archive. Wrapper verification's
+  payload/signature scratch files get the same hardening.
+
 ## 1.4.0 - 2026-10-09
 
 ### Changed

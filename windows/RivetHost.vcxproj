@@ -91,6 +91,7 @@
     <ClCompile Include="pch.cpp"><PrecompiledHeader>Create</PrecompiledHeader></ClCompile>
     <ClCompile Include="App.xaml.cpp"><DependentUpon>App.xaml</DependentUpon></ClCompile>
     <ClCompile Include="MainWindow.xaml.cpp"><DependentUpon>MainWindow.xaml</DependentUpon></ClCompile>
+    <ClCompile Include="MainWindow.Update.cpp"><DependentUpon>MainWindow.xaml</DependentUpon></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\system\system_services.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>

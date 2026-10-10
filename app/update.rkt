@@ -13,6 +13,12 @@
 ;; The public key is embedded raw (base64 of the 32 bytes) — the same bytes
 ;; the Swift host embeds — and rebuilt into a PEM for OpenSSL.
 ;;
+;; The backend owns the artifact download (family pattern): a check stashes
+;; the selected artifact, start-download! streams it to <data-dir>/updates/
+;; on a background thread with progress published to a state box that hosts
+;; poll through the `update-state` RPC (RVT1 events are thread-local, so a
+;; background thread cannot emit them). Hosts own installation.
+;;
 ;; Key management lives in docs/UPDATE.md; `scripts/update-keys.sh`
 ;; generates the pair. Rotation: ship a client trusting the next key
 ;; before signing releases exclusively with it.
@@ -22,6 +28,7 @@
          racket/file
          racket/format
          racket/list
+         racket/path
          racket/port
          racket/string
          racket/system
@@ -39,7 +46,15 @@
          raw-key->pem
          parse-signed-wrapper
          verify-wrapper-signature
-         select-artifact)
+         select-artifact
+         update-state-snapshot
+         reset-update-state!
+         set-update-error!
+         current-candidate
+         set-candidate!
+         start-download!
+         destination-path
+         file-sha256-hex)
 
 ;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
 ;; #f keeps developer builds honest about update availability.
@@ -143,8 +158,11 @@
   (dynamic-wind
     (lambda () (void))
     (lambda ()
-      (display-to-file payload payload-file #:exists 'replace)
-      (display-to-file signature sig-file #:exists 'replace)
+      (display-to-file payload payload-file #:exists 'replace #:mode 'binary)
+      ;; the signature is 64 random bytes — a 0x0A among them would be
+      ;; expanded to \r\n by a text-mode port on Windows, so binary is
+      ;; load-bearing here too
+      (display-to-file signature sig-file #:exists 'replace #:mode 'binary)
       (display-to-file (raw-key->pem key-raw) pem-file #:exists 'replace)
       (define out
         (with-output-to-string
@@ -190,14 +208,22 @@
 ;;
 ;; The macOS host runs the same contract natively; this module gives the
 ;; CLI, the backend RPC and the Windows host the same check by shelling
-;; out to OpenSSL 3.
+;; out to OpenSSL 3. An "available" result also stashes the selected
+;; artifact for start-download!, so the download never re-fetches or
+;; re-verifies the manifest.
 (define (update-check-result current-version)
   (cond
     [(not (update-configured?))
      (list 'unavailable "developer build (no update key configured)")]
     [else
      (with-handlers
-         ([exn:fail? (lambda (e) (list 'failed (exn-message e)))])
+         ([exn:fail?
+           (lambda (e)
+             (state-set! 'phase "error")
+             (state-set! 'message (exn-message e))
+             (list 'failed (exn-message e)))])
+       (reset-update-state!)
+       (state-set! 'phase "checking")
        (define-values (code _h body)
          (http-get-bytes (manifest-url) (list "Accept: application/vnd.github+json")))
        (unless (= code 200)
@@ -213,12 +239,26 @@
        (unless (equal? (hash-ref manifest 'application_id #f)
                        current-update-application-id)
          (error 'update-check "manifest is for a different application"))
-       (unless (select-artifact manifest (host-platform) (host-architecture))
+       (define artifact
+         (select-artifact manifest (host-platform) (host-architecture)))
+       (unless artifact
          (error 'update-check "feed carries no artifact for this platform"))
        (define latest (hash-ref manifest 'version "0"))
        (if (version-newer? current-version latest)
-           (list 'available latest)
-           (list 'up-to-date)))]))
+           (begin
+             (set-box! candidate-box
+                       (hasheq 'version latest
+                               'artifact artifact
+                               'build (hash-ref manifest 'build #f)
+                               'published-at (hash-ref manifest 'published_at #f)))
+             (state-set! 'phase "idle")
+             (state-set! 'availableVersion latest)
+             (list 'available latest))
+           (begin
+             (set-box! candidate-box #f)
+             (state-set! 'phase "idle")
+             (state-set! 'availableVersion #f)
+             (list 'up-to-date))))]))
 
 (define (version-newer? current latest)
   (define (segs v)
@@ -228,3 +268,151 @@
   (define n (max (length a) (length b)))
   (define (pad xs) (append xs (make-list (- n (length xs)) 0)))
   (for/or ([x (in-list (pad a))] [y (in-list (pad b))]) (> y x)))
+
+;; ---- download state (UI-visible) -------------------------------------------
+
+;; phase: idle | checking | downloading | downloaded | error. The download
+;; streams on a background thread; RVT1 events are thread-local, so progress
+;; is published through this box and hosts poll it via `update-state`.
+(define update-state
+  (box (hasheq 'phase "idle"
+               'percent 0
+               'message #f
+               'downloadedPath #f
+               'availableVersion #f)))
+
+;; artifact + version chosen by the last successful check; start-download!
+;; consumes it. Reset by every new check.
+(define candidate-box (box #f))
+(define worker-thread-box (box #f))
+
+;; Sanity cap on the update archive; a signed manifest claiming more than
+;; this is treated as hostile (800 MiB ≫ any family install).
+(define maximum-download-bytes (* 800 1024 1024))
+
+(define (state-set! key value)
+  (set-box! update-state (hash-set (unbox update-state) key value)))
+
+(define (update-state-snapshot)
+  (unbox update-state))
+
+(define (reset-update-state!)
+  (set-box! update-state
+            (hasheq 'phase "idle"
+                    'percent 0
+                    'message #f
+                    'downloadedPath #f
+                    'availableVersion #f)))
+
+;; Pre-spawn download failures (already running, no candidate) surface
+;; through the state instead of an RPC error, so host UIs have a single
+;; failure channel.
+(define (set-update-error! message)
+  (state-set! 'phase "error")
+  (state-set! 'message message))
+
+;; The candidate stashed by the last successful check: #f or a hasheq with
+;; 'version / 'artifact / 'build / 'published-at. The RPC layer maps it onto
+;; the UpdateCheck record's optional fields.
+(define (current-candidate) (unbox candidate-box))
+
+;; Test seam: install a candidate without a network check so the download
+;; can be driven against a local HTTP server.
+(define (set-candidate! candidate) (set-box! candidate-box candidate))
+
+;; ---- download ----------------------------------------------------------------
+
+;; last path segment of the artifact URL, query stripped — release assets
+;; are named podlens-<ver>-<platform>-<arch>.zip, which keeps <data-dir>/
+;; updates/ self-describing
+(define (url-basename url)
+  (define m (regexp-match #rx"/([^/?#]+)(?:[?#].*)?$" url))
+  (if m (second m) "update-archive.zip"))
+
+(define (destination-path data-dir candidate)
+  (build-path data-dir "updates"
+              (url-basename (hash-ref (hash-ref candidate 'artifact) 'url))))
+
+;; SHA-256 of a file, lowercase hex, via the same OpenSSL 3 the wrapper
+;; verification uses ("-r" prints "<hex> *<path>"; take the first field).
+;; Accepts a path or a string (state boxes carry path->string results, and
+;; path->string itself rejects strings — the guard below is load-bearing).
+(define (file-sha256-hex path)
+  (define openssl (find-openssl))
+  (unless (openssl3? openssl)
+    (error 'file-sha256-hex "OpenSSL 3 not found for artifact verification"))
+  (define out
+    (with-output-to-string
+      (lambda ()
+        (with-handlers ([exn:fail? void])
+          (system* openssl "dgst" "-sha256" "-r"
+                   (if (string? path) path (path->string path)))))))
+  (define m (regexp-match #px"^([0-9a-fA-F]{64})\\b" out))
+  (unless m
+    (error 'file-sha256-hex "unreadable digest output for ~a" path))
+  (string-downcase (second m)))
+
+;; Stream the artifact to `destination` and hold it to the signed manifest's
+;; size + SHA-256 before the file is trusted. The .partial suffix keeps a
+;; half-downloaded file from ever looking final.
+(define (download-update! candidate destination)
+  (define artifact (hash-ref candidate 'artifact))
+  (define url (hash-ref artifact 'url))
+  (define expected-size (hash-ref artifact 'size #f))
+  (define expected-sha256 (hash-ref artifact 'sha256 #f))
+  (when (and expected-size (> expected-size maximum-download-bytes))
+    (error 'download-update "signed artifact size exceeds the download limit"))
+  (make-parent-directory* destination)
+  (define temporary (path-add-extension destination #".partial"))
+  (when (file-exists? temporary) (delete-file temporary))
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (with-handlers ([exn:fail? void]) (delete-file temporary))
+          (raise e))])
+    (define-values (code written)
+      (http-download-file url temporary
+                          (lambda (done total)
+                            (when (and total (> total 0))
+                              (state-set! 'percent
+                                          (min 100
+                                               (quotient (* done 100) total)))))))
+    (unless (= code 200)
+      (error 'download-update "~a returned ~a" url code))
+    (when (and expected-size (not (= written expected-size)))
+      (error 'download-update
+             "downloaded artifact size mismatch: ~a of ~a bytes"
+             written expected-size))
+    (when expected-sha256
+      (unless (string-ci=? (file-sha256-hex temporary) expected-sha256)
+        (error 'download-update "artifact checksum mismatch")))
+    (rename-file-or-directory temporary destination #t))
+  destination)
+
+;; Spawns the worker thread and returns immediately; the host follows
+;; progress via the update-state RPC. Raises before spawning when there is
+;; nothing to download (the RPC maps that onto the state's error phase);
+;; never raises from the thread itself.
+(define (start-download! data-dir)
+  (define worker (unbox worker-thread-box))
+  (when (and worker (thread-running? worker))
+    (error 'start-download! "an update download is already running"))
+  (define candidate (unbox candidate-box))
+  (unless candidate
+    (error 'start-download! "no update is available; run a check first"))
+  (state-set! 'phase "downloading")
+  (state-set! 'percent 0)
+  (state-set! 'message #f)
+  (define destination (destination-path data-dir candidate))
+  (set-box! worker-thread-box
+            (thread
+             (lambda ()
+               (with-handlers
+                   ([exn:fail?
+                     (lambda (e)
+                       (state-set! 'phase "error")
+                       (state-set! 'message (exn-message e)))])
+                 (define path (download-update! candidate destination))
+                 (state-set! 'phase "downloaded")
+                 (state-set! 'percent 100)
+                 (state-set! 'downloadedPath (path->string path)))))))

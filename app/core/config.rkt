@@ -45,6 +45,8 @@
          "Transcript characters sent to the summarizer")
    (list 'check-updates-enabled "true" 'boolean
          "Automatically check for updates (silent, throttled)")
+   (list 'last-update-check 0 'number
+         "Unix seconds of the last automatic update check (internal)")
    (list 'search-limit 25 'number
          "Max results per discovery search (iTunes Search API)")))
 

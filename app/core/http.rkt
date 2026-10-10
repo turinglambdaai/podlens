@@ -160,6 +160,9 @@
              (with-handlers ([exn:fail? void]) (http-conn-close! conn))
              (values code 0))
       (begin
+        ;; binary mode is load-bearing: a text-mode port on Windows turns
+        ;; every 0x0A into 0x0D 0x0A, which would corrupt downloads (audio,
+        ;; update archives) and fail every byte-exact checksum
         (with-output-to-file dest-path
           (lambda ()
             (let copy ([chunk (read-bytes 262144 body-port)])
@@ -171,7 +174,8 @@
                   (set! last-reported written)
                   (on-progress written total))
                 (copy (read-bytes 262144 body-port)))))
-          #:exists 'truncate)
+          #:exists 'truncate
+          #:mode 'binary)
         (close-input-port body-port)
         (with-handlers ([exn:fail? void]) (http-conn-close! conn))
         (values code written))))

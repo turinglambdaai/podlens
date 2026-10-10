@@ -18,10 +18,29 @@ namespace rivet_app {
 inline constexpr char kModuleName[] = "backend";
 inline constexpr char kEntryName[] = "start";
 inline constexpr char kDisplayName[] = "PodLens";
-inline constexpr char kVersion[] = "1.4.0";
-inline constexpr std::int64_t kBuild = 9;
+inline constexpr char kVersion[] = "1.5.0";
+inline constexpr std::int64_t kBuild = 10;
 inline constexpr char kIdentifier[] = "site.jrtx.podlens";
 inline constexpr char kReleaseChannel[] = "stable";
+
+struct UpdateCheck {
+  std::string status;
+  std::optional<std::string> error;
+  std::string current_version;
+  std::optional<std::string> available_version;
+  std::optional<std::int64_t> build;
+  std::optional<std::string> published_at;
+  std::optional<std::string> installer;
+  std::optional<std::int64_t> size_bytes;
+};
+
+struct UpdateState {
+  std::string phase;
+  std::int64_t percent;
+  std::optional<std::string> message;
+  std::optional<std::string> downloaded_path;
+  std::optional<std::string> available_version;
+};
 
 template <typename T>
 struct Result {
@@ -45,6 +64,10 @@ inline rivet::Value encode__List_List_String_(std::vector<std::vector<std::strin
 inline rivet::Value encode_Bool(bool v) { return rivet::Value(v); }
 inline rivet::Value encode_Int64(std::int64_t v) { return rivet::Value(v); }
 inline rivet::Value encode_Void() { return rivet::Value{}; }
+inline rivet::Value encode__Optional_String_(std::optional<std::string> const& v) { return v ? encode_String(*v) : rivet::Value{}; }
+inline rivet::Value encode__Optional_Int64_(std::optional<std::int64_t> const& v) { return v ? encode_Int64(*v) : rivet::Value{}; }
+inline rivet::Value encode_UpdateCheck(UpdateCheck const& v) { rivet::Value::List r; r.reserve(8); r.push_back(encode_String(v.status)); r.push_back(encode__Optional_String_(v.error)); r.push_back(encode_String(v.current_version)); r.push_back(encode__Optional_String_(v.available_version)); r.push_back(encode__Optional_Int64_(v.build)); r.push_back(encode__Optional_String_(v.published_at)); r.push_back(encode__Optional_String_(v.installer)); r.push_back(encode__Optional_Int64_(v.size_bytes)); return rivet::Value(std::move(r)); }
+inline rivet::Value encode_UpdateState(UpdateState const& v) { rivet::Value::List r; r.reserve(5); r.push_back(encode_String(v.phase)); r.push_back(encode_Int64(v.percent)); r.push_back(encode__Optional_String_(v.message)); r.push_back(encode__Optional_String_(v.downloaded_path)); r.push_back(encode__Optional_String_(v.available_version)); return rivet::Value(std::move(r)); }
 
 inline std::string decode_String(rivet::Value const& v) { if (auto p = std::get_if<std::string>(&v.data)) return *p; throw std::runtime_error("Rivet result type mismatch: String"); }
 inline std::vector<std::string> decode__List_String_(rivet::Value const& v) { auto p = std::get_if<rivet::Value::List>(&v.data); if (!p) throw std::runtime_error("Rivet result type mismatch: (List String)"); std::vector<std::string> r; r.reserve(p->size()); for (auto const& x : *p) r.push_back(decode_String(x)); return r; }
@@ -52,6 +75,10 @@ inline std::vector<std::vector<std::string>> decode__List_List_String_(rivet::Va
 inline bool decode_Bool(rivet::Value const& v) { if (auto p = std::get_if<bool>(&v.data)) return *p; throw std::runtime_error("Rivet result type mismatch: Bool"); }
 inline std::int64_t decode_Int64(rivet::Value const& v) { if (auto p = std::get_if<std::int64_t>(&v.data)) return *p; throw std::runtime_error("Rivet result type mismatch: Int64"); }
 inline void decode_Void(rivet::Value const& v) { if (!std::holds_alternative<std::monostate>(v.data)) throw std::runtime_error("Rivet result type mismatch: Void"); }
+inline std::optional<std::string> decode__Optional_String_(rivet::Value const& v) { if (std::holds_alternative<std::monostate>(v.data)) return std::nullopt; return decode_String(v); }
+inline std::optional<std::int64_t> decode__Optional_Int64_(rivet::Value const& v) { if (std::holds_alternative<std::monostate>(v.data)) return std::nullopt; return decode_Int64(v); }
+inline UpdateCheck decode_UpdateCheck(rivet::Value const& v) { auto p = std::get_if<rivet::Value::List>(&v.data); if (!p || p->size() != 8) throw std::runtime_error("Rivet result type mismatch: UpdateCheck"); return UpdateCheck{decode_String((*p)[0]), decode__Optional_String_((*p)[1]), decode_String((*p)[2]), decode__Optional_String_((*p)[3]), decode__Optional_Int64_((*p)[4]), decode__Optional_String_((*p)[5]), decode__Optional_String_((*p)[6]), decode__Optional_Int64_((*p)[7])}; }
+inline UpdateState decode_UpdateState(rivet::Value const& v) { auto p = std::get_if<rivet::Value::List>(&v.data); if (!p || p->size() != 5) throw std::runtime_error("Rivet result type mismatch: UpdateState"); return UpdateState{decode_String((*p)[0]), decode_Int64((*p)[1]), decode__Optional_String_((*p)[2]), decode__Optional_String_((*p)[3]), decode__Optional_String_((*p)[4])}; }
 }  // namespace detail
 
 struct Episodes_changedEvent { std::string value; };
@@ -125,8 +152,12 @@ class API {
   [[nodiscard]] std::uint64_t settings_list_async(std::function<void(Result<std::vector<std::vector<std::string>>>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("settings-list", rivet::Value::List{}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<std::vector<std::vector<std::string>>> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); result.value = detail::decode__List_List_String_(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
   std::future<bool> settings_set(std::string key, std::string value) { auto raw = backend_.call("settings-set", rivet::Value::List{detail::encode_String(key), detail::encode_String(value)}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> bool { return detail::decode_Bool(raw.get()); }); }
   [[nodiscard]] std::uint64_t settings_set_async(std::string key, std::string value, std::function<void(Result<bool>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("settings-set", rivet::Value::List{detail::encode_String(key), detail::encode_String(value)}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<bool> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); result.value = detail::decode_Bool(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
-  std::future<std::string> update_check() { auto raw = backend_.call("update-check", rivet::Value::List{}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> std::string { return detail::decode_String(raw.get()); }); }
-  [[nodiscard]] std::uint64_t update_check_async(std::function<void(Result<std::string>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("update-check", rivet::Value::List{}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<std::string> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); result.value = detail::decode_String(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
+  std::future<void> start_download() { auto raw = backend_.call("start-download", rivet::Value::List{}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> void { detail::decode_Void(raw.get()); }); }
+  [[nodiscard]] std::uint64_t start_download_async(std::function<void(Result<void>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("start-download", rivet::Value::List{}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<void> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); detail::decode_Void(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
+  std::future<UpdateCheck> update_check() { auto raw = backend_.call("update-check", rivet::Value::List{}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> UpdateCheck { return detail::decode_UpdateCheck(raw.get()); }); }
+  [[nodiscard]] std::uint64_t update_check_async(std::function<void(Result<UpdateCheck>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("update-check", rivet::Value::List{}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<UpdateCheck> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); result.value = detail::decode_UpdateCheck(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
+  std::future<UpdateState> update_state() { auto raw = backend_.call("update-state", rivet::Value::List{}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> UpdateState { return detail::decode_UpdateState(raw.get()); }); }
+  [[nodiscard]] std::uint64_t update_state_async(std::function<void(Result<UpdateState>)> completion) { if (!completion) throw std::invalid_argument("Rivet async completion handler is empty"); return backend_.request_async("update-state", rivet::Value::List{}, [completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<UpdateState> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error("Rivet async call completed without a value"); result.value = detail::decode_UpdateState(*raw.value); } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }); }
 
   // Shared state
   std::future<std::string> get_version() { auto raw = backend_.get_state("version"); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> std::string { return detail::decode_String(raw.get()); }); }

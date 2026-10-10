@@ -40,6 +40,7 @@
          "core/paths.rkt"
          "core/pipeline.rkt"
          "core/util.rkt"
+         "schema.rkt"
          "version.rkt"
          (prefix-in upd: "update.rkt"))
 
@@ -312,19 +313,58 @@
   #t)
 
 ;; ---- updates ---------------------------------------------------------------------------
+;; Family pattern (docs/UPDATE.md): this backend verifies and downloads the
+;; signed artifact; hosts own installation and the silent 4-hour throttle
+;; (last-update-check config key). update-check returns a typed UpdateCheck
+;; record so hosts never parse localized strings; start-download runs the
+;; transfer on a backend worker thread and hosts poll update-state.
 
-(define-rpc (update-check : String)
-  (define result (upd:update-check-result app-version))
-  (define status
+(define-rpc (update-check : UpdateCheck)
+  (with-handlers
+      ([exn:fail?
+        (lambda (e)
+          (UpdateCheck "error" (nullable (exn-message e)) app-version
+                       (void) (void) (void) (void) (void)))])
+    (define result (upd:update-check-result app-version))
     (match result
-      [(list 'available v) (tr (lang!) 'update-available v)]
-      [(list 'up-to-date) (tr (lang!) 'up-to-date)]
-      [(list 'unavailable _) (tr (lang!) 'update-dev)]
-      [(list 'failed m) (tr (lang!) 'update-failed m)]
-      [_ (tr (lang!) 'update-failed "unknown")]))
-  (when (and (pair? result) (eq? (car result) 'available))
-    (update-available status))
-  status)
+      [(list 'available version)
+       (define candidate (upd:current-candidate))
+       (define artifact (and candidate (hash-ref candidate 'artifact #f)))
+       (update-available version)
+       (UpdateCheck
+        "available" (void) app-version (nullable version)
+        (nullable (and candidate (hash-ref candidate 'build #f)))
+        (nullable (and candidate (hash-ref candidate 'published-at #f)))
+        (nullable (and artifact (format "~a" (hash-ref artifact 'installer "zip"))))
+        (nullable (and artifact (hash-ref artifact 'size #f))))]
+      [(list 'up-to-date)
+       (UpdateCheck "up-to-date" (void) app-version
+                    (void) (void) (void) (void) (void))]
+      [(list 'unavailable reason)
+       (UpdateCheck "error" (nullable reason) app-version
+                    (void) (void) (void) (void) (void))]
+      [(list 'failed reason)
+       (UpdateCheck "error" (nullable reason) app-version
+                    (void) (void) (void) (void) (void))]
+      [_ (UpdateCheck "error" (nullable "unknown") app-version
+                      (void) (void) (void) (void) (void))])))
+
+;; Runs on a backend worker thread; the host follows progress via
+;; update-state. Never raises: failures surface through the state's phase.
+(define-rpc (start-download : Void)
+  (with-handlers
+      ([exn:fail? (lambda (e) (upd:set-update-error! (exn-message e)))])
+    (upd:start-download! (data-dir)))
+  (void))
+
+(define-rpc (update-state : UpdateState)
+  (define s (upd:update-state-snapshot))
+  (UpdateState
+   (hash-ref s 'phase "idle")
+   (hash-ref s 'percent 0)
+   (nullable (hash-ref s 'message #f))
+   (nullable (hash-ref s 'downloadedPath #f))
+   (nullable (hash-ref s 'availableVersion #f))))
 
 (define-rpc (open-releases : Void)
   (open-url upd:releases-page)
