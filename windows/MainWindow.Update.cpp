@@ -24,8 +24,7 @@
 namespace winrt::RivetHost::implementation {
 namespace {
 
-namespace mx = winrt::Microsoft::UI::Xaml;
-namespace mxc = winrt::Microsoft::UI::Xaml::Controls;
+namespace muxc = winrt::Microsoft::UI::Xaml::Controls;
 
 constexpr wchar_t kReleasesUrl[] =
     L"https://github.com/turinglambdaai/podlens/releases";
@@ -140,7 +139,7 @@ void open_releases_page() {
 
 // printf-style expansion of the i18n table's %s placeholders (the table
 // itself stays plain data; sizing first keeps long paths unclipped).
-std::wstring FormatUpdateMessage(wchar_t const* key, std::wstring const& arg) {
+std::wstring FormatUpdateMessage(char const* key, std::wstring const& arg) {
   std::wstring const format(podlens::Tr(key));
   int const size = swprintf(nullptr, 0, format.c_str(), arg.c_str());
   if (size <= 0) {
@@ -301,7 +300,7 @@ void MainWindow::HandleUpdateCheckResult(
         check.available_version.value_or(check.current_version);
     ShowUpdateDialog(
         std::wstring(podlens::Tr("update.available_title")),
-        FormatUpdateMessage(L"update.available_body", to_wide(version)),
+        FormatUpdateMessage("update.available_body", to_wide(version)),
         std::wstring(podlens::Tr("update.download")),
         std::wstring(podlens::Tr("dialog.cancel")),
         [weak = get_weak()] {
@@ -449,7 +448,7 @@ void MainWindow::FailDownload(std::string const& message) {
   StopUpdateTimer();
   SetStatus(true, L"");
   ShowUpdateDialog(L"PodLens",
-                   FormatUpdateMessage(L"update.install_failed",
+                   FormatUpdateMessage("update.install_failed",
                                        to_wide(message)),
                    L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
 }
@@ -476,7 +475,7 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
   auto const work = update_work_dir();
   if (work.empty()) {
     ShowUpdateDialog(L"PodLens",
-                     FormatUpdateMessage(L"update.install_failed", L"temp"),
+                     FormatUpdateMessage("update.install_failed", L"temp"),
                      L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
     return;
   }
@@ -491,7 +490,7 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
     if (!file) {
       ShowUpdateDialog(
           L"PodLens",
-          FormatUpdateMessage(L"update.install_failed", L"script"), L"",
+          FormatUpdateMessage("update.install_failed", L"script"), L"",
           std::wstring(podlens::Tr("dialog.close")), nullptr);
       return;
     }
@@ -501,7 +500,7 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
     if (!file) {
       ShowUpdateDialog(
           L"PodLens",
-          FormatUpdateMessage(L"update.install_failed", L"script"), L"",
+          FormatUpdateMessage("update.install_failed", L"script"), L"",
           std::wstring(podlens::Tr("dialog.close")), nullptr);
       return;
     }
@@ -525,7 +524,7 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
   if (!ShellExecuteExW(&info)) {
     ShowUpdateDialog(
         L"PodLens",
-        FormatUpdateMessage(L"update.install_failed", L"handoff"), L"",
+        FormatUpdateMessage("update.install_failed", L"handoff"), L"",
         std::wstring(podlens::Tr("dialog.close")), nullptr);
     return;
   }
@@ -567,7 +566,7 @@ void MainWindow::HandleInstallMarkers() {
   std::filesystem::remove(marker, ec);
   ShowUpdateDialog(
       L"PodLens",
-      FormatUpdateMessage(L"update.install_failed",
+      FormatUpdateMessage("update.install_failed",
                           to_wide(code.empty() ? std::string("unknown")
                                                : code)),
       L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
@@ -628,7 +627,7 @@ void MainWindow::ShowUpdateDialog(std::wstring const& title,
   dialog.Content(winrt::box_value(winrt::hstring(body)));
   if (!primary_button.empty()) {
     dialog.PrimaryButtonText(winrt::hstring(primary_button));
-    dialog.DefaultButton(mxc::ContentDialogButton::Primary);
+    dialog.DefaultButton(muxc::ContentDialogButton::Primary);
   }
   dialog.CloseButtonText(winrt::hstring(close_button));
   dialog.XamlRoot(Content().XamlRoot());
@@ -637,15 +636,15 @@ void MainWindow::ShowUpdateDialog(std::wstring const& title,
   auto op = dialog.ShowAsync();
   op.Completed([weak, on_primary = std::move(on_primary)](
                    winrt::Windows::Foundation::IAsyncOperation<
-                       mxc::ContentDialogResult> const& sender,
+                       muxc::ContentDialogResult> const& sender,
                    winrt::Windows::Foundation::AsyncStatus) {
-    mxc::ContentDialogResult result{mxc::ContentDialogResult::None};
+    muxc::ContentDialogResult result{muxc::ContentDialogResult::None};
     try {
       result = sender.GetResults();
     } catch (...) {
       return;  // another dialog is already up; the flow can be retried
     }
-    if (result == mxc::ContentDialogResult::Primary && weak.get() &&
+    if (result == muxc::ContentDialogResult::Primary && weak.get() &&
         on_primary) {
       on_primary();
     }
