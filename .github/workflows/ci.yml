@@ -27,13 +27,8 @@ jobs:
         with:
           version: stable
           distribution: full
-      - name: Checkout Rivet (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: turinglambdaai/rivet
-          path: rivet
-      - name: Link Rivet
-        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      - name: Install Rivet (catalog)
+        run: raco pkg install --auto --no-docs rivet
         shell: bash
       - name: Compile backend
         run: raco make app/core/*.rkt app/update.rkt app/backend.rkt app/cli.rkt
@@ -63,19 +58,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout Rivet (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: turinglambdaai/rivet
-          path: rivet
       - name: Install Racket (CS, arm64)
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
           architecture: arm64
-      - name: Link Rivet
-        run: raco pkg install --auto --no-docs --link "$GITHUB_WORKSPACE/rivet"
+      - name: Install Rivet (catalog)
+        run: raco pkg install --auto --no-docs rivet
       - name: Build + package + verify
         run: raco rivet package
       - name: Launch smoke (ad-hoc build)
@@ -90,18 +80,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout Rivet (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: turinglambdaai/rivet
-          path: rivet
       - name: Install Racket (CS)
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
-      - name: Link Rivet
-        run: raco pkg install --auto --no-docs --link "$env:GITHUB_WORKSPACE\rivet"
+      - name: Install Rivet (catalog)
+        run: raco pkg install --auto --no-docs rivet
       - name: Build + package + verify
         run: raco rivet package
         shell: bash
