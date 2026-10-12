@@ -5,6 +5,22 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 0.1.2 - 2026-10-12
+
+### Security
+
+- **Update-signing key rotation, phase 2 of 2**: the feed is now signed
+  exclusively with the new Ed25519 key (fingerprint `b465070c92a4bb23`,
+  embedded since 0.1.1); the previous key is retired and signs nothing
+  anymore. Clients on 0.1.0 or older cannot verify this feed — update
+  manually once (download the DMG/MSI); 0.1.1+ keeps updating in app.
+
+### Changed
+
+- Releases consume Rivet from the Racket Package Catalog instead of a
+  checked-out working copy (the docs/ci.md standard) — first release
+  through this flow.
+
 ## 0.1.1 - 2026-10-12
 
 ### Security
