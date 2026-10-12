@@ -58,7 +58,7 @@
 
 ;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
 ;; #f keeps developer builds honest about update availability.
-(define current-update-public-key-hex "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0=")
+(define current-update-public-key-hex "CRJhkEfo79/a7lgRkLhWSvVGviGcLNL2obvE2k7bFZI=")
 (define current-update-key-id "podlens-2026-10")
 (define current-update-application-id "site.jrtx.podlens")
 

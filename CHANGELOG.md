@@ -5,6 +5,18 @@ All notable changes to PodLens are documented here. Format follows
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-12
+
+### Security
+
+- **Update-signing key rotation, phase 1 of 2** (docs/UPDATE.md, Keys):
+  this release embeds the *next* Ed25519 public key (fingerprint
+  `b465070c92a4bb23`) in both hosts while the feed is still signed with the
+  current key — 0.1.0 clients verify and auto-update as usual, and every
+  client that lands here already trusts the key the next release is signed
+  with. Phase 2 retires the current key and signs exclusively with the new
+  one.
+
 ## 0.1.0 - 2026-10-10
 
 > The family moves to the 0.x churn era (rivet itself is still 0.6.x), so

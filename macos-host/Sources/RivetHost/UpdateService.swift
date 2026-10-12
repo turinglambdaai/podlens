@@ -20,7 +20,7 @@ import Foundation
 /// build") instead of pretending to check.
 struct UpdateService {
     // Base64 of the raw 32-byte Ed25519 public key (scripts/update-keys.sh).
-    static let publicKeyBase64 = "yBOlLqQHWs7P5CMVwHTh+uqR3b8fA9K6K5Iwkt4csD0="
+    static let publicKeyBase64 = "CRJhkEfo79/a7lgRkLhWSvVGviGcLNL2obvE2k7bFZI="
 
     /// The manifest must carry this key id — rotation ships a build that
     /// trusts the next key before releases stop being signed with this one.
