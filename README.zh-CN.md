@@ -147,6 +147,7 @@ raco test tests/        # 后端测试（假服务器，不需要真实 key）
 - [ ] macOS 公证 + Windows Authenticode 签名发布
 - [ ] 章节标记与分章总结
 - [ ] 收听统计与生词导出
+- [ ] 移动端伴随 —— iOS / iPadOS + Android 宿主、watchOS 遥控（设计见 [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md)）
 
 ## 许可
 

@@ -179,7 +179,9 @@ agent 用两条 CLI 命令完成「订阅并取回某集的中文要点」。
       WatchConnectivity，且方向是「后端在手机」——需要反转为
       「桌面宿主暴露类型化设备 API」+ TCP/WebSocket 传输）
 - [ ] iOS：SwiftUI 壳 + 复用现有 Swift RVT1 client（基线 iOS 16）
+- [ ] iPadOS：手机壳自适应布局，对齐家族全平台标准
 - [ ] Android：复用 Kotlin client，待传输层就绪后排期
+- [ ] watchOS：播放遥控/进度伴机，随手机宿主走 WatchConnectivity
 
 **验收**：手机在局域网内完成「看到正在播放的逐句稿 + 遥控播放」。
 

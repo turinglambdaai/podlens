@@ -154,6 +154,8 @@ The full design roadmap (M1 consistency baseline → M2 transcript-as-product �
 - [x] Chapter marks (Podcasting 2.0), mark played, unplayed badges, continuous playback, resume on launch
 - [ ] Notarized macOS + Authenticode-signed Windows releases
 - [ ] Per-chapter summaries, listening stats and vocabulary export
+- [ ] Mobile companion — iOS / iPadOS + Android hosts, watchOS remote
+      (design in [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md))
 
 ## License
 
