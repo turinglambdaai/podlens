@@ -51,7 +51,7 @@ struct ContentView: View {
 }
 
 extension UpdateService.Manifest: Identifiable {
-    var id: String { version }
+    public var id: String { version }
 }
 
 // MARK: discover sheet

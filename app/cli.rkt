@@ -546,15 +546,14 @@
 
 (define (cmd-check-updates _args)
   (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
+    (define result (perform-check!))
     (define status
-      (match (update-check-result cli-version)
-        [(list 'available v) (tr (lang) 'update-available v)]
-        [(list 'up-to-date) (tr (lang) 'up-to-date)]
-        [(list 'unavailable _) (tr (lang) 'update-dev)]
-        [(list 'failed m) (tr (lang) 'update-failed m)]
-        [_ (tr (lang) 'update-failed "unknown")]))
+      (match (hash-ref result 'status "error")
+        ["available" (tr (lang) 'update-available (hash-ref result 'availableVersion))]
+        ["up-to-date" (tr (lang) 'up-to-date)]
+        [_ (tr (lang) 'update-failed (hash-ref result 'message "unknown"))]))
     (if (stdout-json?)
-        (emit-ok (hasheq 'status status))
+        (emit-ok (hasheq 'status (hash-ref result 'status "error")))
         (displayln status))
     0))
 

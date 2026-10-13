@@ -27,7 +27,8 @@ let package = Package(
             dependencies: [
                 .product(name: "RivetRuntime", package: "macos"),
                 .product(name: "RivetEmbedding", package: "macos"),
-                .product(name: "RivetSystem", package: "macos")
+                .product(name: "RivetSystem", package: "macos"),
+                .product(name: "RivetUpdate", package: "macos")
             ],
             path: "Sources/RivetHost",
             linkerSettings: [

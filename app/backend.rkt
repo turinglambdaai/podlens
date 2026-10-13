@@ -319,35 +319,30 @@
 ;; record so hosts never parse localized strings; start-download runs the
 ;; transfer on a backend worker thread and hosts poll update-state.
 
+(define (update-check->record result)
+  (define (opt key) (nullable (hash-ref result key #f)))
+  (UpdateCheck
+   (hash-ref result 'status "error")
+   (opt 'message)
+   (hash-ref result 'currentVersion app-version)
+   (opt 'availableVersion)
+   (opt 'build)
+   (opt 'publishedAt)
+   (opt 'installer)
+   (opt 'sizeBytes)))
+
+;; Never raises: network/manifest failures surface as status "error" so a
+;; headless check can't take the host down with it.
 (define-rpc (update-check : UpdateCheck)
   (with-handlers
       ([exn:fail?
         (lambda (e)
           (UpdateCheck "error" (nullable (exn-message e)) app-version
                        (void) (void) (void) (void) (void)))])
-    (define result (upd:update-check-result app-version))
-    (match result
-      [(list 'available version)
-       (define candidate (upd:current-candidate))
-       (define artifact (and candidate (hash-ref candidate 'artifact #f)))
-       (update-available version)
-       (UpdateCheck
-        "available" (void) app-version (nullable version)
-        (nullable (and candidate (hash-ref candidate 'build #f)))
-        (nullable (and candidate (hash-ref candidate 'published-at #f)))
-        (nullable (and artifact (format "~a" (hash-ref artifact 'installer "zip"))))
-        (nullable (and artifact (hash-ref artifact 'size #f))))]
-      [(list 'up-to-date)
-       (UpdateCheck "up-to-date" (void) app-version
-                    (void) (void) (void) (void) (void))]
-      [(list 'unavailable reason)
-       (UpdateCheck "error" (nullable reason) app-version
-                    (void) (void) (void) (void) (void))]
-      [(list 'failed reason)
-       (UpdateCheck "error" (nullable reason) app-version
-                    (void) (void) (void) (void) (void))]
-      [_ (UpdateCheck "error" (nullable "unknown") app-version
-                      (void) (void) (void) (void) (void))])))
+    (define result (upd:perform-check!))
+    (when (equal? (hash-ref result 'status #f) "available")
+      (update-available (hash-ref result 'availableVersion app-version)))
+    (update-check->record result)))
 
 ;; Runs on a backend worker thread; the host follows progress via
 ;; update-state. Never raises: failures surface through the state's phase.

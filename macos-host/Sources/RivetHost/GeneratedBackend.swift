@@ -13,40 +13,43 @@ public enum RivetGeneratedConfig {
     public static let releaseChannel = "stable"
 }
 
-public struct UpdateCheck: Sendable {
-    public let status: String
-    public let error: String?
-    public let current_version: String
-    public let available_version: String?
-    public let build: Int64?
-    public let published_at: String?
-    public let installer: String?
-    public let size_bytes: Int64?
-    public init(status: String, error: String?, current_version: String, available_version: String?, build: Int64?, published_at: String?, installer: String?, size_bytes: Int64?) {
-        self.status = status
-        self.error = error
-        self.current_version = current_version
-        self.available_version = available_version
-        self.build = build
-        self.published_at = published_at
-        self.installer = installer
-        self.size_bytes = size_bytes
+public enum RivetTypes {
+    public struct UpdateCheck: Sendable {
+        public let status: String
+        public let error: String?
+        public let current_version: String
+        public let available_version: String?
+        public let build: Int64?
+        public let published_at: String?
+        public let installer: String?
+        public let size_bytes: Int64?
+        public init(status: String, error: String?, current_version: String, available_version: String?, build: Int64?, published_at: String?, installer: String?, size_bytes: Int64?) {
+            self.status = status
+            self.error = error
+            self.current_version = current_version
+            self.available_version = available_version
+            self.build = build
+            self.published_at = published_at
+            self.installer = installer
+            self.size_bytes = size_bytes
+        }
     }
-}
 
-public struct UpdateState: Sendable {
-    public let phase: String
-    public let percent: Int64
-    public let message: String?
-    public let downloaded_path: String?
-    public let available_version: String?
-    public init(phase: String, percent: Int64, message: String?, downloaded_path: String?, available_version: String?) {
-        self.phase = phase
-        self.percent = percent
-        self.message = message
-        self.downloaded_path = downloaded_path
-        self.available_version = available_version
+    public struct UpdateState: Sendable {
+        public let phase: String
+        public let percent: Int64
+        public let message: String?
+        public let downloaded_path: String?
+        public let available_version: String?
+        public init(phase: String, percent: Int64, message: String?, downloaded_path: String?, available_version: String?) {
+            self.phase = phase
+            self.percent = percent
+            self.message = message
+            self.downloaded_path = downloaded_path
+            self.available_version = available_version
+        }
     }
+
 }
 
 private func encode_String(_ v: String) -> RivetValue { .string(v) }
@@ -57,8 +60,8 @@ private func encode_Int64(_ v: Int64) -> RivetValue { .int64(v) }
 private func encode_Void(_ v: Void) -> RivetValue { .null }
 private func encode__Optional_String_(_ v: String?) -> RivetValue { v.map(encode_String) ?? .null }
 private func encode__Optional_Int64_(_ v: Int64?) -> RivetValue { v.map(encode_Int64) ?? .null }
-private func encode_UpdateCheck(_ v: UpdateCheck) -> RivetValue { .list([encode_String(v.status), encode__Optional_String_(v.error), encode_String(v.current_version), encode__Optional_String_(v.available_version), encode__Optional_Int64_(v.build), encode__Optional_String_(v.published_at), encode__Optional_String_(v.installer), encode__Optional_Int64_(v.size_bytes)]) }
-private func encode_UpdateState(_ v: UpdateState) -> RivetValue { .list([encode_String(v.phase), encode_Int64(v.percent), encode__Optional_String_(v.message), encode__Optional_String_(v.downloaded_path), encode__Optional_String_(v.available_version)]) }
+private func encode_UpdateCheck(_ v: RivetTypes.UpdateCheck) -> RivetValue { .list([encode_String(v.status), encode__Optional_String_(v.error), encode_String(v.current_version), encode__Optional_String_(v.available_version), encode__Optional_Int64_(v.build), encode__Optional_String_(v.published_at), encode__Optional_String_(v.installer), encode__Optional_Int64_(v.size_bytes)]) }
+private func encode_UpdateState(_ v: RivetTypes.UpdateState) -> RivetValue { .list([encode_String(v.phase), encode_Int64(v.percent), encode__Optional_String_(v.message), encode__Optional_String_(v.downloaded_path), encode__Optional_String_(v.available_version)]) }
 
 private func decode_String(_ v: RivetValue) throws -> String { guard case .string(let x) = v else { throw RivetGeneratedError.typeMismatch("String") }; return x }
 private func decode__List_String_(_ v: RivetValue) throws -> [String] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List String)") }; return try xs.map(decode_String) }
@@ -68,8 +71,8 @@ private func decode_Int64(_ v: RivetValue) throws -> Int64 { guard case .int64(l
 private func decode_Void(_ v: RivetValue) throws -> Void { guard case .null = v else { throw RivetGeneratedError.typeMismatch("Void") } }
 private func decode__Optional_String_(_ v: RivetValue) throws -> String? { if case .null = v { return nil }; return try decode_String(v) }
 private func decode__Optional_Int64_(_ v: RivetValue) throws -> Int64? { if case .null = v { return nil }; return try decode_Int64(v) }
-private func decode_UpdateCheck(_ v: RivetValue) throws -> UpdateCheck { guard case .list(let xs) = v, xs.count == 8 else { throw RivetGeneratedError.typeMismatch("UpdateCheck") }; return UpdateCheck(status: try decode_String(xs[0]), error: try decode__Optional_String_(xs[1]), current_version: try decode_String(xs[2]), available_version: try decode__Optional_String_(xs[3]), build: try decode__Optional_Int64_(xs[4]), published_at: try decode__Optional_String_(xs[5]), installer: try decode__Optional_String_(xs[6]), size_bytes: try decode__Optional_Int64_(xs[7])) }
-private func decode_UpdateState(_ v: RivetValue) throws -> UpdateState { guard case .list(let xs) = v, xs.count == 5 else { throw RivetGeneratedError.typeMismatch("UpdateState") }; return UpdateState(phase: try decode_String(xs[0]), percent: try decode_Int64(xs[1]), message: try decode__Optional_String_(xs[2]), downloaded_path: try decode__Optional_String_(xs[3]), available_version: try decode__Optional_String_(xs[4])) }
+private func decode_UpdateCheck(_ v: RivetValue) throws -> RivetTypes.UpdateCheck { guard case .list(let xs) = v, xs.count == 8 else { throw RivetGeneratedError.typeMismatch("UpdateCheck") }; return RivetTypes.UpdateCheck(status: try decode_String(xs[0]), error: try decode__Optional_String_(xs[1]), current_version: try decode_String(xs[2]), available_version: try decode__Optional_String_(xs[3]), build: try decode__Optional_Int64_(xs[4]), published_at: try decode__Optional_String_(xs[5]), installer: try decode__Optional_String_(xs[6]), size_bytes: try decode__Optional_Int64_(xs[7])) }
+private func decode_UpdateState(_ v: RivetValue) throws -> RivetTypes.UpdateState { guard case .list(let xs) = v, xs.count == 5 else { throw RivetGeneratedError.typeMismatch("UpdateState") }; return RivetTypes.UpdateState(phase: try decode_String(xs[0]), percent: try decode_Int64(xs[1]), message: try decode__Optional_String_(xs[2]), downloaded_path: try decode__Optional_String_(xs[3]), available_version: try decode__Optional_String_(xs[4])) }
 
 public enum RivetEvent: Sendable {
     case episodes_changed(String)
@@ -95,130 +98,130 @@ public struct RivetAPI: Sendable {
     public init(client: RivetClient) { self.client = client }
 
     public func catalog_list() async throws -> [[String]] {
-        let result = try await client.call("catalog-list", arguments: [])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("catalog-list", arguments: [])
+        return try decode__List_List_String_(rivetResult)
     }
     public func catalog_search(query: String) async throws -> [[String]] {
-        let result = try await client.call("catalog-search", arguments: [encode_String(query)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("catalog-search", arguments: [encode_String(query)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func episode_chapters(id: String) async throws -> [[String]] {
-        let result = try await client.call("episode-chapters", arguments: [encode_String(id)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("episode-chapters", arguments: [encode_String(id)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func episode_download(id: String) async throws -> String {
-        let result = try await client.call("episode-download", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-download", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_estimate(id: String) async throws -> String {
-        let result = try await client.call("episode-estimate", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-estimate", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_list(feed_id: String) async throws -> [[String]] {
-        let result = try await client.call("episode-list", arguments: [encode_String(feed_id)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("episode-list", arguments: [encode_String(feed_id)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func episode_pipeline(id: String) async throws -> String {
-        let result = try await client.call("episode-pipeline", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-pipeline", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_remove_audio(id: String) async throws -> Bool {
-        let result = try await client.call("episode-remove-audio", arguments: [encode_String(id)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("episode-remove-audio", arguments: [encode_String(id)])
+        return try decode_Bool(rivetResult)
     }
     public func episode_set_done(id: String, done: String) async throws -> Bool {
-        let result = try await client.call("episode-set-done", arguments: [encode_String(id), encode_String(done)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("episode-set-done", arguments: [encode_String(id), encode_String(done)])
+        return try decode_Bool(rivetResult)
     }
     public func episode_summarize(id: String) async throws -> String {
-        let result = try await client.call("episode-summarize", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-summarize", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_summary(id: String) async throws -> String {
-        let result = try await client.call("episode-summary", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-summary", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_transcribe(id: String) async throws -> String {
-        let result = try await client.call("episode-transcribe", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-transcribe", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func episode_transcript(id: String) async throws -> [[String]] {
-        let result = try await client.call("episode-transcript", arguments: [encode_String(id)])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("episode-transcript", arguments: [encode_String(id)])
+        return try decode__List_List_String_(rivetResult)
     }
     public func episode_translate(id: String) async throws -> String {
-        let result = try await client.call("episode-translate", arguments: [encode_String(id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("episode-translate", arguments: [encode_String(id)])
+        return try decode_String(rivetResult)
     }
     public func feed_add(url: String) async throws -> String {
-        let result = try await client.call("feed-add", arguments: [encode_String(url)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("feed-add", arguments: [encode_String(url)])
+        return try decode_String(rivetResult)
     }
     public func feed_list() async throws -> [[String]] {
-        let result = try await client.call("feed-list", arguments: [])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("feed-list", arguments: [])
+        return try decode__List_List_String_(rivetResult)
     }
     public func feed_refresh(id: String) async throws -> Int64 {
-        let result = try await client.call("feed-refresh", arguments: [encode_String(id)])
-        return try decode_Int64(result)
+        let rivetResult = try await client.call("feed-refresh", arguments: [encode_String(id)])
+        return try decode_Int64(rivetResult)
     }
     public func feed_refresh_all() async throws -> Int64 {
-        let result = try await client.call("feed-refresh-all", arguments: [])
-        return try decode_Int64(result)
+        let rivetResult = try await client.call("feed-refresh-all", arguments: [])
+        return try decode_Int64(rivetResult)
     }
     public func feed_remove(id: String) async throws -> Bool {
-        let result = try await client.call("feed-remove", arguments: [encode_String(id)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("feed-remove", arguments: [encode_String(id)])
+        return try decode_Bool(rivetResult)
     }
     public func health() async throws -> String {
-        let result = try await client.call("health", arguments: [])
-        return try decode_String(result)
+        let rivetResult = try await client.call("health", arguments: [])
+        return try decode_String(rivetResult)
     }
     public func job_status(job_id: String) async throws -> String {
-        let result = try await client.call("job-status", arguments: [encode_String(job_id)])
-        return try decode_String(result)
+        let rivetResult = try await client.call("job-status", arguments: [encode_String(job_id)])
+        return try decode_String(rivetResult)
     }
     public func open_releases() async throws -> Void {
-        let result = try await client.call("open-releases", arguments: [])
-        return try decode_Void(result)
+        let rivetResult = try await client.call("open-releases", arguments: [])
+        return try decode_Void(rivetResult)
     }
     public func position_save(id: String, seconds: String, done: String) async throws -> Bool {
-        let result = try await client.call("position-save", arguments: [encode_String(id), encode_String(seconds), encode_String(done)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("position-save", arguments: [encode_String(id), encode_String(seconds), encode_String(done)])
+        return try decode_Bool(rivetResult)
     }
     public func resume_last() async throws -> [String] {
-        let result = try await client.call("resume-last", arguments: [])
-        return try decode__List_String_(result)
+        let rivetResult = try await client.call("resume-last", arguments: [])
+        return try decode__List_String_(rivetResult)
     }
     public func settings_list() async throws -> [[String]] {
-        let result = try await client.call("settings-list", arguments: [])
-        return try decode__List_List_String_(result)
+        let rivetResult = try await client.call("settings-list", arguments: [])
+        return try decode__List_List_String_(rivetResult)
     }
     public func settings_set(key: String, value: String) async throws -> Bool {
-        let result = try await client.call("settings-set", arguments: [encode_String(key), encode_String(value)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("settings-set", arguments: [encode_String(key), encode_String(value)])
+        return try decode_Bool(rivetResult)
     }
     public func start_download() async throws -> Void {
-        let result = try await client.call("start-download", arguments: [])
-        return try decode_Void(result)
+        let rivetResult = try await client.call("start-download", arguments: [])
+        return try decode_Void(rivetResult)
     }
-    public func update_check() async throws -> UpdateCheck {
-        let result = try await client.call("update-check", arguments: [])
-        return try decode_UpdateCheck(result)
+    public func update_check() async throws -> RivetTypes.UpdateCheck {
+        let rivetResult = try await client.call("update-check", arguments: [])
+        return try decode_UpdateCheck(rivetResult)
     }
-    public func update_state() async throws -> UpdateState {
-        let result = try await client.call("update-state", arguments: [])
-        return try decode_UpdateState(result)
+    public func update_state() async throws -> RivetTypes.UpdateState {
+        let rivetResult = try await client.call("update-state", arguments: [])
+        return try decode_UpdateState(rivetResult)
     }
 
     // Shared state
-    public func getVersion() async throws -> String {
-        let result = try await client.getState("version")
-        return try decode_String(result)
+    public func get_version() async throws -> String {
+        let rivetResult = try await client.getState("version")
+        return try decode_String(rivetResult)
     }
     @discardableResult
-    public func setVersion(_ value: String) async throws -> String {
-        let result = try await client.setState("version", value: encode_String(value))
-        return try decode_String(result)
+    public func set_version(_ value: String) async throws -> String {
+        let rivetResult = try await client.setState("version", value: encode_String(value))
+        return try decode_String(rivetResult)
     }
 }

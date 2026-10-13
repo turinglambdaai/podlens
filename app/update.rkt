@@ -1,279 +1,148 @@
 #lang racket/base
 
-;; PodLens update wiring — the family signed-wrapper scheme (docs/UPDATE.md).
-;; The update feed is a single GitHub release asset, `update-manifest.json`:
-;; a self-contained wrapper (schema + base64 payload + Ed25519 signature
-;; block, the rivet/distribution format). The payload is the inner manifest;
-;; the signature covers the exact payload bytes every client verifies.
+;; Online update support for PodLens, built on rivet/distribution — the
+;; family pattern (taskly/brainfuel/payback/syncpilot): the backend
+;; verifies and downloads the signed update artifact; the native host owns
+;; installation. A check fetches and verifies the Ed25519-signed channel
+;; manifest (the signed wrapper in docs/UPDATE.md); the artifact download
+;; runs on a background thread with progress published to a state box that
+;; hosts poll through the `update-state` RPC (RVT1 events are thread-local,
+;; so a background thread cannot emit them directly).
 ;;
-;; The native macOS host verifies with CryptoKit (UpdateService.swift); this
-;; module gives the CLI, the backend RPC and the Windows host the same check
-;; by shelling out to OpenSSL 3 (the backend runs in an embedded runtime, so
-;; rivet/distribution's crypto factories are deliberately not loaded here).
-;; The public key is embedded raw (base64 of the 32 bytes) — the same bytes
-;; the Swift host embeds — and rebuilt into a PEM for OpenSSL.
+;; PodLens-specific rules (docs/UPDATE.md): the 4-hour silent-check
+;; throttle lives in the hosts (macOS UserDefaults / Windows config key) —
+;; this module only persists the sticky rollout bucket. Downloads land
+;; under <data-dir>/updates/ and config.json / library.json / audio are
+;; never touched.
 ;;
-;; The backend owns the artifact download (family pattern): a check stashes
-;; the selected artifact, start-download! streams it to <data-dir>/updates/
-;; on a background thread with progress published to a state box that hosts
-;; poll through the `update-state` RPC (RVT1 events are thread-local, so a
-;; background thread cannot emit them). Hosts own installation.
-;;
-;; Key management lives in docs/UPDATE.md; `scripts/update-keys.sh`
-;; generates the pair. Rotation: ship a client trusting the next key
-;; before signing releases exclusively with it.
+;; Note on crypto factories: rivet/distribution pins the provider set to
+;; libcrypto at module load and deliberately avoids crypto/all — factory
+;; FFIs load at import time and the gmp factory kills embedded runtimes on
+;; hosts without libgmp. This module runs inside the embedded CS runtime,
+;; so it must not require crypto/all either (tests may, they are headless).
+;; This replaces the earlier hand-rolled OpenSSL 3 subprocess scheme: the
+;; crypto package's libcrypto factory does the same Ed25519/SHA-256 work
+;; in-process, with no PATH dependence and no temp-file dance.
 
-(require json
+(require crypto
+         json
          net/base64
+         rivet/distribution
          racket/file
-         racket/format
          racket/list
          racket/path
          racket/port
          racket/string
-         racket/system
-         "core/http.rkt"
-         "core/util.rkt")
+         "core/paths.rkt"
+         "version.rkt")
 
-(provide update-check-result
-         update-configured?
-         current-update-public-key-hex
-         current-update-key-id
-         current-update-application-id
-         releases-api
+(provide app-version
+         app-build
+         app-identifier
+         app-channel
+         app-display-name
+         update-key-id
+         update-public-key-b64
+         default-update-base-url
+         current-update-base-url
          releases-page
+         update-configured?
+         platform-symbol
+         architecture-symbol
+         installer-extension
          manifest-url
-         raw-key->pem
-         parse-signed-wrapper
-         verify-wrapper-signature
-         select-artifact
+         destination-path
          update-state-snapshot
          reset-update-state!
          set-update-error!
          current-candidate
          set-candidate!
+         set-update-data-dir-override!
+         perform-check!
          start-download!
-         destination-path
-         file-sha256-hex)
+         rollout-bucket)
 
-;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh).
-;; #f keeps developer builds honest about update availability.
-(define current-update-public-key-hex "CRJhkEfo79/a7lgRkLhWSvVGviGcLNL2obvE2k7bFZI=")
-(define current-update-key-id "podlens-2026-10")
-(define current-update-application-id "site.jrtx.podlens")
+;; Release identity: the version comes from core/version.rkt (the single
+;; source scripts/check-release-version.sh pins to VERSION/rivet.rktd);
+;; the rest duplicates rivet.rktd, which the packaged app cannot read at
+;; runtime.
+(define app-build 1)
+(define app-identifier "site.jrtx.podlens")
+(define app-channel 'stable)
+(define app-display-name "PodLens")
 
-(define releases-api "https://api.github.com/repos/turinglambdaai/podlens/releases/latest")
-(define releases-page "https://github.com/turinglambdaai/podlens/releases/latest")
+(define update-key-id "podlens-2026-10")
 
-;; The moving "latest" location; redirect-following is mandatory — release
-;; assets answer with a 302 to the CDN (rivet#153, followed in core/http).
-(define (manifest-url)
-  "https://github.com/turinglambdaai/podlens/releases/latest/download/update-manifest.json")
+;; Ed25519 public key, base64 of the raw 32 bytes (scripts/update-keys.sh)
+;; — the same literal the macOS host embeds (UpdateService.swift). The
+;; private half lives outside the repository and never ships. Rotate by
+;; shipping a build that trusts the next key before signing releases
+;; exclusively with it.
+(define update-public-key-b64
+  "CRJhkEfo79/a7lgRkLhWSvVGviGcLNL2obvE2k7bFZI=")
+
+;; Where the updater looks for the signed manifest. The release pipeline
+;; pins artifact URLs to the concrete tag; the manifest itself is always
+;; fetched from the moving "latest" location. Tests parameterize this at
+;; an unreachable local URL instead of touching the network.
+(define default-update-base-url
+  "https://github.com/turinglambdaai/podlens/releases/latest/download")
+
+(define current-update-base-url (make-parameter #f))
+
+;; Human-facing releases page; the open-releases RPC sends hosts here.
+(define releases-page
+  "https://github.com/turinglambdaai/podlens/releases/latest")
+
+(define maximum-download-bytes (* 800 1024 1024))
+
+;; ---------- public key ----------
 
 ;; Fixed SPKI prefix bytes for an Ed25519 public key (12 bytes) followed by
-;; the raw 32-byte key = full SubjectPublicKeyInfo DER.
+;; the raw 32-byte key = full SubjectPublicKeyInfo DER. (hex->bytes comes
+;; from the crypto require.)
 (define ed25519-spki-prefix (hex->bytes "302a300506032b6570032100"))
 
 (define (update-configured?)
-  (and (string? current-update-public-key-hex)
-       (let ([raw (base64-decode (string->bytes/latin-1 current-update-public-key-hex))])
-         (and raw (= 32 (bytes-length raw))))))
+  (and (string? update-public-key-b64)
+       (let ([raw (base64-string->bytes update-public-key-b64)])
+         (and (= 32 (bytes-length raw)) (embedded-public-key) #t))))
 
-;; raw 32-byte key → SubjectPublicKeyInfo PEM
-(define (raw-key->pem raw-32)
-  (define der (bytes-append ed25519-spki-prefix raw-32))
-  ;; net/base64 on this Racket build appends its second argument verbatim
-  ;; and the default value is garbage (a temp-file-shaped string) — pass ""
-  ;; explicitly and trim the trailing newline
-  (define b64 (string-trim (bytes->string/latin-1 (base64-encode der ""))))
-  (define wrapped (regexp-match* #px".{1,64}" b64))
-  (string-append
-   "-----BEGIN PUBLIC KEY-----\n"
-   (string-join wrapped "\n")
-   "\n-----END PUBLIC KEY-----\n"))
+(define (embedded-public-key)
+  (datum->pk-key
+   (bytes-append ed25519-spki-prefix
+                 (base64-string->bytes update-public-key-b64))
+   'SubjectPublicKeyInfo))
 
-(define (find-openssl)
-  (define candidates
-    (list (getenv "OPENSSL_BIN")
-          "/opt/homebrew/opt/openssl@3/bin/openssl"
-          "/usr/local/opt/openssl@3/bin/openssl"))
-  (or (for/or ([c (in-list candidates)] #:when (and c (file-exists? c))) c)
-      (find-executable-path "openssl")))
+;; ---------- platform identity ----------
 
-(define (openssl3? path)
-  (and path
-       (string-contains?
-        (with-output-to-string
-          (lambda ()
-            (with-handlers ([exn:fail? void])
-              (system* path "version"))))
-        "OpenSSL 3")))
-
-;; ---- signed wrapper (pure parsing, shared with the tests) -----------------
-
-;; jsexpr → (values payload key-id signature); raises when the envelope is
-;; not the family signed-wrapper format (schema 1, ed25519, base64 parts).
-(define (parse-signed-wrapper wrapper)
-  (unless (hash? wrapper)
-    (error 'parse-signed-wrapper "manifest is not a JSON object"))
-  (define schema (hash-ref wrapper 'schema
-                           (lambda () (error 'parse-signed-wrapper "schema field missing"))))
-  (unless (equal? schema 1)
-    (error 'parse-signed-wrapper "unsupported wrapper schema: ~a" schema))
-  (define sig-block (hash-ref wrapper 'signature
-                              (lambda () (error 'parse-signed-wrapper "signature block missing"))))
-  (unless (hash? sig-block)
-    (error 'parse-signed-wrapper "signature block is not an object"))
-  (define algorithm (hash-ref sig-block 'algorithm #f))
-  (unless (equal? algorithm "ed25519")
-    (error 'parse-signed-wrapper "unsupported signature algorithm: ~a" algorithm))
-  (define key-id (hash-ref sig-block 'key_id #f))
-  (define payload
-    (or (and (hash-has-key? wrapper 'payload)
-             (let ([v (hash-ref wrapper 'payload)])
-               (and (string? v) (base64-decode (string->bytes/latin-1 v)))))
-        (error 'parse-signed-wrapper "payload is not valid base64")))
-  (define signature
-    (or (and (hash-has-key? sig-block 'value)
-             (let ([v (hash-ref sig-block 'value)])
-               (and (string? v) (base64-decode (string->bytes/latin-1 v)))))
-        (error 'parse-signed-wrapper "signature value is not valid base64")))
-  (unless (= 64 (bytes-length signature))
-    (error 'parse-signed-wrapper "signature is not a 64-byte Ed25519 signature"))
-  (values payload (and (string? key-id) key-id) signature))
-
-;; Ed25519 verify via OpenSSL 3: signature over the exact payload bytes,
-;; against the embedded raw public key. Raises when verification fails or
-;; no OpenSSL 3 is available.
-(define (verify-wrapper-signature payload signature key-raw)
-  (unless (and (bytes? key-raw) (= 32 (bytes-length key-raw)))
-    (error 'verify-wrapper-signature "embedded update key is malformed"))
-  (define openssl (find-openssl))
-  (unless (openssl3? openssl)
-    (error 'verify-wrapper-signature "OpenSSL 3 not found for signature verification"))
-  (define tmp (make-temporary-file "podlens-update~a"))
-  (define payload-file (path-replace-extension tmp #".payload"))
-  (define sig-file (path-replace-extension tmp #".sig"))
-  (define pem-file (path-replace-extension tmp #".pem"))
-  (dynamic-wind
-    (lambda () (void))
-    (lambda ()
-      (display-to-file payload payload-file #:exists 'replace #:mode 'binary)
-      ;; the signature is 64 random bytes — a 0x0A among them would be
-      ;; expanded to \r\n by a text-mode port on Windows, so binary is
-      ;; load-bearing here too
-      (display-to-file signature sig-file #:exists 'replace #:mode 'binary)
-      (display-to-file (raw-key->pem key-raw) pem-file #:exists 'replace)
-      (define out
-        (with-output-to-string
-          (lambda ()
-            (system* openssl "pkeyutl" "-verify" "-pubin"
-                     "-inkey" pem-file "-rawin"
-                     "-in" payload-file "-sigfile" sig-file))))
-      (unless (string-contains? out "Signature Verified Successfully")
-        (error 'verify-wrapper-signature "manifest signature invalid")))
-    (lambda ()
-      (with-handlers ([exn:fail? void])
-        (delete-file payload-file)
-        (delete-file sig-file)
-        (delete-file pem-file)))))
-
-;; inner manifest jsexpr × platform symbol × architecture symbol → artifact
-;; jsexpr or #f. The feed carries one artifact per platform × architecture.
-(define (select-artifact manifest platform architecture)
-  (define platform-s (symbol->string platform))
-  (define arch-s (symbol->string architecture))
-  (for/or ([artifact (in-list (hash-ref manifest 'artifacts '()))]
-           #:when (hash? artifact))
-    (and (equal? (hash-ref artifact 'platform #f) platform-s)
-         (equal? (hash-ref artifact 'architecture #f) arch-s)
-         artifact)))
-
-;; rivet release tooling emits these exact platform/architecture names into
-;; update manifests (same mapping the rivet MSI tooling uses).
-(define (host-platform)
+;; rivet release tooling emits these exact symbols into update manifests
+(define (platform-symbol)
   (case (system-type 'os)
     [(macosx) 'macos]
     [(windows) 'windows]
     [else 'linux]))
 
-(define (host-architecture)
+(define (architecture-symbol)
   (case (system-type 'arch)
     [(aarch64 arm64) 'arm64]
     [else 'x64]))
 
-;; → structured result the callers localize:
-;;   '(up-to-date) | (list 'available version)
-;;   (list 'unavailable reason) | (list 'failed reason)
-;;
-;; The macOS host runs the same contract natively; this module gives the
-;; CLI, the backend RPC and the Windows host the same check by shelling
-;; out to OpenSSL 3. An "available" result also stashes the selected
-;; artifact for start-download!, so the download never re-fetches or
-;; re-verifies the manifest.
-(define (update-check-result current-version)
-  (cond
-    [(not (update-configured?))
-     (list 'unavailable "developer build (no update key configured)")]
-    [else
-     (with-handlers
-         ([exn:fail?
-           (lambda (e)
-             (state-set! 'phase "error")
-             (state-set! 'message (exn-message e))
-             (list 'failed (exn-message e)))])
-       (reset-update-state!)
-       (state-set! 'phase "checking")
-       (define-values (code _h body)
-         (http-get-bytes (manifest-url) (list "Accept: application/vnd.github+json")))
-       (unless (= code 200)
-         (error 'update-check "~a returned ~a" (manifest-url) code))
-       (define wrapper (bytes->jsexpr body))
-       (define-values (payload key-id signature) (parse-signed-wrapper wrapper))
-       (unless (equal? key-id current-update-key-id)
-         (error 'update-check "manifest signed by unexpected key ~a" key-id))
-       (verify-wrapper-signature
-        payload signature
-        (base64-decode (string->bytes/latin-1 current-update-public-key-hex)))
-       (define manifest (bytes->jsexpr payload))
-       (unless (equal? (hash-ref manifest 'application_id #f)
-                       current-update-application-id)
-         (error 'update-check "manifest is for a different application"))
-       (define artifact
-         (select-artifact manifest (host-platform) (host-architecture)))
-       (unless artifact
-         (error 'update-check "feed carries no artifact for this platform"))
-       (define latest (hash-ref manifest 'version "0"))
-       (if (version-newer? current-version latest)
-           (begin
-             (set-box! candidate-box
-                       (hasheq 'version latest
-                               'artifact artifact
-                               'build (hash-ref manifest 'build #f)
-                               'published-at (hash-ref manifest 'published_at #f)))
-             (state-set! 'phase "idle")
-             (state-set! 'availableVersion latest)
-             (list 'available latest))
-           (begin
-             (set-box! candidate-box #f)
-             (state-set! 'phase "idle")
-             (state-set! 'availableVersion #f)
-             (list 'up-to-date))))]))
+(define (installer-extension)
+  (case (system-type 'os)
+    [(macosx) ".zip"]
+    [(windows) ".zip"]
+    [else ".tar.gz"]))
 
-(define (version-newer? current latest)
-  (define (segs v)
-    (map (lambda (p) (or (string->number p) 0)) (string-split v ".")))
-  (define a (segs current))
-  (define b (segs latest))
-  (define n (max (length a) (length b)))
-  (define (pad xs) (append xs (make-list (- n (length xs)) 0)))
-  (for/or ([x (in-list (pad a))] [y (in-list (pad b))]) (> y x)))
+(define (manifest-url)
+  (string-append
+   (string-trim (or (current-update-base-url) default-update-base-url)
+                "/" #:right? #t)
+   "/update-manifest.json"))
 
-;; ---- download state (UI-visible) -------------------------------------------
+;; ---------- shared update state (UI-visible) ----------
 
-;; phase: idle | checking | downloading | downloaded | error. The download
-;; streams on a background thread; RVT1 events are thread-local, so progress
-;; is published through this box and hosts poll it via `update-state`.
+;; phase: idle | checking | downloading | downloaded | error
 (define update-state
   (box (hasheq 'phase "idle"
                'percent 0
@@ -281,14 +150,20 @@
                'downloadedPath #f
                'availableVersion #f)))
 
-;; artifact + version chosen by the last successful check; start-download!
-;; consumes it. Reset by every new check.
 (define candidate-box (box #f))
 (define worker-thread-box (box #f))
 
-;; Sanity cap on the update archive; a signed manifest claiming more than
-;; this is treated as hostile (800 MiB ≫ any family install).
-(define maximum-download-bytes (* 800 1024 1024))
+;; Download watchdog bounds. rivet's copy loop waits on read-bytes-avail!
+;; with no timeout, so a connection that stalls without RST/FIN parks the
+;; worker thread forever — visibly "stuck at 100%" (all bytes had arrived;
+;; the loop was still waiting for EOF). Two finite bounds keep the phase
+;; machine honest: no byte progress for the stall limit, or wall clock
+;; past the total limit, breaks the worker (rivet's partial-file cleanup
+;; runs, and the worker reports phase=error itself) so the host always
+;; gets a terminal state.
+(define download-stall-limit-seconds 120)
+(define download-total-limit-seconds (* 30 60))
+(define last-progress-seconds (box 0))
 
 (define (state-set! key value)
   (set-box! update-state (hash-set (unbox update-state) key value)))
@@ -297,6 +172,7 @@
   (unbox update-state))
 
 (define (reset-update-state!)
+  (set-box! candidate-box #f)
   (set-box! update-state
             (hasheq 'phase "idle"
                     'percent 0
@@ -311,88 +187,164 @@
   (state-set! 'phase "error")
   (state-set! 'message message))
 
-;; The candidate stashed by the last successful check: #f or a hasheq with
-;; 'version / 'artifact / 'build / 'published-at. The RPC layer maps it onto
-;; the UpdateCheck record's optional fields.
+;; The candidate stashed by the last successful check: an update-candidate
+;; struct or #f. The backend maps it onto the UpdateCheck record's
+;; optional fields.
 (define (current-candidate) (unbox candidate-box))
 
 ;; Test seam: install a candidate without a network check so the download
 ;; can be driven against a local HTTP server.
 (define (set-candidate! candidate) (set-box! candidate-box candidate))
 
-;; ---- download ----------------------------------------------------------------
+;; ---------- updater state (rollout bucket persistence) ----------
 
-;; last path segment of the artifact URL, query stripped — release assets
-;; are named podlens-<ver>-<platform>-<arch>.zip, which keeps <data-dir>/
-;; updates/ self-describing
-(define (url-basename url)
-  (define m (regexp-match #rx"/([^/?#]+)(?:[?#].*)?$" url))
-  (if m (second m) "update-archive.zip"))
+;; Exactly these keys may exist in updater-state.json — the updater's own
+;; tiny store, kept out of the user-facing config.json schema. Values are
+;; integers (0-99 for the bucket).
+(define updater-state-keys '(rollout-bucket))
 
-(define (destination-path data-dir candidate)
-  (build-path data-dir "updates"
-              (url-basename (hash-ref (hash-ref candidate 'artifact) 'url))))
+;; RPC handlers run on serve threads where a parameterization from the
+;; calling thread is invisible, so the tests' data-dir redirect is a box
+;; (the same pattern the family uses), read at call time.
+(define data-dir-override-box (box #f))
 
-;; SHA-256 of a file, lowercase hex, via the same OpenSSL 3 the wrapper
-;; verification uses ("-r" prints "<hex> *<path>"; take the first field).
-;; Accepts a path or a string (state boxes carry path->string results, and
-;; path->string itself rejects strings — the guard below is load-bearing).
-(define (file-sha256-hex path)
-  (define openssl (find-openssl))
-  (unless (openssl3? openssl)
-    (error 'file-sha256-hex "OpenSSL 3 not found for artifact verification"))
-  (define out
-    (with-output-to-string
-      (lambda ()
-        (with-handlers ([exn:fail? void])
-          (system* openssl "dgst" "-sha256" "-r"
-                   (if (string? path) path (path->string path)))))))
-  (define m (regexp-match #px"^([0-9a-fA-F]{64})\\b" out))
-  (unless m
-    (error 'file-sha256-hex "unreadable digest output for ~a" path))
-  (string-downcase (second m)))
+(define (set-update-data-dir-override! path)
+  (set-box! data-dir-override-box path))
 
-;; Stream the artifact to `destination` and hold it to the signed manifest's
-;; size + SHA-256 before the file is trusted. The .partial suffix keeps a
-;; half-downloaded file from ever looking final.
-(define (download-update! candidate destination)
-  (define artifact (hash-ref candidate 'artifact))
-  (define url (hash-ref artifact 'url))
-  (define expected-size (hash-ref artifact 'size #f))
-  (define expected-sha256 (hash-ref artifact 'sha256 #f))
-  (when (and expected-size (> expected-size maximum-download-bytes))
-    (error 'download-update "signed artifact size exceeds the download limit"))
-  (make-parent-directory* destination)
-  (define temporary (path-add-extension destination #".partial"))
-  (when (file-exists? temporary) (delete-file temporary))
+(define (update-data-dir)
+  (or (unbox data-dir-override-box) (data-dir)))
+
+(define (updater-state-path)
+  (build-path (update-data-dir) "updater-state.json"))
+
+(define (read-updater-state)
+  (define path (updater-state-path))
+  (if (file-exists? path)
+      (with-handlers ([exn:fail? (lambda (_) (hasheq))])
+        (define doc (with-input-from-file path read-json))
+        (if (hash? doc) doc (hasheq)))
+      (hasheq)))
+
+(define (write-updater-state! doc)
+  ;; Whitelist on write: unknown keys are dropped, so a corrupt or
+  ;; hand-edited file can never grow product data into the updater store.
+  (define clean
+    (for/fold ([acc (hasheq)])
+              ([key (in-list updater-state-keys)])
+      (define value (hash-ref doc key #f))
+      (if (exact-integer? value)
+          (hash-set acc key value)
+          acc)))
+  (define path (updater-state-path))
+  (define dir (path-only path))
+  (when dir (make-directory* dir))
+  (with-output-to-file path
+    #:exists 'truncate/replace
+    (lambda () (write-json clean))))
+
+;; ---------- rollout bucket ----------
+
+;; Stable random 0..99 assigned on first check so staged rollouts are
+;; sticky per installation. Persisted as an integer in updater-state.json;
+;; crypto-random-bytes, not `random`: racket/base's PRNG has a fixed seed,
+;; which would put every fresh install in the same lockstep bucket.
+(define (rollout-bucket)
+  (define existing (hash-ref (read-updater-state) 'rollout-bucket #f))
+  (if (and existing (exact-integer? existing) (<= 0 existing 99))
+      existing
+      (let ([bucket
+             (modulo (integer-bytes->integer (crypto-random-bytes 4) #t #t)
+                     100)])
+        (write-updater-state!
+         (hash-set (read-updater-state) 'rollout-bucket bucket))
+        bucket)))
+
+;; ---------- check ----------
+
+;; Returns a plain hasheq describing the outcome; the backend maps it onto
+;; the typed UpdateCheck record. Throttling is the host's job
+;; (docs/UPDATE.md). fetch-update-manifest accepts only #:key-id and
+;; #:maximum-bytes — redirection following (GitHub release assets answer
+;; with a 302 into an otherwise empty body, rivet#153) is built in.
+(define (perform-check!)
+  (reset-update-state!)
+  (state-set! 'phase "checking")
   (with-handlers
       ([exn:fail?
         (lambda (e)
-          (with-handlers ([exn:fail? void]) (delete-file temporary))
-          (raise e))])
-    (define-values (code written)
-      (http-download-file url temporary
-                          (lambda (done total)
-                            (when (and total (> total 0))
-                              (state-set! 'percent
-                                          (min 100
-                                               (quotient (* done 100) total)))))))
-    (unless (= code 200)
-      (error 'download-update "~a returned ~a" url code))
-    (when (and expected-size (not (= written expected-size)))
-      (error 'download-update
-             "downloaded artifact size mismatch: ~a of ~a bytes"
-             written expected-size))
-    (when expected-sha256
-      (unless (string-ci=? (file-sha256-hex temporary) expected-sha256)
-        (error 'download-update "artifact checksum mismatch")))
-    (rename-file-or-directory temporary destination #t))
-  destination)
+          (state-set! 'phase "error")
+          (state-set! 'message (exn-message e))
+          (hasheq 'status "error" 'message (exn-message e)))])
+    (define manifest
+      (fetch-update-manifest (manifest-url)
+                             (embedded-public-key)
+                             #:key-id update-key-id))
+    (define config
+      (updater-config app-identifier
+                      app-version
+                      app-channel
+                      (platform-symbol)
+                      (architecture-symbol)
+                      (embedded-public-key)
+                      update-key-id
+                      (rollout-bucket)
+                      maximum-download-bytes))
+    (define candidate (select-update config manifest))
+    (cond
+      [candidate
+       (set-box! candidate-box candidate)
+       (define artifact (update-candidate-artifact candidate))
+       (state-set! 'phase "idle")
+       (state-set! 'availableVersion
+                   (update-manifest-version
+                    (update-candidate-manifest candidate)))
+       (hasheq 'status "available"
+               'currentVersion app-version
+               'availableVersion
+               (update-manifest-version
+                (update-candidate-manifest candidate))
+               'build (update-manifest-build
+                       (update-candidate-manifest candidate))
+               'publishedAt
+               (update-manifest-published-at
+                (update-candidate-manifest candidate))
+               'installer (symbol->string (update-artifact-installer artifact))
+               'sizeBytes (update-artifact-size artifact))]
+      [else
+       (state-set! 'phase "idle")
+       (state-set! 'availableVersion #f)
+       (hasheq 'status "up-to-date" 'currentVersion app-version)])))
 
-;; Spawns the worker thread and returns immediately; the host follows
-;; progress via the update-state RPC. Raises before spawning when there is
-;; nothing to download (the RPC maps that onto the state's error phase);
-;; never raises from the thread itself.
+;; ---------- download ----------
+
+;; The download lands in <data-dir>/updates/ under a self-describing name;
+;; hosts learn the exact path from update-state's downloadedPath and never
+;; parse the name themselves.
+(define (destination-path data-dir candidate [extension (installer-extension)])
+  (define version
+    (update-manifest-version (update-candidate-manifest candidate)))
+  (build-path data-dir
+              "updates"
+              (string-append app-display-name "-" version extension)))
+
+(define (download-with-progress! config candidate destination)
+  ;; rivet's downloader bounds the stream to the signed size, verifies
+  ;; size + SHA-256 against the signed manifest before the file is
+  ;; trusted, and swaps the .partial into place atomically. Progress
+  ;; reports arrive as byte counts; publish integer percent to the state
+  ;; box and feed the watchdog's stall clock on every report.
+  (define total (update-artifact-size (update-candidate-artifact candidate)))
+  (download-update config candidate destination
+                   #:on-progress
+                   (lambda (done)
+                     (set-box! last-progress-seconds (current-seconds))
+                     (state-set! 'percent
+                                 (if (> total 0)
+                                     (min 100 (quotient (* done 100) total))
+                                     0)))))
+
+;; Runs on a backend worker thread; the host follows progress via the
+;; update-state RPC. Never raises: failures surface through the phase.
 (define (start-download! data-dir)
   (define worker (unbox worker-thread-box))
   (when (and worker (thread-running? worker))
@@ -403,16 +355,55 @@
   (state-set! 'phase "downloading")
   (state-set! 'percent 0)
   (state-set! 'message #f)
+  (define config
+    (updater-config app-identifier
+                    app-version
+                    app-channel
+                    (platform-symbol)
+                    (architecture-symbol)
+                    (embedded-public-key)
+                    update-key-id
+                    (rollout-bucket)
+                    maximum-download-bytes))
   (define destination (destination-path data-dir candidate))
-  (set-box! worker-thread-box
-            (thread
-             (lambda ()
-               (with-handlers
-                   ([exn:fail?
-                     (lambda (e)
-                       (state-set! 'phase "error")
-                       (state-set! 'message (exn-message e)))])
-                 (define path (download-update! candidate destination))
-                 (state-set! 'phase "downloaded")
-                 (state-set! 'percent 100)
-                 (state-set! 'downloadedPath (path->string path)))))))
+  (set-box! last-progress-seconds (current-seconds))
+  (define worker-thread
+    (thread
+     (lambda ()
+       ;; The watchdog breaks a stalled worker; exn:break is not an
+       ;; exn:fail, so it needs its own arm — either way rivet's partial
+       ;; cleanup removes the .partial and the phase lands on error
+       ;; (never mid-flight).
+       (with-handlers
+           ([(lambda (e) (or (exn:fail? e) (exn:break? e)))
+             (lambda (e)
+               (state-set! 'phase "error")
+               (state-set! 'message
+                           (if (exn:break? e)
+                               "update download stalled or timed out"
+                               (exn-message e))))])
+         (define path
+           (download-with-progress! config candidate destination))
+         (state-set! 'phase "downloaded")
+         (state-set! 'percent 100)
+         (state-set! 'downloadedPath (path->string path))))))
+  (set-box! worker-thread-box worker-thread)
+  ;; Watchdog: exits once the worker finishes on its own; otherwise a stall
+  ;; (no byte progress) or the total wall-clock limit breaks the worker so
+  ;; phase never rests on "downloading" indefinitely.
+  (define download-started (current-seconds))
+  (thread
+   (lambda ()
+     (let loop ()
+       (cond
+         [(sync/timeout download-stall-limit-seconds
+                        (thread-dead-evt worker-thread))
+          (void)]
+         [(> (- (current-seconds) (unbox last-progress-seconds))
+             download-stall-limit-seconds)
+          (break-thread worker-thread)]
+         [(> (- (current-seconds) download-started)
+             download-total-limit-seconds)
+          (break-thread worker-thread)]
+         [else (loop)]))))
+  (void))
