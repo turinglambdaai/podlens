@@ -63,8 +63,11 @@
 
   (define tmp (make-temporary-file "podlens-updater-~a" 'directory))
   (define manifest-path (build-path tmp "update-manifest.json"))
+  ;; the artifact must match the RUNNING platform/architecture — select-update
+  ;; filters on the host identity, so a hardcoded macos/arm64 entry fails the
+  ;; check on every other platform (the all-three-CI red)
   (define artifact
-    (update-artifact 'macos 'arm64
+    (update-artifact (platform-symbol) (architecture-symbol)
                      "https://example.invalid/podlens-1.4.0-macos-arm64.zip"
                      "0000000000000000000000000000000000000000000000000000000000000000"
                      123456789 'zip '()))
