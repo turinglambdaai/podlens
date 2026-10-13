@@ -62,7 +62,7 @@
          start-download!
          rollout-bucket)
 
-;; Release identity: the version comes from core/version.rkt (the single
+;; Release identity: the version comes from app/version.rkt (the single
 ;; source scripts/check-release-version.sh pins to VERSION/rivet.rktd);
 ;; the rest duplicates rivet.rktd, which the packaged app cannot read at
 ;; runtime.

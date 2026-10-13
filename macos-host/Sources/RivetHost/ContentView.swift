@@ -50,7 +50,7 @@ struct ContentView: View {
     }
 }
 
-extension UpdateService.Manifest: Identifiable {
+extension UpdateService.Manifest: @retroactive Identifiable {
     public var id: String { version }
 }
 
