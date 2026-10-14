@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PodLens — 使用手册</title>
+<meta name="description" content="PodLens 用户手册：五分钟上手、订阅管理、转写翻译总结、BYOK 密钥配置与常见问题。">
+<script>
+  (function () {
+    var t = localStorage.getItem('podlens-theme');
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .manual-hero { max-width: 820px; margin: 0 auto; padding: 72px 24px 8px; text-align: center; }
+  .manual-hero h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.03em; }
+  .manual-hero .sub { margin-top: 14px; color: var(--muted); font-size: 16px; }
+  .manual-layout { max-width: 1040px; margin: 0 auto; padding: 40px 24px 72px; display: grid; grid-template-columns: 220px 1fr; gap: 40px; align-items: start; }
+  .manual-toc { position: sticky; top: 76px; font-size: 14px; }
+  .manual-toc a { display: block; padding: 5px 10px; border-radius: 8px; color: var(--muted); }
+  .manual-toc a:hover { color: var(--accent); background: var(--accent-soft); }
+  .manual-toc .toc-group { margin-top: 18px; padding: 0 10px; font-size: 12.5px; letter-spacing: 0.06em; color: var(--ink); font-weight: 700; }
+  .manual-toc .toc-group:first-child { margin-top: 0; }
+  .manual-section { margin-bottom: 56px; scroll-margin-top: 84px; }
+  .manual-section h2 { font-size: 24px; letter-spacing: -0.02em; margin-bottom: 14px; text-align: left; }
+  .manual-section h3 { font-size: 16.5px; margin: 22px 0 8px; }
+  .manual-section p, .manual-section li { font-size: 15px; color: var(--ink); }
+  .manual-section p { margin-bottom: 10px; }
+  .manual-section ol, .manual-section ul { padding-left: 22px; display: grid; gap: 8px; margin-bottom: 12px; }
+  .manual-section code { font-size: 13px; background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .manual-section table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  .manual-section th, .manual-section td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .manual-section th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .manual-shot { width: 100%; display: block; margin: 18px 0 6px; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.07); }
+  .manual-hint { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 6px; }
+  .callout { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; font-size: 14px; color: var(--muted); background: var(--surface); }
+  .callout b { color: var(--ink); }
+  .faq-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px; background: var(--surface); }
+  .faq-item h3 { margin: 0 0 8px; font-size: 15.5px; }
+  .faq-item p:last-child { margin-bottom: 0; }
+  @media (max-width: 860px) { .manual-layout { grid-template-columns: 1fr; } .manual-toc { position: static; } }
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">PodLens</a>
+    <nav class="nav-links">
+      <a href="index.html#features" data-i18n="nav.features">功能</a>
+      <a href="guide.html" data-i18n="nav.guide">手册</a>
+      <a href="index.html#download" data-i18n="nav.download">下载</a>
+      <a href="https://github.com/turinglambdaai/podlens" data-i18n="nav.github">GitHub</a>
+      <div class="lang-dropdown-wrapper">
+        <button class="lang-btn" type="button" onclick="void 0" aria-label="Switch language">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span id="current-lang-label">English</span>
+        </button>
+        <ul class="lang-menu">
+          <li onclick="setLanguage('en')">English</li>
+          <li onclick="setLanguage('zh')">简体中文</li>
+        </ul>
+      </div>
+      <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle theme">◐</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="manual-hero">
+    <p class="eyebrow" data-i18n="hero.eyebrow">使用手册</p>
+    <h1 data-i18n="hero.title">从安装到听懂第一集</h1>
+    <p class="sub" data-i18n="hero.sub">五分钟上手、核心功能与常见问题，一页说清。句子短，动词开头，每节独立。</p>
+  </section>
+
+  <div class="manual-layout">
+    <aside class="manual-toc">
+      <div class="toc-group" data-i18n="toc.start">上手</div>
+      <a href="#quickstart" data-i18n="toc.quickstart">五分钟上手</a>
+      <div class="toc-group" data-i18n="toc.core">核心功能</div>
+      <a href="#subscribe" data-i18n="toc.subscribe">订阅管理</a>
+      <a href="#pipeline" data-i18n="toc.pipeline">转写 / 翻译 / 总结</a>
+      <a href="#byok" data-i18n="toc.byok">BYOK 密钥配置</a>
+      <div class="toc-group" data-i18n="toc.faq">常见问题</div>
+      <a href="#faq" data-i18n="toc.faq">FAQ</a>
+    </aside>
+
+    <div>
+      <!-- =================== 五分钟上手 =================== -->
+      <section class="manual-section" id="quickstart">
+        <h2 data-i18n="qs.title">五分钟上手</h2>
+        <p data-i18n="qs.intro">下载、打开、配一次密钥、听一集。教程到这里就结束了——本页其余内容都是可选的。</p>
+        <ol>
+          <li data-i18n="qs.s1"><strong>安装。</strong>到 <a href="https://github.com/turinglambdaai/podlens/releases/latest">Releases</a> 下载最新版：macOS 把 DMG 里的应用拖进「应用程序」（Apple Silicon 与 Intel 分架构下载）；Windows 双击 MSI 安装，或解压便携 zip 直接运行。</li>
+          <li data-i18n="qs.s2"><strong>首次启动。</strong>macOS 未公证构建先右键应用选「打开」。没有账号，不需要注册。首次启动是空库，应用会打开「发现」面板。</li>
+          <li data-i18n="qs.s3"><strong>添加一期播客。</strong>点左下角 <code>+</code>，粘贴一期播客的 RSS 地址，回车。或者从「发现」面板的精选目录里挑一档，一键添加。</li>
+          <li data-i18n="qs.s4"><strong>配置密钥（一次即可）。</strong>按 <code>⌘,</code>（macOS）打开设置，填 <code>api-base</code> 和 <code>api-key</code>（详见下方 <a href="#byok">BYOK 配置</a>）。转写、翻译、总结都走你自己的大模型 API。</li>
+          <li data-i18n="qs.s5"><strong>听并听懂。</strong>选一集，点播放。想读懂它：点「一键听懂」，下载、转写、翻译、总结一次完成；逐句稿跟随播放高亮，点句子即跳转。</li>
+        </ol>
+        <img class="manual-shot" src="screenshots/podlens-main-light.png"
+             alt="PodLens macOS 首次启动的空库状态：三栏布局与左下角操作按钮"
+             data-alt-en="PodLens on macOS at first launch: the empty library, three-pane layout, action buttons at the bottom left"
+             data-alt-zh="PodLens macOS 首次启动的空库状态：三栏布局与左下角操作按钮"
+             loading="lazy">
+        <p class="manual-hint" data-i18n="qs.hint">截图为真实的 macOS 构建（首次启动的空库状态）。添加订阅后，中栏列出单集，右栏是播放与逐句稿。</p>
+      </section>
+
+      <!-- =================== 订阅管理 =================== -->
+      <section class="manual-section" id="subscribe">
+        <h2 data-i18n="sub.title">订阅管理</h2>
+        <p data-i18n="sub.p1">左栏是订阅列表。点 <code>+</code> 添加，粘贴 RSS 地址；「发现」面板内置 16 档经典英文播客（科技 / 安全 / 科学 / 设计 / 商业 / 资讯），也支持全目录搜索（iTunes Search API，无需密钥）。</p>
+        <ul>
+          <li data-i18n="sub.l1">自动刷新：每 30 分钟刷新全部订阅，新单集自动出现（macOS 弹系统通知）。</li>
+          <li data-i18n="sub.l2">未播标记：单集可标已播 / 未播，侧栏徽章显示每档未播数。</li>
+          <li data-i18n="sub.l3">取消订阅：右键订阅项即可，已生成的逐句稿和总结保留在本机。</li>
+        </ul>
+      </section>
+
+      <!-- =================== 转写 / 翻译 / 总结 =================== -->
+      <section class="manual-section" id="pipeline">
+        <h2 data-i18n="pipe.title">转写 / 翻译 / 总结</h2>
+        <p data-i18n="pipe.p1">选中一集，点 <strong>一键听懂</strong>：下载 → 转写 → 翻译 → 总结，一次排队完成。已完成的阶段自动跳过——中断后重跑，只为缺的部分付费。</p>
+        <p data-i18n="pipe.p2">动手之前先看价：操作区显示字符与句数估算（BYOK 账单是真金白银）。逐句稿支持双语 / 只看译文 / 只看原文三种视图，点句子即跳转播放。</p>
+        <ul>
+          <li data-i18n="pipe.l1">播放：倍速 1.0–3.0×，±15/30 秒快进快退，睡眠定时器，章节跳转（播客含 Podcasting 2.0 章节时）。</li>
+          <li data-i18n="pipe.l2">连续播放：一集听完自动接同一节目下一集；下次打开从上次的进度继续。</li>
+          <li data-i18n="pipe.l3">系统媒体键、Control Center（macOS）与任务栏媒体控件（Windows）直接可用。</li>
+          <li data-i18n="pipe.l4">全部结果缓存在本机：一集只处理一次，结果永远可读、可导出。</li>
+        </ul>
+      </section>
+
+      <!-- =================== BYOK =================== -->
+      <section class="manual-section" id="byok">
+        <h2 data-i18n="byok.title">BYOK 密钥配置</h2>
+        <p data-i18n="byok.p1">按 <code>⌘,</code>（macOS）或从菜单打开设置，逐项填写。key 只存本机 <code>~/.podlens/config.json</code>，从不上传、从不同步。</p>
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="byok.th1">配置项</th>
+              <th data-i18n="byok.th2">填什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>api-base</code></td>
+              <td data-i18n="byok.r1">OpenAI 兼容服务的 API 地址，以 <code>/v1</code> 结尾，例如 <code>https://api.openai.com/v1</code>。DeepSeek、Groq、SiliconFlow、本地 Ollama 均可——具体地址看你的服务商文档。</td>
+            </tr>
+            <tr>
+              <td><code>api-key</code></td>
+              <td data-i18n="byok.r2">服务商控制台里生成的密钥（<code>sk-…</code>）。粘贴进去，点保存。</td>
+            </tr>
+            <tr>
+              <td><code>chat-model</code></td>
+              <td data-i18n="byok.r3">翻译和总结用的对话模型，默认 <code>gpt-4o-mini</code>。按服务商支持的型号名填写。</td>
+            </tr>
+            <tr>
+              <td><code>asr-model</code></td>
+              <td data-i18n="byok.r4">转写模型，默认 <code>whisper-1</code>。要求服务商提供 <code>/audio/transcriptions</code> 端点。</td>
+            </tr>
+            <tr>
+              <td><code>target-lang</code></td>
+              <td data-i18n="byok.r5">翻译目标语言：<code>zh</code> 或 <code>en</code>。修改后需重新翻译已有单集。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <b data-i18n="byok.c1">先测一集短的。</b>
+          <span data-i18n="byok.c2">密钥填好后，挑一集 10 分钟以内的单集跑「一键听懂」，确认三个阶段都通过，再去处理长单集——长单集按句计费，成本随长度增长。</span>
+        </div>
+        <p data-i18n="byok.p2">不想用云服务？本地跑 Ollama 时 <code>api-base</code> 填本机地址即可；只需注意转写阶段仍需要支持音频输入的端点。</p>
+      </section>
+
+      <!-- =================== FAQ =================== -->
+      <section class="manual-section" id="faq">
+        <h2 data-i18n="faq.title">FAQ</h2>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q1">数据存在哪里？</h3>
+          <p data-i18n="faq.a1">全部在 <code>~/.podlens/</code>：订阅与单集元数据（<code>library.json</code>）、音频缓存（<code>audio/</code>）、逐句稿、翻译与总结（纯 JSON）。备份这个目录，就备份了一切；删掉它，就卸载了一切。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q2">需要注册账号吗？</h3>
+          <p data-i18n="faq.a2">不需要。没有账号、没有云端依赖。唯一的密钥是你自己的大模型 API key，存在本机。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q3">支持哪些平台？</h3>
+          <p data-i18n="faq.a3">macOS 14+（Apple Silicon 与 Intel）和 Windows 10+（x64，MSI 安装器或便携 zip）。Linux 宿主在路线图上，暂无下载。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q4">界面语言和主题怎么换？</h3>
+          <p data-i18n="faq.a4">设置面板（<code>⌘,</code>）里有中文 / English 切换。深浅色主题跟随系统外观。CLI 输出语言由 <code>ui-lang</code> 配置控制。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q5">怎么卸载？</h3>
+          <p data-i18n="faq.a5">两步：把应用移到废纸篓（Windows 卸载 MSI 或删掉便携目录），再删除 <code>~/.podlens/</code>。后者包含你的全部数据——不删它，重装后数据还在。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q6">应用内更新失败了？</h3>
+          <p data-i18n="faq.a6">去 <a href="https://github.com/turinglambdaai/podlens/releases/latest">Releases</a> 页手动下载新版覆盖安装：macOS 重新拖一次 DMG，Windows 重跑 MSI 或替换便携目录。更新走 Ed25519 签名清单校验，失败时不会安装半截的更新。</p>
+        </div>
+        <div class="faq-item">
+          <h3 data-i18n="faq.q7">macOS 提示「无法打开」？</h3>
+          <p data-i18n="faq.a7">构建目前为 ad-hoc 签名（公证在路线图上）。右键应用 → 「打开」→ 再点「打开」，之后不再提示。</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <p>PodLens · <a href="index.html" data-i18n="footer.home">首页</a> · <a href="https://github.com/turinglambdaai/podlens">GitHub</a> · AGPL-3.0 · <span data-i18n="footer.built">基于 Rivet 构建</span></p>
+</footer>
+
+<script>
+(function () {
+  var zh = {
+    "nav.features": "功能", "nav.guide": "手册", "nav.download": "下载", "nav.github": "GitHub",
+    "hero.eyebrow": "使用手册",
+    "hero.title": "从安装到听懂第一集",
+    "hero.sub": "五分钟上手、核心功能与常见问题，一页说清。句子短，动词开头，每节独立。",
+    "toc.start": "上手", "toc.quickstart": "五分钟上手",
+    "toc.core": "核心功能", "toc.subscribe": "订阅管理", "toc.pipeline": "转写 / 翻译 / 总结", "toc.byok": "BYOK 密钥配置",
+    "toc.faq": "常见问题",
+    "qs.title": "五分钟上手",
+    "qs.intro": "下载、打开、配一次密钥、听一集。教程到这里就结束了——本页其余内容都是可选的。",
+    "qs.s1": "<strong>安装。</strong>到 <a href='https://github.com/turinglambdaai/podlens/releases/latest'>Releases</a> 下载最新版：macOS 把 DMG 里的应用拖进「应用程序」（Apple Silicon 与 Intel 分架构下载）；Windows 双击 MSI 安装，或解压便携 zip 直接运行。",
+    "qs.s2": "<strong>首次启动。</strong>macOS 未公证构建先右键应用选「打开」。没有账号，不需要注册。首次启动是空库，应用会打开「发现」面板。",
+    "qs.s3": "<strong>添加一期播客。</strong>点左下角 <code>+</code>，粘贴一期播客的 RSS 地址，回车。或者从「发现」面板的精选目录里挑一档，一键添加。",
+    "qs.s4": "<strong>配置密钥（一次即可）。</strong>按 <code>⌘,</code>（macOS）打开设置，填 <code>api-base</code> 和 <code>api-key</code>（详见下方 <a href='#byok'>BYOK 配置</a>）。转写、翻译、总结都走你自己的大模型 API。",
+    "qs.s5": "<strong>听并听懂。</strong>选一集，点播放。想读懂它：点「一键听懂」，下载、转写、翻译、总结一次完成；逐句稿跟随播放高亮，点句子即跳转。",
+    "qs.hint": "截图为真实的 macOS 构建（首次启动的空库状态）。添加订阅后，中栏列出单集，右栏是播放与逐句稿。",
+    "sub.title": "订阅管理",
+    "sub.p1": "左栏是订阅列表。点 <code>+</code> 添加，粘贴 RSS 地址；「发现」面板内置 16 档经典英文播客（科技 / 安全 / 科学 / 设计 / 商业 / 资讯），也支持全目录搜索（iTunes Search API，无需密钥）。",
+    "sub.l1": "自动刷新：每 30 分钟刷新全部订阅，新单集自动出现（macOS 弹系统通知）。",
+    "sub.l2": "未播标记：单集可标已播 / 未播，侧栏徽章显示每档未播数。",
+    "sub.l3": "取消订阅：右键订阅项即可，已生成的逐句稿和总结保留在本机。",
+    "pipe.title": "转写 / 翻译 / 总结",
+    "pipe.p1": "选中一集，点 <strong>一键听懂</strong>：下载 → 转写 → 翻译 → 总结，一次排队完成。已完成的阶段自动跳过——中断后重跑，只为缺的部分付费。",
+    "pipe.p2": "动手之前先看价：操作区显示字符与句数估算（BYOK 账单是真金白银）。逐句稿支持双语 / 只看译文 / 只看原文三种视图，点句子即跳转播放。",
+    "pipe.l1": "播放：倍速 1.0–3.0×，±15/30 秒快进快退，睡眠定时器，章节跳转（播客含 Podcasting 2.0 章节时）。",
+    "pipe.l2": "连续播放：一集听完自动接同一节目下一集；下次打开从上次的进度继续。",
+    "pipe.l3": "系统媒体键、Control Center（macOS）与任务栏媒体控件（Windows）直接可用。",
+    "pipe.l4": "全部结果缓存在本机：一集只处理一次，结果永远可读、可导出。",
+    "byok.title": "BYOK 密钥配置",
+    "byok.p1": "按 <code>⌘,</code>（macOS）或从菜单打开设置，逐项填写。key 只存本机 <code>~/.podlens/config.json</code>，从不上传、从不同步。",
+    "byok.th1": "配置项", "byok.th2": "填什么",
+    "byok.r1": "OpenAI 兼容服务的 API 地址，以 <code>/v1</code> 结尾，例如 <code>https://api.openai.com/v1</code>。DeepSeek、Groq、SiliconFlow、本地 Ollama 均可——具体地址看你的服务商文档。",
+    "byok.r2": "服务商控制台里生成的密钥（<code>sk-…</code>）。粘贴进去，点保存。",
+    "byok.r3": "翻译和总结用的对话模型，默认 <code>gpt-4o-mini</code>。按服务商支持的型号名填写。",
+    "byok.r4": "转写模型，默认 <code>whisper-1</code>。要求服务商提供 <code>/audio/transcriptions</code> 端点。",
+    "byok.r5": "翻译目标语言：<code>zh</code> 或 <code>en</code>。修改后需重新翻译已有单集。",
+    "byok.c1": "先测一集短的。",
+    "byok.c2": "密钥填好后，挑一集 10 分钟以内的单集跑「一键听懂」，确认三个阶段都通过，再去处理长单集——长单集按句计费，成本随长度增长。",
+    "byok.p2": "不想用云服务？本地跑 Ollama 时 <code>api-base</code> 填本机地址即可；只需注意转写阶段仍需要支持音频输入的端点。",
+    "faq.title": "FAQ",
+    "faq.q1": "数据存在哪里？",
+    "faq.a1": "全部在 <code>~/.podlens/</code>：订阅与单集元数据（<code>library.json</code>）、音频缓存（<code>audio/</code>）、逐句稿、翻译与总结（纯 JSON）。备份这个目录，就备份了一切；删掉它，就卸载了一切。",
+    "faq.q2": "需要注册账号吗？",
+    "faq.a2": "不需要。没有账号、没有云端依赖。唯一的密钥是你自己的大模型 API key，存在本机。",
+    "faq.q3": "支持哪些平台？",
+    "faq.a3": "macOS 14+（Apple Silicon 与 Intel）和 Windows 10+（x64，MSI 安装器或便携 zip）。Linux 宿主在路线图上，暂无下载。",
+    "faq.q4": "界面语言和主题怎么换？",
+    "faq.a4": "设置面板（<code>⌘,</code>）里有中文 / English 切换。深浅色主题跟随系统外观。CLI 输出语言由 <code>ui-lang</code> 配置控制。",
+    "faq.q5": "怎么卸载？",
+    "faq.a5": "两步：把应用移到废纸篓（Windows 卸载 MSI 或删掉便携目录），再删除 <code>~/.podlens/</code>。后者包含你的全部数据——不删它，重装后数据还在。",
+    "faq.q6": "应用内更新失败了？",
+    "faq.a6": "去 <a href='https://github.com/turinglambdaai/podlens/releases/latest'>Releases</a> 页手动下载新版覆盖安装：macOS 重新拖一次 DMG，Windows 重跑 MSI 或替换便携目录。更新走 Ed25519 签名清单校验，失败时不会安装半截的更新。",
+    "faq.q7": "macOS 提示「无法打开」？",
+    "faq.a7": "构建目前为 ad-hoc 签名（公证在路线图上）。右键应用 → 「打开」→ 再点「打开」，之后不再提示。",
+    "footer.home": "首页", "footer.built": "基于 Rivet 构建"
+  };
+  var en = {
+    "nav.features": "Features", "nav.guide": "Manual", "nav.download": "Download", "nav.github": "GitHub",
+    "hero.eyebrow": "User Manual",
+    "hero.title": "From install to your first understood episode",
+    "hero.sub": "Five-minute start, core features and the FAQ — one page. Short sentences, verbs first, every section stands alone.",
+    "toc.start": "Get started", "toc.quickstart": "Five-minute start",
+    "toc.core": "Core features", "toc.subscribe": "Subscriptions", "toc.pipeline": "Transcribe / translate / summarize", "toc.byok": "BYOK key setup",
+    "toc.faq": "FAQ",
+    "qs.title": "Five-minute start",
+    "qs.intro": "Download, open, set a key once, listen. That's the whole tutorial — everything else on this page is optional.",
+    "qs.s1": "<strong>Install.</strong> Grab the latest build from the <a href='https://github.com/turinglambdaai/podlens/releases/latest'>Releases</a> page: drag the app from the DMG into Applications on macOS (separate downloads for Apple Silicon and Intel); run the MSI installer or unpack the portable zip on Windows.",
+    "qs.s2": "<strong>First launch.</strong> The macOS build is unnotarized — right-click the app and choose Open first. There is no account and nothing to sign up for. The library starts empty and the Discover panel opens for you.",
+    "qs.s3": "<strong>Add a podcast.</strong> Click <code>+</code> at the bottom left, paste the show's RSS URL, press Enter. Or pick one from the curated catalog in the Discover panel — one tap.",
+    "qs.s4": "<strong>Set your key (once).</strong> Press <code>⌘,</code> (macOS) to open Settings and fill in <code>api-base</code> and <code>api-key</code> (see <a href='#byok'>BYOK setup</a> below). Transcription, translation and summary all run through your own LLM API.",
+    "qs.s5": "<strong>Listen and understand.</strong> Pick an episode and press play. To read it: click Understand — download, transcribe, translate and summarize in one job; the transcript highlights along with playback and a click seeks.",
+    "qs.hint": "The screenshot is the real macOS build (the empty library at first launch). Once you subscribe, the middle pane lists episodes and the right pane holds playback and the transcript.",
+    "sub.title": "Subscriptions",
+    "sub.p1": "The left pane lists your shows. Click <code>+</code> and paste an RSS URL; the Discover panel carries 16 classic English shows (tech / security / science / design / business / news) and full-directory search (iTunes Search API, no key needed).",
+    "sub.l1": "Auto refresh: every subscription refreshes every 30 minutes; new episodes appear on their own (macOS posts a system notification).",
+    "sub.l2": "Played marks: mark episodes played / unplayed; a badge per show counts the unplayed ones.",
+    "sub.l3": "Unsubscribe: right-click a show. Generated transcripts and summaries stay on your disk.",
+    "pipe.title": "Transcribe / translate / summarize",
+    "pipe.p1": "Select an episode and click <strong>Understand</strong>: download → transcribe → translate → summarize as one job. Finished stages are skipped — re-run after a failure and you only pay for what's missing.",
+    "pipe.p2": "Check the price first: the action row shows a sentence / character estimate before you start (BYOK bills are real money). The transcript has bilingual / translation-only / original-only views; click a line to seek.",
+    "pipe.l1": "Playback: 1.0–3.0× speed, ±15/30 s skip, sleep timer, chapter jumps (when the feed carries Podcasting 2.0 chapters).",
+    "pipe.l2": "Continuous playback: when an episode ends, the next one from the same show starts; reopening the app resumes where you stopped.",
+    "pipe.l3": "System media keys, Control Center (macOS) and taskbar media controls (Windows) work out of the box.",
+    "pipe.l4": "Everything caches locally: an episode is processed once and stays readable and exportable.",
+    "byok.title": "BYOK key setup",
+    "byok.p1": "Press <code>⌘,</code> (macOS) or open Settings from the menu and fill the fields one by one. Keys stay in <code>~/.podlens/config.json</code> on your machine — never uploaded, never synced.",
+    "byok.th1": "Setting", "byok.th2": "What to put in",
+    "byok.r1": "The API base of an OpenAI-compatible service, ending in <code>/v1</code>, e.g. <code>https://api.openai.com/v1</code>. DeepSeek, Groq, SiliconFlow and local Ollama all work — check your provider's docs for the exact address.",
+    "byok.r2": "The key you generated in the provider's console (<code>sk-…</code>). Paste it in and save.",
+    "byok.r3": "The chat model for translation and summary, default <code>gpt-4o-mini</code>. Use a model name your provider supports.",
+    "byok.r4": "The transcription model, default <code>whisper-1</code>. The provider must expose an <code>/audio/transcriptions</code> endpoint.",
+    "byok.r5": "Translation target language: <code>zh</code> or <code>en</code>. Changing it means existing episodes are translated again.",
+    "byok.c1": "Test with a short episode first.",
+    "byok.c2": "Once the key is in, run Understand on an episode under 10 minutes and confirm all three stages pass — then move on to long ones. Long episodes are billed per sentence and costs grow with length.",
+    "byok.p2": "Prefer no cloud? Point <code>api-base</code> at your local Ollama; just note transcription still needs an endpoint that accepts audio.",
+    "faq.title": "FAQ",
+    "faq.q1": "Where does my data live?",
+    "faq.a1": "Everything under <code>~/.podlens/</code>: show and episode metadata (<code>library.json</code>), the audio cache (<code>audio/</code>), transcripts, translations and summaries (plain JSON). Back up that directory and you have backed up everything; delete it and the app is fully uninstalled.",
+    "faq.q2": "Do I need an account?",
+    "faq.a2": "No. No account, no cloud dependency. The only secret is your own LLM API key, stored locally.",
+    "faq.q3": "Which platforms are supported?",
+    "faq.a3": "macOS 14+ (Apple Silicon and Intel) and Windows 10+ (x64, MSI installer or portable zip). A Linux host is on the roadmap; no downloads yet.",
+    "faq.q4": "How do I change the interface language or theme?",
+    "faq.a4": "The Settings sheet (<code>⌘,</code>) has a Chinese / English toggle. Dark and light follow the system appearance. CLI output language is controlled by the <code>ui-lang</code> setting.",
+    "faq.q5": "How do I uninstall?",
+    "faq.a5": "Two steps: move the app to the Trash (on Windows, uninstall the MSI or delete the portable folder), then delete <code>~/.podlens/</code>. That directory holds all your data — keep it and a reinstall picks up where you left off.",
+    "faq.q6": "The in-app update failed.",
+    "faq.a6": "Download the new version from the <a href='https://github.com/turinglambdaai/podlens/releases/latest'>Releases</a> page and install over the old one: re-drag the DMG on macOS, re-run the MSI or replace the portable folder on Windows. Updates verify an Ed25519-signed manifest — a failed check never installs a half-downloaded update.",
+    "faq.q7": "macOS says the app can't be opened.",
+    "faq.a7": "Builds are ad-hoc signed for now (notarization is on the roadmap). Right-click the app → Open → Open again; the prompt won't come back.",
+    "footer.home": "Home", "footer.built": "Built on Rivet"
+  };
+  // language dropdown: unified family policy (explicit choice wins; otherwise browser locale)
+  var LANGUAGE_OVERRIDE_KEY = "podlens-lang-override-v2";
+  var LANGUAGE_LEGACY_KEYS = ["podlens-site-lang", "site-lang"];
+
+  function readLanguageOverride() {
+    try {
+      var v = localStorage.getItem(LANGUAGE_OVERRIDE_KEY);
+      if (v !== "zh" && v !== "en") {
+        for (var i = 0; i < LANGUAGE_LEGACY_KEYS.length; i++) {
+          var legacy = localStorage.getItem(LANGUAGE_LEGACY_KEYS[i]);
+          if (legacy === "zh" || legacy === "en") { v = legacy; try { localStorage.setItem(LANGUAGE_OVERRIDE_KEY, v); } catch (e) {} break; }
+        }
+      }
+      return v === "zh" || v === "en" ? v : null;
+    } catch (e) { return null; }
+  }
+  function detectBrowserLanguage() {
+    var locale = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    return String(locale).toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
+  }
+  function apply(lang) {
+    var table = lang === "en" ? en : zh;
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (table[k]) el.innerHTML = table[k];
+    });
+    document.querySelectorAll("img[data-alt-en]").forEach(function (el) {
+      el.alt = lang === "en" ? el.getAttribute("data-alt-en") : el.getAttribute("data-alt-zh");
+    });
+    document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+    document.documentElement.setAttribute("data-language", lang);
+    var label = document.getElementById("current-lang-label");
+    if (label) label.textContent = lang === "en" ? "English" : "简体中文";
+  }
+  window.setLanguage = function (lang) {
+    if (lang !== "zh" && lang !== "en") return;
+    try { localStorage.setItem(LANGUAGE_OVERRIDE_KEY, lang); } catch (e) {}
+    apply(lang);
+  };
+  apply(readLanguageOverride() || detectBrowserLanguage());
+  LANGUAGE_LEGACY_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+  window.addEventListener("languagechange", function () {
+    if (!readLanguageOverride()) apply(detectBrowserLanguage());
+  });
+})();
+</script>
+<script>
+  document.getElementById('theme-btn').addEventListener('click', function () {
+    var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('podlens-theme', next);
+  });
+</script>
+</body>
+</html>
