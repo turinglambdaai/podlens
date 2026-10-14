@@ -57,7 +57,10 @@ public final class UpdateService {
 
     public typealias Manifest = RivetUpdateManifest
 
-    public enum CheckResult: Equatable {
+    // No Equatable: nothing compares outcomes, and synthesizing a
+    // conformance over the cross-module Manifest payload trips a SILGen
+    // segfault in the Intel release runner's older swiftc (6.1.2).
+    public enum CheckResult {
         case upToDate
         case available(Manifest)
     }
