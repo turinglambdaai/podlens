@@ -118,25 +118,23 @@ jobs:
           rm -f dist/update-*.json
         shell: bash
       - name: Collect MSI + portable zip + checksums
-        shell: pwsh
+        shell: bash
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          Move-Item dist/podlens-*-windows-x64.msi "podlens-$version-windows-x64.msi"
-          Compress-Archive -Path dist/podlens-windows-x64/* -DestinationPath "podlens-$version-windows-x64.zip"
-          $msi = (Get-FileHash "podlens-$version-windows-x64.msi" -Algorithm SHA256).Hash.ToLower()
-          # LF line ending on purpose — the publish job's shasum --check
-          # mis-parses the filename with a trailing CR.
-          [IO.File]::WriteAllText("podlens-$version-windows-x64.msi.sha256", "$msi  podlens-$version-windows-x64.msi`n")
-          $zip = (Get-FileHash "podlens-$version-windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
-          [IO.File]::WriteAllText("podlens-$version-windows-x64.zip.sha256", "$zip  podlens-$version-windows-x64.zip`n")
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd dist
+          # rivet v0.11.0 emits the MSI and the portable zip directly in
+          # family form — no staging directory to compress anymore.
+          sha256sum "podlens-${VERSION}-windows-x64.msi" > "podlens-${VERSION}-windows-x64.msi.sha256"
+          sha256sum "podlens-${VERSION}-windows-x64.zip" > "podlens-${VERSION}-windows-x64.zip.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            podlens-*-windows-x64.msi
-            podlens-*-windows-x64.msi.sha256
-            podlens-*-windows-x64.zip
-            podlens-*-windows-x64.zip.sha256
+            dist/podlens-*-windows-x64.msi
+            dist/podlens-*-windows-x64.msi.sha256
+            dist/podlens-*-windows-x64.zip
+            dist/podlens-*-windows-x64.zip.sha256
           if-no-files-found: error
 
   release:

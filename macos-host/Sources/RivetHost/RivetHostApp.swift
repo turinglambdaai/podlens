@@ -50,7 +50,11 @@ final class AppModel: ObservableObject {
                 set: { [weak self] in self?.showSettings = $0 })
     }
 
-    let updateService = UpdateService()
+    // lazy: the Intel release runner's older swiftc crashes in SILGen
+    // while emitting this stored-property initialization (arm64 compiles
+    // the same code fine). First access happens on the main actor, long
+    // after boot, so the deferred init changes no behavior.
+    lazy var updateService = UpdateService()
     let store = PodLensStore()
 
     private var backend: EmbeddedRacketBackend?
