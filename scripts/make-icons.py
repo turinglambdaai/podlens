@@ -6,10 +6,11 @@ Usage: python scripts/make-icons.py
 Draws the 1024x1024 master (site accent palette, podcast-wave mark) into
 assets/branding/icon-source.png, then emits the platform artifacts Rivet
 consumes: assets/branding/app.ico (Windows, compiled into the host exe and
-referenced by MSI shortcuts) and assets/branding/app.icns (macOS bundle).
+referenced by MSI shortcuts), assets/branding/app.icns (macOS bundle), and
+assets/branding/app.png (Linux desktop/deb/rpm/AppImage icon).
 
 To restyle the icon, edit draw_master() and rerun; do not hand-edit the
-generated .ico/.icns.
+generated .ico/.icns/.png.
 """
 
 from __future__ import annotations
@@ -101,7 +102,10 @@ def main() -> None:
     )
 
     write_icns(master, BRANDING / "app.icns")
-    for name in ("icon-source.png", "app.ico", "app.icns"):
+
+    # Linux: one 512x512 PNG, consumed via rivet.rktd's linux-icon.
+    master.resize((512, 512), Image.LANCZOS).save(BRANDING / "app.png")
+    for name in ("icon-source.png", "app.ico", "app.icns", "app.png"):
         print(f"{(BRANDING / name).name}: {(BRANDING / name).stat().st_size} bytes")
 
 
