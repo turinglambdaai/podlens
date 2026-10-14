@@ -9,6 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Single source of truth for the rivet pin; every install step below
+# references this so a bump is one edit, not a grep-replace across jobs.
+env:
+  RIVET_PIN: v0.11.0
+
 jobs:
   backend:
     name: Backend tests (${{ matrix.os }})
@@ -28,7 +33,7 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
         shell: bash
       - name: Compile backend
         run: raco make app/core/*.rkt app/update.rkt app/backend.rkt app/cli.rkt
@@ -65,7 +70,7 @@ jobs:
           distribution: full
           architecture: arm64
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Build + package + verify
         run: raco rivet package
       - name: Launch smoke (ad-hoc build)
@@ -86,7 +91,7 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Build + package + verify
         run: raco rivet package
         shell: bash

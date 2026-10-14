@@ -13,6 +13,10 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Single source of truth for the rivet pin (matches ci.yml).
+env:
+  RIVET_PIN: v0.11.0
+
 jobs:
   validate:
     name: Validate release tag
@@ -51,7 +55,7 @@ jobs:
           distribution: full
           architecture: ${{ matrix.racket-arch }}
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Package (ad-hoc; notarization activates when secrets exist)
         run: raco rivet package
       - name: Update-feed zip + checksum
@@ -90,7 +94,7 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
         shell: bash
       - name: Install WiX (v5; v7 requires EULA acceptance, v5 runs the v4 schema)
         run: dotnet tool install --global wix --version 5.0.2
@@ -151,7 +155,7 @@ jobs:
           distribution: full
       - name: Install Rivet (catalog; rivet/distribution signs the wrapper)
         if: env.HAS_UPDATE_KEY == 'true'
-        run: raco pkg install --auto --no-docs rivet
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Install OpenSSL 3
         if: env.HAS_UPDATE_KEY == 'true'
         run: brew install openssl@3

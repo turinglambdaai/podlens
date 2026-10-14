@@ -2,7 +2,7 @@
 
 听得懂的英文播客。跨平台桌面播客应用：用你自己的大模型 API key，把英文单集转写、逐句翻译、自动总结——为"读得懂、听不懂"的听众而生。
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turinglambdaai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [English](README.md) · **中文**
 
@@ -14,7 +14,7 @@
 |---|---|---|
 | macOS 14+（Apple Silicon 与 Intel） | `podlens-<version>-macos-<arch>.dmg`——`arm64` / `x64`（ad-hoc 签名——首次启动右键 → 打开） | 应用内更新（签名清单），或重新安装新版 DMG |
 | Windows 10+ x64 | `podlens-<version>-windows-x64.msi` 安装器（含开始菜单/桌面快捷方式），或 `podlens-<version>-windows-x64.zip` 便携版 | 便携版：应用内下载并换装（签名清单）；MSI：重新运行新版安装器（应用内会提示） |
-| Linux | 规划中——暂无下载；GTK4 宿主已列入路线图，排在 Windows 应用内更新专项之后 | — |
+| Linux | 规划中——暂无下载；GTK4 宿主已列入路线图 | — |
 
 每个发布都带 `SHA256SUMS` 校验清单和 Sigstore 构建来源证明（`gh attestation verify <file> -R turinglambdaai/podlens`）。
 
@@ -59,20 +59,21 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 - 播放走平台媒体栈；音频缓存在 `~/.podlens/audio/`
 - UI 只与 `app/backend.rkt` 中的类型化契约对话——改契约就是一次三端同步发布
 
-## 1.2 都有什么
+## 都有什么
 
-- Windows 原生界面重设计（路线图 M1）：三栏导航、带状态 chips 的单集行、详情区 tab 化（逐句稿 | 总结）、空状态占位、底部播放条（seek + 1.0–2.0× 倍速）——与 macOS 追平
-- 双端共用一份 design tokens，两个平台都有真正的应用图标
-- 订阅 RSS 播客源（RSS 2.0 + iTunes 标签），刷新时检测新单集
-- 单集下载到本地缓存；倍速播放（1.0–2.0×），从上次进度继续
-- 逐句转写稿，跟随播放高亮（点句子即跳转）
-- 逐句对照翻译，双语 / 只看译文 / 只看原文三种视图
-- 结构化总结（TL;DR、要点、引用、话题）
-- 自带 key：OpenAI、DeepSeek、Groq、SiliconFlow、Ollama，任意 OpenAI 兼容端点
-- 内置经典英文播客精选目录（科技/科学/商业/设计），「发现」面板一键添加，绝不自动订阅；每个条目发布前都用 `scripts/verify-catalog.rkt` 实测可达
-- 同一「发现」面板支持全目录搜索（iTunes Search API，无需 key）——结果自带 Apple 权威 feed 地址
-- agent 友好的 CLI，与 GUI 共用同一核心（`add`、`episodes`、`transcribe`、`translate`、`summarize`、`show`、`search`、`--json`、退出码 0/1/2）
+- **一键听懂**：下载 → 转写 → 翻译 → 总结一次排队完成——已完成的阶段重跑时自动跳过，动手前还显示句数/字符数成本估算
+- 订阅 RSS 播客源（RSS 2.0 + iTunes 标签），刷新检测新单集，每 30 分钟自动刷新（macOS 弹新单集系统通知）
+- 播放：1.0–3.0× 倍速、±15/30 秒跳转、睡眠定时器、章节跳转（Podcasting 2.0 `podcast:chapters`）、连续播放接下一集、启动续播、系统媒体键 + Control Center（macOS）/ SMTC（Windows）
+- 逐句转写稿跟随播放高亮（点句子即跳转）；逐句对照翻译，双语 / 只看译文 / 只看原文三种视图
+- 结构化总结（TL;DR、要点、引用、话题），附 feed 自带的节目介绍
+- 媒体库基础：已播/未播标记、每档未播徽章、单集任务进度
+- 「发现」面板：经典英文播客精选目录 + 全目录搜索（iTunes Search API，无需密钥，结果自带 Apple 权威 feed 地址）——绝不自动订阅
+- 自带 key（BYOK）：OpenAI、DeepSeek、Groq、SiliconFlow、Ollama，任意 OpenAI 兼容端点
+- agent 友好的 CLI，与 GUI 共用同一核心（`add`、`episodes`、`pipeline`、
+  `estimate`、`transcribe`、`translate`、`summarize`、`show`、`export`、
+  `find`、`done`、`search`、`--json`、退出码 0/1/2）
 - 签名的应用内更新（Ed25519 清单 + SHA-256，见 [docs/UPDATE.md](docs/UPDATE.md)）
+- [使用手册](https://podlens.jrtx.site/guide.html)：五分钟上手、BYOK 配置与常见问题
 
 ## 快速开始
 
@@ -89,7 +90,7 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 
 ```bash
 git clone https://github.com/turinglambdaai/podlens && cd podlens
-raco pkg install --auto --no-docs --link /path/to/rivet
+raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
 racket app/cli.rkt add "https://feeds.example.com/show.xml"
 racket app/cli.rkt episodes <feed-id>
 racket app/cli.rkt transcribe <episode-id>
@@ -108,10 +109,10 @@ podlens/
 │   ├── backend.rkt         # RVT1 契约（21 个 RPC、5 个事件、1 个 State）
 │   ├── update.rkt          # 签名清单更新检查
 │   ├── cli.rkt             # agent 向 CLI（--json、退出码）
-│   └── core/               # feeds、library、config、openai、pipeline、i18n
+│   └── core/               # feeds、library、config、openai、pipeline、chapters、i18n
 ├── macos-host/             # SwiftUI 宿主（播放器、逐句稿、更新服务）
 ├── windows/                # WinUI 3 宿主（C++/WinRT code-behind）
-├── tests/                  # 19 个后端测试（含假 OpenAI 服务器，无需真实 key）
+├── tests/                  # 41 个后端测试（含假 OpenAI 服务器，无需真实 key）
 ├── scripts/                # update-keys.sh、make-update-manifest.sh、make-icons.py
 ├── docs/                   # UPDATE.md（更新契约）· DESIGN-ROADMAP.md（M1–M5）
 ├── site/                   # podlens.jrtx.site（GitHub Pages）
@@ -120,10 +121,10 @@ podlens/
 
 ## 开发
 
-前置：[Racket CS](https://racket-lang.org/)（stable）并 link Rivet 包；平台工具链（macOS 装 Xcode CLT，Windows 装 VS 2022 WinUI 工作负载）。
+前置：[Racket CS](https://racket-lang.org/)（stable）并安装 pinned 的 Rivet 包；平台工具链（macOS 装 Xcode CLT，Windows 装 VS 2022 WinUI 工作负载）。
 
 ```bash
-raco pkg install --auto --no-docs --link /path/to/rivet
+raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
 raco rivet doctor
 raco rivet dev          # 构建并启动当前平台宿主
 raco test tests/        # 后端测试（假服务器，不需要真实 key）
@@ -131,10 +132,11 @@ raco test tests/        # 后端测试（假服务器，不需要真实 key）
 
 ## 诚实缺口
 
-- **Windows 播放尚无波形/无缝衔接/章节标记**——seek 与 1.0–2.0× 倍速已有（M1 已追平 macOS 布局）
+- **无波形、无缝衔接或 Up Next 队列**——seek、±15/30 秒跳转、1.0–3.0× 倍速、睡眠定时器、章节跳转和连续播放已有；可拖拽排序的队列没有
+- **章节仅支持 Podcasting 2.0 feed 指针**——内嵌 ID3/M4A 章节原子未解析；分章总结刻意不做（LLM 账单 ×N）
+- **翻译成本只受你的用量约束**——选中单集的每一句都走你的 API，长单集花费真金白银。操作区会先显示句数/字符数估算，`podlens estimate <id>` 也能打印
+- **一次一种目标语言**——改 `target-lang` 后流水线会重新翻译
 - **macOS 构建为 ad-hoc 签名**——CI 配置公证证书之前，首次启动需要右键 → 打开
-- **翻译成本上不封顶**——选中单集的每一句都会走你的 API，长单集花费真金白银
-- **一次一种目标语言**——改 `target-lang` 后需要重新翻译
 
 ## 路线图
 
@@ -142,12 +144,15 @@ raco test tests/        # 后端测试（假服务器，不需要真实 key）
 
 - [x] RSS 订阅 + 单集缓存 + 播放进度
 - [x] ASR / 翻译 / 总结流水线，任务进度事件
+- [x] 一键听懂（pipeline RPC）+ 成本估算
 - [x] SwiftUI + WinUI 3 宿主共用一份 RVT1 契约
 - [x] Ed25519 签名更新通道
+- [x] 系统媒体键（Control Center / SMTC）、跳转、睡眠定时器、3× 倍速
+- [x] 章节标记（Podcasting 2.0）、已播标记、未播徽章、连续播放、启动续播
 - [ ] macOS 公证 + Windows Authenticode 签名发布
-- [ ] 章节标记与分章总结
-- [ ] 收听统计与生词导出
-- [ ] 移动端伴随 —— iOS / iPadOS + Android 宿主、watchOS 遥控（设计见 [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md)）
+- [ ] 分章总结、收听统计与生词导出
+- [ ] 移动端伴随——iOS / iPadOS + Android 宿主、watchOS 遥控
+      （设计见 [docs/DESIGN-ROADMAP.md](docs/DESIGN-ROADMAP.md)）
 
 ## 许可
 

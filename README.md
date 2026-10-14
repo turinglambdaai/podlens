@@ -2,7 +2,7 @@
 
 Podcasts, in your language. A cross-platform desktop podcast player that transcribes, translates and summarizes English episodes with your own LLM API key — for listeners who understand far more reading than hearing.
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turinglambdaai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -14,7 +14,7 @@ Download from [Releases](https://github.com/turinglambdaai/podlens/releases/late
 |---|---|---|
 | macOS 14+ (Apple Silicon & Intel) | `podlens-<version>-macos-<arch>.dmg` — `arm64` / `x64` (ad-hoc signed — first launch: right-click → Open) | in-app (signed manifest), or reinstall the newer DMG |
 | Windows 10+ x64 | `podlens-<version>-windows-x64.msi` installer (start-menu & desktop shortcuts), or `podlens-<version>-windows-x64.zip` portable | portable: in-app download & install (signed manifest); MSI: re-run the newer installer (the app points you to it) |
-| Linux | planned — no downloads yet; a GTK4 host is on the roadmap, after the Windows in-app update work | — |
+| Linux | planned — no downloads yet; a GTK4 host is on the roadmap | — |
 
 Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
 (`gh attestation verify <file> -R turinglambdaai/podlens`).
@@ -62,7 +62,7 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 - Playback uses the platform media stack; the audio cache lives in `~/.podlens/audio/`
 - The UI talks only to the typed contract in `app/backend.rkt` — changing it is a cross-platform release
 
-## What ships in 1.3
+## What's inside
 
 - **One-click Understand**: download → transcribe → translate → summarize as a single job — finished stages are skipped on re-run, and a cost estimate (sentences/characters) shows before you start
 - Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection, auto-refresh every 30 minutes with new-episode notifications (macOS)
@@ -92,7 +92,7 @@ Add a podcast RSS URL, pick an episode, press **转写 → 翻译 → 总结** (
 
 ```bash
 git clone https://github.com/turinglambdaai/podlens && cd podlens
-raco pkg install --auto --no-docs --link /path/to/rivet
+raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
 racket app/cli.rkt add "https://feeds.example.com/show.xml"
 racket app/cli.rkt episodes <feed-id>
 racket app/cli.rkt transcribe <episode-id>
@@ -115,7 +115,7 @@ podlens/
 │   └── core/               # feeds, library, config, openai, pipeline, chapters, i18n
 ├── macos-host/             # SwiftUI host (player, transcript, updater)
 ├── windows/                # WinUI 3 host (C++/WinRT code-behind)
-├── tests/                  # 19 backend tests incl. a fake OpenAI server
+├── tests/                  # 41 backend tests incl. a fake OpenAI server
 ├── scripts/                # update-keys.sh, make-update-manifest.sh, make-icons.py
 ├── docs/                   # UPDATE.md (update contract) · DESIGN-ROADMAP.md (M1–M5)
 ├── site/                   # podlens.jrtx.site (GitHub Pages)
@@ -124,10 +124,10 @@ podlens/
 
 ## Development
 
-Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the Rivet package linked, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows).
+Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the pinned Rivet package installed, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows).
 
 ```bash
-raco pkg install --auto --no-docs --link /path/to/rivet
+raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
 raco rivet doctor
 raco rivet dev          # build + launch the current platform's host
 raco test tests/        # backend tests (no API key needed — fake server)

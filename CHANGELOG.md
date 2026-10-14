@@ -3,7 +3,41 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
-## Unreleased
+## [0.1.3] - 2026-10-14
+
+### Changed
+
+- **The updater is rebuilt on `rivet/distribution` and the shared
+  `RivetUpdate` host module** (the family pattern, adopted by taskly
+  first). The Racket engine retires its hand-rolled OpenSSL 3 subprocess
+  scheme — manifest fetch/verify, update selection and the download now
+  run through rivet's `fetch-update-manifest` / `select-update` /
+  `download-update`, with the Ed25519 work done in-process (no PATH
+  dependence, no temp-file dance). The macOS host shrinks to a product
+  adapter over rivet 0.8.1's `RivetUpdate` module: delegate-driven
+  download with request timeouts, signed-size enforcement, atomic swap
+  with rollback, and a stale work-dir sweep. The download worker gained
+  the family watchdog — no byte progress for 120 s or 30 minutes total
+  breaks the thread, so a stalled network always reaches a terminal
+  state instead of hanging the update. The sticky rollout bucket now
+  draws from cryptographic randomness (the seeded PRNG would put every
+  fresh install in the same lockstep bucket).
+- CI and the macOS host consume a pinned rivet (`v0.11.0`): the
+  workflows install rivet from its git tag instead of the moving catalog
+  head, and `macos-host/Package.swift` consumes the root rivet package
+  (`rivet#238`) instead of the retired `platform/macos` subpath.
+
+### Added
+
+- User manual: `site/guide.html` (bilingual, linked from the site nav) —
+  five-minute start, subscriptions / transcription / translation /
+  summary / BYOK setup, and a FAQ (data location, accounts, updates).
+- The site shows a real macOS screenshot beside the Windows ones.
+
+### Fixed
+
+- The signed-manifest test suite selects its artifact by the running
+  platform, so the backend tests pass on every OS again.
 
 ## 0.1.2 - 2026-10-12
 

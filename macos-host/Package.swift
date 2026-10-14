@@ -19,16 +19,18 @@ let package = Package(
     name: "RivetHost",
     platforms: [.macOS(macosMinVersion)],
     dependencies: [
-        .package(path: rivetRoot + "/platform/macos")
+        // The root rivet package (issue rivet#238): consumed as a package,
+        // never as compiled-in sources.
+        .package(path: rivetRoot)
     ],
     targets: [
         .executableTarget(
             name: "RivetHost",
             dependencies: [
-                .product(name: "RivetRuntime", package: "macos"),
-                .product(name: "RivetEmbedding", package: "macos"),
-                .product(name: "RivetSystem", package: "macos"),
-                .product(name: "RivetUpdate", package: "macos")
+                .product(name: "RivetRuntime", package: "rivet"),
+                .product(name: "RivetEmbedding", package: "rivet"),
+                .product(name: "RivetSystem", package: "rivet"),
+                .product(name: "RivetUpdate", package: "rivet")
             ],
             path: "Sources/RivetHost",
             linkerSettings: [
