@@ -160,13 +160,28 @@ final class AppModel: ObservableObject {
 /// The app-wide update service, held at file scope instead of as an
 /// AppModel stored property: the Intel release runner's older swiftc
 /// (6.1.2) crashes in SILGen while emitting `UpdateService()` inside
-/// AppModel members — both the property initializer and the lazy getter
-/// crash, while arm64 compiles the same code fine. A static constant
-/// keeps the lifetime the property had: the app holds exactly one
-/// instance, first touched on the main actor.
+/// AppModel members — the stored property initializer, the lazy getter
+/// and a global `static let` initializer all crash (reproduced locally
+/// with a swift.org 6.1.2 toolchain; the stack dies in
+/// emitLazyGlobalInitializer → emitApply). A memoized computed property
+/// keeps the lifetime the property had — exactly one instance, created
+/// on first touch — without any global initializer to lower, and the
+/// constructor is invoked with explicit arguments so the crash-prone
+/// default-argument machinery stays out of the call site.
 @MainActor
 enum UpdateServices {
-    static let shared = UpdateService()
+    private static var _shared: UpdateService?
+    static var shared: UpdateService {
+        if let shared = _shared { return shared }
+        let shared = UpdateService(
+            feedURL: UpdateService.manifestURL,
+            sessionConfiguration: nil,
+            keyBase64: UpdateService.publicKeyBase64,
+            currentVersion: nil,
+            bundleURL: nil)
+        _shared = shared
+        return shared
+    }
 }
 
 enum HostError: Error, CustomStringConvertible {
