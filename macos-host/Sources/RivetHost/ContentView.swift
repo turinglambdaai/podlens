@@ -21,8 +21,10 @@ struct ContentView: View {
             .sheet(isPresented: model.showSettingsBinding) {
                 SettingsSheet()
             }
-            .sheet(item: updateDialog) { manifest in
-                UpdateSheet(manifest: manifest)
+            .sheet(isPresented: Binding(
+                get: { model.store.updateOutcome != nil },
+                set: { if !$0 { model.store.updateOutcome = nil } })) {
+                UpdateSheet()
             }
     }
 
@@ -34,19 +36,6 @@ struct ContentView: View {
         } detail: {
             DetailView()
         }
-    }
-
-    private var updateDialog: Binding<UpdateService.Manifest?> {
-        let store = model.store
-        return Binding(
-            get: {
-                var found: UpdateService.Manifest?
-                if case .success(.available(let m)) = store.updateOutcome {
-                    found = m
-                }
-                return found
-            },
-            set: { _ in store.updateOutcome = nil })
     }
 }
 
@@ -761,6 +750,10 @@ struct SettingsSheet: View {
 
             Text(L("settingsDesc")).font(.caption2).foregroundStyle(.secondary)
 
+            Divider()
+
+            aboutSection
+
             HStack {
                 if saved { Text(L("settingsSaved")).foregroundStyle(.green) }
                 Button(L("cancel")) { dismiss() }
@@ -770,6 +763,30 @@ struct SettingsSheet: View {
         }
         .padding(24)
         .task { load() }
+    }
+
+    /// About block: version, license and the support surface (taskly's
+    /// AboutSheet facts) — a bug report starts one click away.
+    private var aboutSection: some View {
+        VStack(spacing: 6) {
+            Text("PodLens v\(version)")
+                .font(.callout.bold())
+            Text(L("aboutLicense"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 20) {
+                Link(L("aboutWebsite"),
+                     destination: URL(string: "https://podlens.jrtx.site")!)
+                Link(L("aboutReportIssue"),
+                     destination: URL(string: "https://github.com/turinglambdaai/podlens/issues")!)
+            }
+            .font(.caption)
+        }
+    }
+
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? RivetGeneratedConfig.version
     }
 
     private func load() {
@@ -793,27 +810,64 @@ struct SettingsSheet: View {
 
 // MARK: update sheet
 
+/// Every terminal check outcome reaches this sheet (docs/UPDATE.md): an
+/// available update offers install, an up-to-date answer confirms it, and a
+/// failure shows the error — selectable, so it can travel into a bug report.
+/// Silent launch-time checks only ever assign `.available`, so those never
+/// nag.
 struct UpdateSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    let manifest: UpdateService.Manifest
 
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 40))
                 .foregroundStyle(Color.accentColor)
-            Text(L("updateAvailableTitle")).font(.headline)
-            Text(String(format: L("updateAvailableBody"), manifest.version))
-            HStack {
-                Button(L("updateLater")) { dismiss() }
-                Button(L("updateRestart")) {
-                    dismiss()
-                    Task { await model.installUpdate(manifest) }
+
+            switch model.store.updateOutcome {
+            case .some(.success(.available(let manifest))):
+                Text(L("updateAvailableTitle")).font(.headline)
+                Text(String(format: L("updateAvailableBody"), manifest.version))
+                HStack {
+                    Button(L("updateLater")) { dismiss() }
+                    Button(L("updateRestart")) {
+                        dismiss()
+                        Task { await model.installUpdate(manifest) }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+
+            case .some(.success(.upToDate)):
+                Text(L("updateUpToDate")).font(.headline)
+                Button(L("dialogOk")) { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+
+            case .some(.failure(let error)):
+                Text(String(format: L("updateCheckFailed"), Self.message(error)))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: 320)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button(L("cancel")) { dismiss() }
+                    Button(L("menuCheckUpdates")) {
+                        model.checkForUpdates(manual: true)
+                    }
+                }
+
+            case .none:
+                EmptyView()
             }
         }
         .padding(28)
+        .frame(width: 360)
+    }
+
+    private static func message(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
