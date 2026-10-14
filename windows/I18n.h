@@ -188,6 +188,10 @@ inline constexpr Entry kStrings[] = {
     {"update.quit_and_install", L"退出并安装", L"Quit and install"},
     {"update.install_failed", L"安装更新失败：%s。当前版本不受影响。",
      L"Installing the update failed: %s. Your current version is unaffected."},
+    {"update.copy_error", L"复制错误信息", L"Copy error"},
+    {"about.license", L"以 GNU AGPL-3.0 授权发布", L"Released under the GNU AGPL-3.0"},
+    {"about.website", L"访问官网", L"Website"},
+    {"about.issue", L"问题反馈", L"Report an Issue"},
 };
 
 // Look up a UI string in the build-time language. Unknown keys return an

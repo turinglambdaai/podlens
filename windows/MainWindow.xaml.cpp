@@ -2178,6 +2178,7 @@ void MainWindow::RunSettingsDialog() {
   auto const weak = get_weak();
   std::thread([weak, dispatcher]() mutable {
     std::string error;
+    std::string version;
     std::vector<std::vector<std::string>> rows;
     if (weak.get()) {
       try {
@@ -2185,16 +2186,24 @@ void MainWindow::RunSettingsDialog() {
       } catch (std::exception const& e) {
         error = e.what();
       }
-    }
-    dispatcher.TryEnqueue([weak, rows = std::move(rows), error]() mutable {
-      if (auto window = weak.get()) {
-        window->ShowSettingsDialog(rows, error);
+      try {
+        version = weak.get()->api_->get_version().get();
+      } catch (...) {
+        // The About block degrades to no version line; settings still show.
       }
-    });
+    }
+    dispatcher.TryEnqueue(
+        [weak, rows = std::move(rows), version = std::move(version),
+         error]() mutable {
+          if (auto window = weak.get()) {
+            window->ShowSettingsDialog(rows, version, error);
+          }
+        });
   }).detach();
 }
 
 void MainWindow::ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
+                                    std::string const& version,
                                     std::string const& error) {
   if (!error.empty()) {
     SetStatus(false, to_wide(error));
@@ -2238,6 +2247,37 @@ void MainWindow::ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
   hint.FontSize(12);
   hint.Opacity(0.6);
   panel.Children().Append(hint);
+
+  // About block (the mac settings sheet's facts): version, license and the
+  // support links, so a bug report starts one click away.
+  muxc::StackPanel about;
+  about.Spacing(2);
+  if (!version.empty()) {
+    muxc::TextBlock about_version;
+    about_version.Text(L"PodLens v" + to_wide(version));
+    about_version.FontSize(13);
+    about_version.FontWeight(Microsoft::UI::Text::FontWeights::SemiBold());
+    about.Children().Append(about_version);
+  }
+  muxc::TextBlock license;
+  license.Text(winrt::hstring(std::wstring(podlens::Tr("about.license"))));
+  license.FontSize(11);
+  license.Opacity(0.7);
+  about.Children().Append(license);
+  auto website = muxc::HyperlinkButton{};
+  website.Content(winrt::box_value(
+      winrt::hstring(std::wstring(podlens::Tr("about.website")))));
+  website.NavigateUri(winrt::Windows::Foundation::Uri{L"https://podlens.jrtx.site"});
+  website.Padding({0, 0, 0, 0});
+  about.Children().Append(website);
+  auto issue = muxc::HyperlinkButton{};
+  issue.Content(winrt::box_value(
+      winrt::hstring(std::wstring(podlens::Tr("about.issue")))));
+  issue.NavigateUri(winrt::Windows::Foundation::Uri{
+      L"https://github.com/turinglambdaai/podlens/issues"});
+  issue.Padding({0, 0, 0, 0});
+  about.Children().Append(issue);
+  panel.Children().Append(about);
 
   muxc::ScrollViewer scroll;
   scroll.Content(panel);

@@ -164,7 +164,11 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ShowUpdateDialog(std::wstring const& title, std::wstring const& body,
                         std::wstring const& primary_button,
                         std::wstring const& close_button,
-                        std::function<void()> on_primary);
+                        std::function<void()> on_primary,
+                        std::wstring const& copy_button = std::wstring());
+  void ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
+                          std::string const& version,
+                          std::string const& error);
 
   struct FeedRow {
     std::string id;

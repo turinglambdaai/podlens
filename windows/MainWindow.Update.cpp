@@ -450,7 +450,8 @@ void MainWindow::FailDownload(std::string const& message) {
   ShowUpdateDialog(L"PodLens",
                    FormatUpdateMessage("update.install_failed",
                                        to_wide(message)),
-                   L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
+                   L"", std::wstring(podlens::Tr("dialog.close")), nullptr,
+                   std::wstring(podlens::Tr("update.copy_error")));
 }
 
 // ---------- install handoff ------------------------------------------------------
@@ -476,7 +477,8 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
   if (work.empty()) {
     ShowUpdateDialog(L"PodLens",
                      FormatUpdateMessage("update.install_failed", L"temp"),
-                     L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
+                     L"", std::wstring(podlens::Tr("dialog.close")), nullptr,
+                     std::wstring(podlens::Tr("update.copy_error")));
     return;
   }
   std::error_code ec;
@@ -491,7 +493,8 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
       ShowUpdateDialog(
           L"PodLens",
           FormatUpdateMessage("update.install_failed", L"script"), L"",
-          std::wstring(podlens::Tr("dialog.close")), nullptr);
+          std::wstring(podlens::Tr("dialog.close")), nullptr,
+          std::wstring(podlens::Tr("update.copy_error")));
       return;
     }
     auto const batch = update_handoff_batch(::GetCurrentProcessId());
@@ -501,7 +504,8 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
       ShowUpdateDialog(
           L"PodLens",
           FormatUpdateMessage("update.install_failed", L"script"), L"",
-          std::wstring(podlens::Tr("dialog.close")), nullptr);
+          std::wstring(podlens::Tr("dialog.close")), nullptr,
+          std::wstring(podlens::Tr("update.copy_error")));
       return;
     }
   }
@@ -525,7 +529,8 @@ void MainWindow::InstallDownloadedUpdate(std::wstring const& zip_path) {
     ShowUpdateDialog(
         L"PodLens",
         FormatUpdateMessage("update.install_failed", L"handoff"), L"",
-        std::wstring(podlens::Tr("dialog.close")), nullptr);
+        std::wstring(podlens::Tr("dialog.close")), nullptr,
+        std::wstring(podlens::Tr("update.copy_error")));
     return;
   }
   // The handoff script takes it from here: it waits for this process to
@@ -569,7 +574,8 @@ void MainWindow::HandleInstallMarkers() {
       FormatUpdateMessage("update.install_failed",
                           to_wide(code.empty() ? std::string("unknown")
                                                : code)),
-      L"", std::wstring(podlens::Tr("dialog.close")), nullptr);
+      L"", std::wstring(podlens::Tr("dialog.close")), nullptr,
+      std::wstring(podlens::Tr("update.copy_error")));
 }
 
 // ZIP便携版语义: a copy without the packaged layout (embedded backend at
@@ -615,13 +621,17 @@ bool MainWindow::IsMsiInstall() {
 // ---------- update dialogs -------------------------------------------------------
 
 // One dialog helper for the whole update flow. An empty primary label hides
-// the primary button (WinUI), so info dialogs pass L"". A failed ShowAsync
-// (another dialog already up) is swallowed instead of stacking modals.
+// the primary button (WinUI), so info dialogs pass L"". A non-empty
+// copy_button adds a secondary "copy error" button that puts the failure
+// message on the clipboard (taskly's pattern) — only real failure dialogs
+// pass it. A failed ShowAsync (another dialog already up) is swallowed
+// instead of stacking modals.
 void MainWindow::ShowUpdateDialog(std::wstring const& title,
                                   std::wstring const& body,
                                   std::wstring const& primary_button,
                                   std::wstring const& close_button,
-                                  std::function<void()> on_primary) {
+                                  std::function<void()> on_primary,
+                                  std::wstring const& copy_button) {
   muxc::ContentDialog dialog;
   dialog.Title(winrt::box_value(winrt::hstring(title)));
   dialog.Content(winrt::box_value(winrt::hstring(body)));
@@ -629,12 +639,15 @@ void MainWindow::ShowUpdateDialog(std::wstring const& title,
     dialog.PrimaryButtonText(winrt::hstring(primary_button));
     dialog.DefaultButton(muxc::ContentDialogButton::Primary);
   }
+  if (!copy_button.empty()) {
+    dialog.SecondaryButtonText(winrt::hstring(copy_button));
+  }
   dialog.CloseButtonText(winrt::hstring(close_button));
   dialog.XamlRoot(Content().XamlRoot());
 
   auto const weak = get_weak();
   auto op = dialog.ShowAsync();
-  op.Completed([weak, on_primary = std::move(on_primary)](
+  op.Completed([weak, body, on_primary = std::move(on_primary)](
                    winrt::Windows::Foundation::IAsyncOperation<
                        muxc::ContentDialogResult> const& sender,
                    winrt::Windows::Foundation::AsyncStatus) {
@@ -647,6 +660,17 @@ void MainWindow::ShowUpdateDialog(std::wstring const& title,
     if (result == muxc::ContentDialogResult::Primary && weak.get() &&
         on_primary) {
       on_primary();
+    }
+    if (result == muxc::ContentDialogResult::Secondary) {
+      try {
+        winrt::Windows::ApplicationModel::DataTransfer::DataPackage package;
+        package.SetText(body);
+        winrt::Windows::ApplicationModel::DataTransfer::Clipboard::SetContent(
+            package);
+      } catch (...) {
+        // The clipboard can be briefly held by another process; the failure
+        // text also lands in update-failed.txt, so nothing is lost.
+      }
     }
   });
 }
