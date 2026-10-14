@@ -137,9 +137,69 @@ jobs:
             dist/podlens-*-windows-x64.zip.sha256
           if-no-files-found: error
 
+  linux:
+    name: Linux (${{ matrix.arch }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up embeddable Racket CS
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.11.0
+      # Installed after the embeddable runtime so the catalog dependency
+      # closure (cext-lib, crypto-lib, keel) resolves against the minimal
+      # build — it ships no packages of its own. crypto backs the updater.
+      - name: Install Rivet (catalog) and backend packages
+        run: |
+          raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+          raco pkg install --auto --no-docs crypto
+      - name: Install GTK4, GStreamer, rpm and packaging tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libgtk-4-dev libadwaita-1-dev libjson-glib-dev libsecret-1-dev \
+            libglib2.0-dev cmake ninja-build pkg-config file \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            rpm desktop-file-utils
+      # tar.gz (the update-feed payload) + deb + rpm + AppImage + portable
+      # zip + SBOM, launch smoke included. The deb side-payload ships the
+      # GStreamer plugin closure (base/good + gst-libav) so m4a/mp3 play on
+      # stock Debian/Ubuntu; the AppImage carries its own GTK4 closure, and
+      # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run on the runner.
+      - name: Release (tar.gz + deb + rpm + AppImage + portable zip)
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: raco rivet release --without-updates --development
+      - name: Collect artifacts + checksums
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.arch }}"
+          cd dist
+          mv sbom.cdx.json "podlens-${VERSION}-linux-${ARCH}.sbom.cdx.json"
+          mv THIRD_PARTY_NOTICES.txt "podlens-${VERSION}-linux-${ARCH}-THIRD_PARTY_NOTICES.txt"
+          for f in podlens-*; do
+            case "$f" in
+              *.sha256) ;;
+              *) [ -f "$f.sha256" ] || sha256sum "$f" > "$f.sha256" ;;
+            esac
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/podlens-*
+          if-no-files-found: error
+
   release:
     name: Sign manifest + publish
-    needs: [macos, windows]
+    needs: [macos, windows, linux]
     runs-on: macos-latest
     env:
       HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
@@ -180,6 +240,14 @@ jobs:
           cp "podlens-${VERSION}-macos-x64.zip" podlens-macos-x64.zip
           cp "podlens-${VERSION}-windows-x64.msi" podlens-windows-x64.msi
           cp "podlens-${VERSION}-windows-x64.zip" podlens-windows-x64.zip
+          # rivet names the linux installers with their distro arch strings;
+          # the aliases normalize them to the family's x64/arm64.
+          cp "podlens-${VERSION}-linux-amd64.deb" podlens-linux-x64.deb
+          cp "podlens-${VERSION}-linux-arm64.deb" podlens-linux-arm64.deb
+          cp "podlens-${VERSION}-linux-x86_64.AppImage" podlens-linux-x64.AppImage
+          cp "podlens-${VERSION}-linux-aarch64.AppImage" podlens-linux-arm64.AppImage
+          cp "podlens-${VERSION}-linux-x64.tar.gz" podlens-linux-x64.tar.gz
+          cp "podlens-${VERSION}-linux-arm64.tar.gz" podlens-linux-arm64.tar.gz
           ls -la
       - name: Generate + sign update manifest
         if: env.HAS_UPDATE_KEY == 'true'

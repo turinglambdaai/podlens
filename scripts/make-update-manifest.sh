@@ -8,7 +8,10 @@
 #               the release pipeline produces:
 #                 podlens-<ver>-macos-arm64.zip   podlens-<ver>-macos-x64.zip
 #                 podlens-<ver>-windows-x64.zip
-#               (the DMG and the MSI are human installers, not feed entries)
+#                 podlens-<ver>-linux-x64.tar.gz
+#                 podlens-<ver>-linux-arm64.tar.gz
+#               (the DMG/MSI/deb/rpm/AppImage are human installers, not feed
+#               entries; Linux hosts update through the tar.gz)
 #   <key-path>  Ed25519 private key PEM (default: $UPDATE_KEY_PATH, then
 #               ~/.podlens/update-signing-key.pem)
 #
@@ -30,7 +33,9 @@ VERSION="${TAG#v}"
 
 for artifact in "$DIST/podlens-$VERSION-macos-arm64.zip" \
                 "$DIST/podlens-$VERSION-macos-x64.zip" \
-                "$DIST/podlens-$VERSION-windows-x64.zip"; do
+                "$DIST/podlens-$VERSION-windows-x64.zip" \
+                "$DIST/podlens-$VERSION-linux-x64.tar.gz" \
+                "$DIST/podlens-$VERSION-linux-arm64.tar.gz"; do
   [[ -f "$artifact" ]] || { echo "error: missing $artifact" >&2; exit 1; }
 done
 [[ -f "$KEY" ]] || { echo "error: missing signing key $KEY (see scripts/update-keys.sh)" >&2; exit 1; }
@@ -111,7 +116,11 @@ cat > "$SCRIPT" <<RKT
                          (artifact 'macos 'x64
                                    (format "podlens-~a-macos-x64.zip" version) 'zip)
                          (artifact 'windows 'x64
-                                   (format "podlens-~a-windows-x64.zip" version) 'zip))))
+                                   (format "podlens-~a-windows-x64.zip" version) 'zip)
+                         (artifact 'linux 'x64
+                                   (format "podlens-~a-linux-x64.tar.gz" version) 'targz)
+                         (artifact 'linux 'arm64
+                                   (format "podlens-~a-linux-arm64.tar.gz" version) 'targz))))
 
 ;; write-signed-manifest validates the struct against the manifest schema
 ;; before signing, so a malformed manifest fails the release instead of
@@ -124,7 +133,7 @@ cat > "$SCRIPT" <<RKT
                            key-id
                            out)
     (newline out)))
-(printf "manifest: ~a (3 artifacts, key-id ~a)\\n"
+(printf "manifest: ~a (5 artifacts, key-id ~a)\\n"
         (build-path dist "update-manifest.json") key-id)
 RKT
 
