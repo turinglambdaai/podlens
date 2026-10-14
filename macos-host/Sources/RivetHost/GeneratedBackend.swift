@@ -7,7 +7,7 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "PodLens"
-    public static let version = "0.1.3"
+    public static let version = "0.2.0"
     public static let build: Int64 = 1
     public static let identifier = "site.jrtx.podlens"
     public static let releaseChannel = "stable"

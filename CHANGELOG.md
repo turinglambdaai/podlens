@@ -5,6 +5,8 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+## 0.2.0 - 2026-10-15
+
 ### Added
 - **The Linux host ships.** A GTK4 first-party host lands in `linux/` —
   subscriptions, episode cards with status chips, feed add/remove/refresh
