@@ -606,6 +606,7 @@
    "  position <episode-id> <s>  remember a playback position\n"
    "  config [key [value]]       read or set settings\n"
    "  check-updates              signed update check\n"
+   "  version                    print the app version\n"
    "  doctor                     health check\n"
    "  --json                     machine-readable output\n"
    "\n"
