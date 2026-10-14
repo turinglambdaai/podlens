@@ -14,7 +14,7 @@ Download from [Releases](https://github.com/turinglambdaai/podlens/releases/late
 |---|---|---|
 | macOS 14+ (Apple Silicon & Intel) | `podlens-<version>-macos-<arch>.dmg` — `arm64` / `x64` (ad-hoc signed — first launch: right-click → Open) | in-app (signed manifest), or reinstall the newer DMG |
 | Windows 10+ x64 | `podlens-<version>-windows-x64.msi` installer (start-menu & desktop shortcuts), or `podlens-<version>-windows-x64.zip` portable | portable: in-app download & install (signed manifest); MSI: re-run the newer installer (the app points you to it) |
-| Linux | planned — no downloads yet; a GTK4 host is on the roadmap | — |
+| Linux x64 / arm64 | `podlens-<version>-linux-x64.AppImage` / `podlens-<version>-linux-arm64.AppImage` (bundled GTK4), `podlens-<version>-linux-<distro-arch>.deb` (ships the GStreamer plugin closure incl. `gst-libav` for m4a/mp3), `.rpm`, or the portable `tar.gz`/`.zip` | tarball/AppImage: in-app check + download (signed manifest); deb/rpm: upgrade through the package manager |
 
 Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
 (`gh attestation verify <file> -R turinglambdaai/podlens`).
@@ -115,6 +115,7 @@ podlens/
 │   └── core/               # feeds, library, config, openai, pipeline, chapters, i18n
 ├── macos-host/             # SwiftUI host (player, transcript, updater)
 ├── windows/                # WinUI 3 host (C++/WinRT code-behind)
+├── linux/                  # GTK4 host (GStreamer playback; GeneratedBackend.hpp is generated)
 ├── tests/                  # 41 backend tests incl. a fake OpenAI server
 ├── scripts/                # update-keys.sh, make-update-manifest.sh, make-icons.py
 ├── docs/                   # UPDATE.md (update contract) · DESIGN-ROADMAP.md (M1–M5)
@@ -124,7 +125,7 @@ podlens/
 
 ## Development
 
-Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the pinned Rivet package installed, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows).
+Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the pinned Rivet package installed, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows, GTK4 + GStreamer dev packages on Linux).
 
 ```bash
 raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'

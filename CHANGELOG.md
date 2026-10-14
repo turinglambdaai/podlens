@@ -6,6 +6,30 @@ All notable changes to PodLens are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **The Linux host ships.** A GTK4 first-party host lands in `linux/` —
+  subscriptions, episode cards with status chips, feed add/remove/refresh
+  (all + per-feed), resume-on-launch, one-click Understand with a cost
+  estimate before the run, read-only transcript and summary panels, and
+  GStreamer `playbin` playback over the local audio cache (±15/30 s skip,
+  1.0–3.0× speed, chapter jumps, position writeback, click a transcript
+  line to seek). Episode jobs (download/transcribe/translate/summarize)
+  run with a job-progress bar; backend `notify` events surface as
+  freedesktop notifications; the settings dialog and About block match the
+  Windows host. The updater follows docs/UPDATE.md per install shape:
+  AppImage swaps in place and offers a restart, deb/rpm installs point at
+  the package manager, portable tarball installs get the extract hint —
+  silent launch checks are throttled to one per 4 hours and skip dev
+  copies and package-manager installs. UI text is English throughout,
+  matching the Windows host.
+- **Linux release pipeline.** CI gains a `linux-host` job (GTK4 +
+  GStreamer dev packages, embeddable Racket CS, `raco rivet build`,
+  headless boot smoke under Xvfb); releases build x64 and arm64 artifacts
+  — `tar.gz` (the signed update feed's Linux payload), `deb`, `rpm`,
+  `AppImage` and portable `zip` — with stable versionless aliases
+  (`podlens-linux-x64.deb`, `podlens-linux-x64.AppImage`, …). The deb
+  payload ships the GStreamer plugin closure (base/good + `gst-libav`) so
+  m4a/mp3 play on stock Debian/Ubuntu. The signed update manifest now
+  carries the two Linux `tar.gz` entries next to macOS and Windows.
 - **Every manual update check now reaches the screen.** The macOS sheet
   covers all terminal outcomes (the taskly UpdateSheet pattern): an
   available update offers install as before, an up-to-date answer gets a

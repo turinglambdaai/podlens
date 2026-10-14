@@ -10,6 +10,7 @@ PodLens 是**原生**播客应用（Rivet 架构）：解决「听不懂英文�
 |---|---|---|---|
 | macOS 14+ | SwiftUI + Rivet（嵌入式 Racket CS） | `macos-host/` | ✅ 构建+打包+启动已验证 |
 | Windows 10+ | WinUI 3 (C++/WinRT) + Rivet | `windows/` | 源码完成，CI 构建验证 |
+| Linux x64/arm64 | GTK4 + GStreamer + Rivet | `linux/` | 源码完成，CI 构建+headless 冒烟验证 |
 
 GUI 与 CLI 共用同一份 Racket 核心：无参数启动 GUI；CLI 走源码方式
 `racket app/cli.rkt <command>`（单文件自带运行时的 CLI 在路线图上）。
@@ -73,6 +74,7 @@ scripts/update-keys.sh
 ## 诚实缺口（不要在文档里夸口）
 
 - Windows 播放尚无波形/无缝衔接/章节标记（播放/seek/倍速 1.0–2.0 已有，M1 已追平 macOS）
+- Linux 宿主已追平 Windows 的播放/管线/设置/更新面；尚无连续播放（播完自动接下一集）、睡眠定时与发现页 UI（catalog RPC 已可用，UI 待跟进）
 - 发现页全目录搜索（`catalog-search` RPC）目前只在 macOS 宿主与 CLI 落地；Windows 发现面板还是纯精选目录，搜索 UI 待跟进
 - Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
 - macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
