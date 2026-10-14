@@ -317,6 +317,8 @@ MainWindow::MainWindow() {
       std::wstring(podlens::Tr("action.translate")))));
   SummarizeButton().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("action.summarize")))));
+  RemoveAudioButton().Content(box_value(winrt::hstring(
+      std::wstring(podlens::Tr("action.remove_audio")))));
   ModeLabel().Text(std::wstring(podlens::Tr("mode.label")));
   TranscriptTab().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("tab.transcript")))));
@@ -820,6 +822,7 @@ void MainWindow::UpdateActionButtons() {
     TranslateButton().IsEnabled(false);
     SummarizeButton().IsEnabled(false);
     MarkButton().IsEnabled(false);
+    RemoveAudioButton().Visibility(Visibility::Collapsed);
     return;
   }
   bool const transcript_running = episode->transcript_status == "running";
@@ -833,6 +836,10 @@ void MainWindow::UpdateActionButtons() {
   SummarizeButton().IsEnabled(episode->transcript_status == "done" &&
                               !summary_running && episode->summary_status != "done");
   MarkButton().IsEnabled(true);
+  // Delete Audio only makes sense while local audio exists (Linux parity)
+  RemoveAudioButton().Visibility(episode->downloaded ? Visibility::Visible
+                                                     : Visibility::Collapsed);
+  RemoveAudioButton().IsEnabled(true);
 }
 
 // ---- transcript ----------------------------------------------------------------
@@ -1170,7 +1177,12 @@ void MainWindow::TogglePlayPause() {
 void MainWindow::StopPlayback(bool save) {
   if (save) SavePosition(false);
   position_timer_.Stop();
-  if (player_) player_.Pause();
+  if (player_) {
+    player_.Pause();
+    // Drop the media along with the pause: a stale Source would let
+    // TogglePlayPause resurrect the previous episode after a switch.
+    player_.Source(nullptr);
+  }
   PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
   SetSmtcStatus(false);
 }
@@ -1576,6 +1588,7 @@ void MainWindow::StartJob(std::string const& kind, std::string const& episode_id
       if (kind == "download") f = weak.get()->api_->episode_download(episode_id);
       else if (kind == "transcribe") f = weak.get()->api_->episode_transcribe(episode_id);
       else if (kind == "translate") f = weak.get()->api_->episode_translate(episode_id);
+      else if (kind == "pipeline") f = weak.get()->api_->episode_pipeline(episode_id);
       else f = weak.get()->api_->episode_summarize(episode_id);
       job_id = f.get();
     } catch (std::exception const& e) {
@@ -1600,8 +1613,13 @@ void MainWindow::StartJob(std::string const& kind, std::string const& episode_id
       if (auto window = weak.get()) {
         window->ReloadEpisodes();
         if (window->selected_episode_id_ == episode_id) {
-          if (kind == "transcribe" || kind == "translate") window->LoadTranscript();
-          if (kind == "summarize") window->LoadSummary(episode_id);
+          if (kind == "transcribe" || kind == "translate" ||
+              kind == "pipeline") {
+            window->LoadTranscript();
+          }
+          if (kind == "summarize" || kind == "pipeline") {
+            window->LoadSummary(episode_id);
+          }
         }
       }
     });
@@ -2002,7 +2020,35 @@ void MainWindow::PlayPause_Click(winrt::Windows::Foundation::IInspectable const&
 
 void MainWindow::Pipeline_Click(winrt::Windows::Foundation::IInspectable const&,
                                 Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  // Runs the real episode-pipeline RPC; the cost estimate is already shown
+  // inline in the detail pane (LoadEstimate), so there is no extra confirm
+  // dialog like on Linux. Progress rides the shared poll-until-done loop.
   StartJob("pipeline", SelectedEpisodeId());
+}
+
+void MainWindow::RemoveAudio_Click(winrt::Windows::Foundation::IInspectable const&,
+                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  auto const episode_id = SelectedEpisodeId();
+  if (episode_id.empty() || !api_) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  (void)api_->episode_remove_audio_async(
+      episode_id,
+      [dispatcher, weak](rivet_app::Result<bool> result) {
+        // completions run off the UI thread; dispatch before touching XAML
+        dispatcher.TryEnqueue([weak, result]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              (void)result.get();
+              window->SetStatus(
+                  true, std::wstring(podlens::Tr("status.audio_removed")));
+            } catch (std::exception const& e) {
+              window->SetStatus(false, to_wide(e.what()));
+            }
+            window->ReloadEpisodes();
+          }
+        });
+      });
 }
 
 void MainWindow::MarkToggle_Click(winrt::Windows::Foundation::IInspectable const&,

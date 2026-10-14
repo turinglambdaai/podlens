@@ -19,8 +19,8 @@ All notable changes to PodLens are documented here. Format follows
   AppImage swaps in place and offers a restart, deb/rpm installs point at
   the package manager, portable tarball installs get the extract hint —
   silent launch checks are throttled to one per 4 hours and skip dev
-  copies and package-manager installs. UI text is English throughout,
-  matching the Windows host.
+  copies and package-manager installs. UI text is English on Linux by
+  design; the Windows and macOS hosts default to Chinese.
 - **Linux release pipeline.** CI gains a `linux-host` job (GTK4 +
   GStreamer dev packages, embeddable Racket CS, `raco rivet build`,
   headless boot smoke under Xvfb); releases build x64 and arm64 artifacts
@@ -41,6 +41,33 @@ All notable changes to PodLens are documented here. Format follows
   starts one click away from the failure it describes.
 - **GitHub issue templates** (bug report + feature request) so feedback
   from the About link lands structured.
+
+### Fixed
+- **Understand runs the pipeline, not a stray summarize.** The Windows
+  host's Understand button dispatched `"pipeline"` through a branch chain
+  with no pipeline arm, so it silently fell through to
+  `episode-summarize`. It now calls the real `episode-pipeline` RPC and
+  refreshes transcript and summary when the job completes. (Linux keeps
+  its event-driven job-progress bar; the Windows host still polls until
+  the job leaves `running`.)
+- **Switching episodes no longer resurrects the previous one.** Both
+  hosts kept the last episode's media attached after stopping — Linux
+  only reset the `playbin` state and Windows never cleared the player
+  source — so the next Play/Pause toggled the old audio back to life
+  under the new episode's UI. Episode switches now drop the media
+  (`uri` / `Source`) along with the playback state.
+- **Settings saves can no longer race shutdown.** The Linux host saved
+  the settings dialog on a detached thread holding a synchronous
+  `settings-set` call; the writes now ride the async API with each
+  completion dispatched back to the main loop.
+- **The seek bar respects an in-progress drag.** The Linux tick handler
+  flipped the user-seeking flag every second, letting programmatic slider
+  syncs fire seeks mid-drag; the sync now steps aside while the user is
+  dragging.
+- **Delete Audio reaches the Windows host.** The `action.remove_audio`
+  string table entry had no button; the episode detail pane now shows
+  Delete Audio while local audio exists, wired to the existing
+  `episode-remove-audio` RPC (parity with Linux).
 
 ### Changed
 - **Update failure text now leaves the screen with the user.** The macOS

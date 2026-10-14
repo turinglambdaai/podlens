@@ -159,6 +159,10 @@
                             <Button x:Name="TranslateButton" Padding="10,4" Click="Translate_Click" />
                             <Button x:Name="SummarizeButton" Padding="10,4" Click="Summarize_Click" />
                             <Button x:Name="MarkButton" Padding="10,4" Click="MarkToggle_Click" />
+                            <!-- only visible while the episode has local audio (parity
+                                 with the Linux host's Delete Audio button) -->
+                            <Button x:Name="RemoveAudioButton" Padding="10,4" Click="RemoveAudio_Click"
+                                    Visibility="Collapsed" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4"

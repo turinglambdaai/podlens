@@ -3,8 +3,10 @@
 // Interaction contract mirrors the Windows host (windows/MainWindow.xaml.cpp)
 // element for element: subscriptions in the sidebar, episode cards with
 // status chips, one-click Understand with a cost estimate, read-only
-// transcript/summary panels, and resume-on-launch. UI text is English,
-// matching the Windows host's current state (no i18n layer on this host).
+// transcript/summary panels, and resume-on-launch. UI text is English on
+// this host by design (no i18n layer here) — a deliberate split from the
+// Windows and macOS hosts, which both default to Chinese (each carries a
+// zh/en table without a runtime switch yet).
 //
 // Threading: boot the runtime off the UI thread; every completion/event is
 // dispatched back to the main loop (g_idle_add) before touching widgets.
@@ -223,7 +225,6 @@ struct AppState {
   GtkButton* summarize_button{nullptr};
   GtkButton* mark_button{nullptr};
   GtkButton* remove_audio_button{nullptr};
-  GtkLabel* feeds_caption{nullptr};
   GtkListBox* feed_list{nullptr};
   GtkLabel* episodes_caption{nullptr};
   GtkListBox* episode_list{nullptr};
@@ -253,7 +254,6 @@ struct AppState {
   GtkScale* seek_scale{nullptr};
   GtkLabel* position_text{nullptr};
   GtkLabel* duration_text{nullptr};
-  GtkComboBoxText* rate_selector{nullptr};
 
   GtkLabel* status_text{nullptr};
 
@@ -1234,6 +1234,9 @@ void stop_playback(bool save) {
   if (save) save_position(false);
   if (g_state.playbin != nullptr) {
     gst_element_set_state(g_state.playbin, GST_STATE_NULL);
+    // Drop the media along with the pipeline: a stale uri would let
+    // toggle_play_pause resurrect the previous episode after a switch.
+    g_object_set(g_state.playbin, "uri", nullptr, nullptr);
   }
   set_play_button_glyph(false);
 }
@@ -1332,11 +1335,13 @@ int on_player_tick(gpointer) {
   double const duration_sec =
       static_cast<double>(g_state.media_duration) / GST_SECOND;
 
-  g_state.user_seeking = true;
-  gtk_range_set_range(GTK_RANGE(g_state.seek_scale), 0,
-                      duration_sec > 0 ? duration_sec : 100);
-  gtk_range_set_value(GTK_RANGE(g_state.seek_scale), position);
-  g_state.user_seeking = false;
+  // Programmatic slider sync only while the user's hand is off the handle;
+  // stomping user_seeking here would break a drag in progress.
+  if (!g_state.user_seeking) {
+    gtk_range_set_range(GTK_RANGE(g_state.seek_scale), 0,
+                        duration_sec > 0 ? duration_sec : 100);
+    gtk_range_set_value(GTK_RANGE(g_state.seek_scale), position);
+  }
   gtk_label_set_text(g_state.position_text, format_seconds(position).c_str());
   gtk_label_set_text(g_state.duration_text,
                      format_seconds(duration_sec).c_str());
@@ -1827,6 +1832,37 @@ void on_about_activated(GSimpleAction*, GVariant*, gpointer) {
 using SettingsFields = std::vector<std::pair<std::string, GtkEntry*>>;
 using StringPairs = std::vector<std::pair<std::string, std::string>>;
 
+// Persist the dialog's rows one by one through the async API. Every RPC is
+// issued on the UI thread and each completion hops back through dispatch_ui,
+// so nothing here can race the runtime teardown at shutdown the way a
+// detached thread holding a synchronous settings_set call could.
+void save_settings_pairs(std::shared_ptr<StringPairs> pairs, size_t index) {
+  if (pairs == nullptr || g_state.api == nullptr) return;
+  if (index >= pairs->size()) {
+    set_status("Settings saved");
+    return;
+  }
+  auto const& [key, value] = (*pairs)[index];
+  (void)g_state.api->settings_set_async(
+      key, value,
+      [pairs = std::move(pairs), index](rivet_app::Result<bool> result) {
+        dispatch_ui([pairs = std::move(pairs), index,
+                     result = std::move(result)]() mutable {
+          if (!result.succeeded()) {
+            try {
+              std::rethrow_exception(result.error);
+            } catch (std::exception const& e) {
+              set_status_error(e.what());
+            } catch (...) {
+              set_status_error("unknown backend failure");
+            }
+            return;
+          }
+          save_settings_pairs(pairs, index + 1);
+        });
+      });
+}
+
 void open_url(char const* url) {
   gtk_show_uri(g_state.window, url, GDK_CURRENT_TIME);
 }
@@ -1943,34 +1979,18 @@ void on_settings_activated(GSimpleAction*, GVariant*, gpointer) {
                             delete fields;
                             return;
                           }
-                          // Serializing on a worker thread: settings-set is
-                          // a cheap write, but the entries must be read on
-                          // the UI thread before the dialog dies.
-                          auto* pairs = new StringPairs();
+                          // The entries must be read on the UI thread before
+                          // the dialog dies; the writes ride the async API
+                          // (save_settings_pairs) so no detached thread can
+                          // outlive the backend at shutdown.
+                          auto pairs = std::make_shared<StringPairs>();
                           for (auto const& [key, entry] : *fields) {
                             pairs->emplace_back(
                                 key,
                                 gtk_editable_get_text(GTK_EDITABLE(entry)));
                           }
                           delete fields;
-                          std::thread([pairs]() mutable {
-                            std::string error;
-                            try {
-                              for (auto const& [key, value] : *pairs) {
-                                g_state.api->settings_set(key, value);
-                              }
-                            } catch (std::exception const& e) {
-                              error = e.what();
-                            }
-                            delete pairs;
-                            dispatch_ui([error] {
-                              if (error.empty()) {
-                                set_status("Settings saved");
-                              } else {
-                                set_status_error(error);
-                              }
-                            });
-                          }).detach();
+                          save_settings_pairs(pairs, 0);
                         }),
                         nullptr);
                     gtk_window_present(GTK_WINDOW(dialog));
@@ -2977,8 +2997,6 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.seek_scale = seek_scale;
   g_state.position_text = position_text;
   g_state.duration_text = duration_text;
-  g_state.rate_selector = rate_selector;
-  g_state.feeds_caption = GTK_LABEL(caption);
   g_state.feed_list = GTK_LIST_BOX(feed_list);
   g_state.episodes_caption = GTK_LABEL(episode_caption);
   g_state.episode_list = GTK_LIST_BOX(episode_list);

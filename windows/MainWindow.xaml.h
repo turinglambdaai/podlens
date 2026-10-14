@@ -49,6 +49,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                        Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Summarize_Click(winrt::Windows::Foundation::IInspectable const&,
                        Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void RemoveAudio_Click(winrt::Windows::Foundation::IInspectable const&,
+                         Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Settings_Click(winrt::Windows::Foundation::IInspectable const&,
                       Microsoft::UI::Xaml::RoutedEventArgs const&);
   void CheckUpdates_Click(winrt::Windows::Foundation::IInspectable const&,
