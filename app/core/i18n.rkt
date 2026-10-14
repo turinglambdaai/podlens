@@ -16,6 +16,7 @@
    'no-feeds '("还没有订阅，先用 add <RSS 地址> 添加" . "No subscriptions yet — add one with add <RSS-URL>")
    'no-episode '("找不到该集数" . "No such episode")
    'no-feed '("找不到该订阅" . "No such feed")
+   'ambiguous-id '("ID 前缀不唯一：{0}" . "Ambiguous id prefix: {0}")
    'no-results '("没有匹配的播客" . "No matching podcasts")
    'downloaded '("下载完成" . "Download complete")
    'transcribed '("转写完成，共 {0} 段" . "Transcribed, {0} segments")
