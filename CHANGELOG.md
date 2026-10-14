@@ -3,6 +3,29 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## [Unreleased]
+
+### Added
+- **Every manual update check now reaches the screen.** The macOS sheet
+  covers all terminal outcomes (the taskly UpdateSheet pattern): an
+  available update offers install as before, an up-to-date answer gets a
+  confirmation, and a failure shows the error with a Check-Again button.
+- **The About surface lands on both hosts.** The macOS settings sheet
+  and the Windows settings dialog close with an About block — version,
+  license (AGPL-3.0), a Website link (podlens.jrtx.site) and a
+  Report-an-Issue link (the GitHub issue tracker). A bug report now
+  starts one click away from the failure it describes.
+- **GitHub issue templates** (bug report + feature request) so feedback
+  from the About link lands structured.
+
+### Changed
+- **Update failure text now leaves the screen with the user.** The macOS
+  sheet's error is selectable, and the Windows update failure dialogs
+  carry a "copy error" button that puts the failure message on the
+  clipboard.
+- CLI help text lists the `version` subcommand, which shipped earlier
+  but was only discoverable through the dispatch table.
+
 ## 0.1.3 - 2026-10-14
 
 ### Changed
