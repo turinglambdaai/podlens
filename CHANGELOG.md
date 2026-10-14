@@ -39,11 +39,11 @@ All notable changes to PodLens are documented here. Format follows
 - The signed-manifest test suite selects its artifact by the running
   platform, so the backend tests pass on every OS again.
 - Release pipeline: the Intel macOS runner's older swiftc crashed in
-  SILGen while emitting a stored-property initialization (arm64
-  compiles the same code fine) — the service is now lazily
-  initialized. The Windows collection step follows rivet v0.11.0's
-  release layout, which emits the MSI and the portable zip directly in
-  family form.
+  SILGen while emitting the update service's construction inside
+  AppModel (arm64 compiles the same code fine) — the service now lives
+  in a file-scope `@MainActor` singleton with the same lifetime. The
+  Windows collection step follows rivet v0.11.0's release layout,
+  which emits the MSI and the portable zip directly in family form.
 
 ## 0.1.2 - 2026-10-12
 

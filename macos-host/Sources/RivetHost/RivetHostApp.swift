@@ -50,11 +50,6 @@ final class AppModel: ObservableObject {
                 set: { [weak self] in self?.showSettings = $0 })
     }
 
-    // lazy: the Intel release runner's older swiftc crashes in SILGen
-    // while emitting this stored-property initialization (arm64 compiles
-    // the same code fine). First access happens on the main actor, long
-    // after boot, so the deferred init changes no behavior.
-    lazy var updateService = UpdateService()
     let store = PodLensStore()
 
     private var backend: EmbeddedRacketBackend?
@@ -100,14 +95,14 @@ final class AppModel: ObservableObject {
 
     func checkForUpdates(manual: Bool) {
         Task {
-            let outcome = await updateService.check(manual: manual)
+            let outcome = await UpdateServices.shared.check(manual: manual)
             await MainActor.run { store.updateOutcome = outcome }
         }
     }
 
     func installUpdate(_ manifest: UpdateService.Manifest) async {
         do {
-            try await updateService.downloadAndInstall(manifest)
+            try await UpdateServices.shared.downloadAndInstall(manifest)
         } catch {
             store.statusLine = L("updateInstallFailed") + " \(error)"
         }
@@ -115,7 +110,7 @@ final class AppModel: ObservableObject {
 
     private func silentUpdateCheck() {
         Task {
-            let outcome = await updateService.check(manual: false)
+            let outcome = await UpdateServices.shared.check(manual: false)
             if case .success(.available) = outcome {
                 await MainActor.run { store.updateOutcome = outcome }
             }
@@ -160,6 +155,18 @@ final class AppModel: ObservableObject {
             roots.map(\.path).joined(separator: ", ")
         )
     }
+}
+
+/// The app-wide update service, held at file scope instead of as an
+/// AppModel stored property: the Intel release runner's older swiftc
+/// (6.1.2) crashes in SILGen while emitting `UpdateService()` inside
+/// AppModel members — both the property initializer and the lazy getter
+/// crash, while arm64 compiles the same code fine. A static constant
+/// keeps the lifetime the property had: the app holds exactly one
+/// instance, first touched on the main actor.
+@MainActor
+enum UpdateServices {
+    static let shared = UpdateService()
 }
 
 enum HostError: Error, CustomStringConvertible {
