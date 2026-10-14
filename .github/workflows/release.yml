@@ -165,6 +165,22 @@ jobs:
           find dist -mindepth 2 -maxdepth 2 -type f -exec mv {} dist/ \;
           find dist -mindepth 1 -maxdepth 1 -type d -empty -delete
           ls -la dist/
+      # Family direct-download standard: the site and update feed point at
+      # stable, version-less asset names, so a release re-uploads its
+      # installers under these aliases next to the versioned originals.
+      # Runs before the manifest step — that script looks up the exact
+      # versioned file names, so the aliases cannot confuse it.
+      - name: Stable alias names
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd dist
+          cp "podlens-${VERSION}-macos-arm64.dmg" podlens-macos-arm64.dmg
+          cp "podlens-${VERSION}-macos-x64.dmg" podlens-macos-x64.dmg
+          cp "podlens-${VERSION}-macos-arm64.zip" podlens-macos-arm64.zip
+          cp "podlens-${VERSION}-macos-x64.zip" podlens-macos-x64.zip
+          cp "podlens-${VERSION}-windows-x64.msi" podlens-windows-x64.msi
+          cp "podlens-${VERSION}-windows-x64.zip" podlens-windows-x64.zip
+          ls -la
       - name: Generate + sign update manifest
         if: env.HAS_UPDATE_KEY == 'true'
         env:

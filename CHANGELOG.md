@@ -33,17 +33,27 @@ All notable changes to PodLens are documented here. Format follows
   five-minute start, subscriptions / transcription / translation /
   summary / BYOK setup, and a FAQ (data location, accounts, updates).
 - The site shows a real macOS screenshot beside the Windows ones.
+- Stable direct-download links (family standard): every release
+  re-uploads its installers under version-less aliases
+  (`podlens-macos-arm64.dmg`, `podlens-macos-x64.dmg`,
+  `podlens-windows-x64.msi` plus the zips), the site's download cards
+  and hero button point straight at them (JavaScript highlights the
+  card for the detected platform, Intel Macs get the x64 DMG), and the
+  Releases page is demoted to a secondary "all releases" link.
 
 ### Fixed
 
 - The signed-manifest test suite selects its artifact by the running
   platform, so the backend tests pass on every OS again.
-- Release pipeline: the Intel macOS runner's older swiftc crashed in
-  SILGen while emitting the update service's construction inside
-  AppModel (arm64 compiles the same code fine) — the service now lives
-  in a file-scope `@MainActor` singleton with the same lifetime. The
-  Windows collection step follows rivet v0.11.0's release layout,
-  which emits the MSI and the portable zip directly in family form.
+- Release pipeline: the Intel macOS runner's older swiftc (6.1.2)
+  crashed in SILGen while emitting the update service's construction —
+  the stored-property initializer, the lazy getter and a file-scope
+  global constant all crashed (reproduced locally with a 6.1.2
+  toolchain; newer toolchains compile the same code fine). The service
+  is now a memoized computed property with the same lifetime, and its
+  constructor is invoked with explicit arguments. The Windows
+  collection step follows rivet v0.11.0's release layout, which emits
+  the MSI and the portable zip directly in family form.
 
 ## 0.1.2 - 2026-10-12
 

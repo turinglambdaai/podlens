@@ -46,7 +46,7 @@
     <h1><span data-i18n="hero.h1a">听得懂的</span><span class="accent" data-i18n="hero.h1b">英文播客</span></h1>
     <p class="sub" data-i18n="hero.sub">PodLens 把每一集英文播客变成「逐句稿 + 对照翻译 + 一页总结」。转写、翻译、总结都走你自己的大模型 API，结果缓存在本机，一次生成，永久可读。</p>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="https://github.com/turinglambdaai/podlens/releases/latest" data-i18n="hero.download">下载最新版</a>
+      <a class="btn btn-primary" id="hero-download" href="https://github.com/turinglambdaai/podlens/releases/latest" data-i18n="hero.download">下载最新版</a>
       <a class="btn" href="https://github.com/turinglambdaai/podlens" data-i18n="hero.source">查看源码</a>
     </div>
     <p class="platforms" data-i18n="hero.platforms">macOS 14+（Apple Silicon 与 Intel）· Windows 10+</p>
@@ -125,16 +125,16 @@
   <section id="download" class="section">
     <h2 data-i18n="download.title">下载</h2>
     <div class="dl-grid">
-      <a class="dl-card" href="https://github.com/turinglambdaai/podlens/releases/latest">
+      <a class="dl-card" id="dl-macos" href="https://github.com/turinglambdaai/podlens/releases/latest/download/podlens-macos-arm64.dmg" data-dl-arm64="podlens-macos-arm64.dmg" data-dl-x64="podlens-macos-x64.dmg">
         <h3>macOS</h3>
         <p data-i18n="dl.mac">14+ · Apple Silicon & Intel · DMG</p>
       </a>
-      <a class="dl-card" href="https://github.com/turinglambdaai/podlens/releases/latest">
+      <a class="dl-card" id="dl-windows" href="https://github.com/turinglambdaai/podlens/releases/latest/download/podlens-windows-x64.msi">
         <h3>Windows</h3>
         <p data-i18n="dl.win">10+ · x64 · MSI 安装器 / 便携 zip</p>
       </a>
     </div>
-    <p class="note" data-i18n="download.note">Windows：MSI 安装器自带开始菜单/桌面快捷方式，zip 为便携版；macOS：首次启动（未公证构建）右键 → 打开。更新通过 Ed25519 签名清单自动推送。</p>
+    <p class="note"><a id="dl-all" href="https://github.com/turinglambdaai/podlens/releases/latest" data-i18n="download.all">全部版本</a> · <span data-i18n="download.note">Windows：MSI 安装器自带开始菜单/桌面快捷方式，zip 为便携版；macOS：首次启动（未公证构建）右键 → 打开。更新通过 Ed25519 签名清单自动推送。</span></p>
   </section>
 </main>
 
@@ -170,6 +170,7 @@
     "s3.title": "总结", "s3.body": "全文压缩成结构化 JSON：TL;DR、要点、引用、话题，可被任何工具消费。",
     "pipeline.note": "全部结果缓存在 ~/.podlens/，纯 JSON——你的数据永远可以带走。",
     "download.title": "下载",
+    "download.all": "全部版本",
     "dl.mac": "14+ · Apple Silicon & Intel · DMG", "dl.win": "10+ · x64 · MSI 安装器 / 便携 zip",
     "download.note": "Windows：MSI 安装器自带开始菜单/桌面快捷方式，zip 为便携版；macOS：首次启动（未公证构建）右键 → 打开。更新通过 Ed25519 签名清单自动推送。",
     "footer.built": "基于 Rivet 构建"
@@ -200,6 +201,7 @@
     "s3.title": "Summarize", "s3.body": "The full text condenses into structured JSON: TL;DR, key points, quotes, topics — consumable by any tool.",
     "pipeline.note": "Everything caches under ~/.podlens/ as plain JSON — your data is always portable.",
     "download.title": "Download",
+    "download.all": "All releases",
     "dl.mac": "14+ · Apple Silicon & Intel · DMG", "dl.win": "10+ · x64 · MSI installer / portable zip",
     "download.note": "Windows: the MSI installer adds start-menu and desktop shortcuts; the zip is the portable build. macOS: first launch of an unnotarized build — right-click → Open. Updates ship through an Ed25519-signed manifest.",
     "footer.built": "Built on Rivet"
@@ -246,6 +248,41 @@
     if (!readLanguageOverride()) apply(detectBrowserLanguage());
   });
 })();
+</script>
+<script>
+  // family direct-download standard: point the hero CTA and the matching
+  // card at the stable, version-less release asset for this platform
+  (function () {
+    var BASE = "https://github.com/turinglambdaai/podlens/releases/latest/download/";
+    var ua = navigator.userAgent || "";
+    var platform = /Windows/i.test(ua) ? "windows"
+                 : (/Mac|iPhone|iPad/i.test(ua) ? "macos" : null);
+    if (!platform) return;
+    var file;
+    if (platform === "windows") {
+      file = "podlens-windows-x64.msi";
+    } else {
+      file = "podlens-macos-arm64.dmg";
+      // macOS UAs hide the architecture; best-effort WebGL probe — Apple
+      // Silicon reports an "Apple GPU" renderer, Intel Macs name Intel/AMD
+      try {
+        var gl = document.createElement("canvas").getContext("webgl");
+        var ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+        var renderer = (ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "";
+        if (!/apple/i.test(String(renderer)) && /intel|amd|nvidia|radeon|geforce/i.test(String(renderer))) {
+          file = "podlens-macos-x64.dmg";
+        }
+      } catch (e) {}
+    }
+    var url = BASE + file;
+    var hero = document.getElementById("hero-download");
+    if (hero) hero.href = url;
+    var card = document.getElementById(platform === "windows" ? "dl-windows" : "dl-macos");
+    if (card) {
+      if (platform === "macos") card.href = url; // arch-correct DMG
+      card.classList.add("dl-card-current");
+    }
+  })();
 </script>
 <script>
   document.getElementById('theme-btn').addEventListener('click', function () {

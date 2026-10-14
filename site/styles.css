@@ -111,6 +111,9 @@ a { color: inherit; text-decoration: none; }
   padding: 28px; text-align: center; transition: border-color 0.12s ease;
 }
 .dl-card:hover { border-color: var(--accent); }
+/* the platform-detected card (set by the inline script in index.html) */
+.dl-card-current { border-color: var(--accent); box-shadow: 0 10px 28px rgba(193, 95, 60, 0.13); }
+.dl-card-current h3::after { content: "●"; color: var(--accent); font-size: 10px; vertical-align: 4px; margin-left: 8px; }
 .dl-card h3 { font-size: 18px; margin-bottom: 4px; }
 .dl-card p { font-size: 13.5px; color: var(--muted); }
 
