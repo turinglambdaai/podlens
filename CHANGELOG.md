@@ -40,6 +40,15 @@ All notable changes to PodLens are documented here. Format follows
   with an empty library lands there.
 
 ### Fixed
+- Jobs no longer die inside their own error handler. The job-store
+  update folded over `hash-set!` results, but `hash-set!` returns
+  void, so the first multi-key patch — progress, done, or error —
+  crashed with "hash-set!: contract violation given `#<void>`"; and
+  since the error handler patched the same way, a failed download
+  also left the job stuck "running", blocking every later job for
+  that episode until restart. The updater now mutates the job hash in
+  place and returns it, so progress lands, failures surface as job
+  error messages, and double-click-to-listen downloads complete.
 - Views observe the store directly now. The old views read the store
   through the app model, so store updates only landed when the model
   itself happened to re-render — lists drew once at boot and then

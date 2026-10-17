@@ -231,5 +231,55 @@
   (episode-set-done! (hash-ref episode-two 'id) #t)
   (check-equal? (feed-unplayed-count feed-id) 1))
 
+;; ---- job manager -----------------------------------------------------------
+;; Regression: the job-store updater used to fold over hash-set! results, so
+;; every multi-key patch (progress, done, error) crashed with hash-set! given
+;; #<void> — and the error handler crashed the same way, leaving the job
+;; stuck "running" forever.
+
+(define (wait-terminal jobs id)
+  (let loop ([n 100])
+    (define j (job-get jobs id))
+    (cond [(not j) (error 'wait-terminal "job vanished: ~a" id)]
+          [(equal? (hash-ref j 'status) "running")
+           (when (zero? n) (error 'wait-terminal "job stuck running: ~a" id))
+           (sleep 0.05)
+           (loop (sub1 n))]
+          [else j])))
+
+(test-case "job completes through multi-key progress patches"
+  (define jobs (make-job-manager void))
+  (define id
+    (job-start! jobs "download" "ep-job-ok"
+                (lambda (progress)
+                  (progress 10 "fetching")
+                  (progress 50 "downloading"))))
+  (define j (wait-terminal jobs id))
+  (check-equal? (hash-ref j 'status) "done")
+  (check-equal? (hash-ref j 'pct) 100)
+  (check-false (jobs-active? jobs)))
+
+(test-case "failing job reports error instead of dying in the handler"
+  (define jobs (make-job-manager void))
+  (define id
+    (job-start! jobs "transcribe" "ep-job-err"
+                (lambda (progress)
+                  (progress 5 "starting")
+                  (error 'boom "asr exploded"))))
+  (define j (wait-terminal jobs id))
+  (check-equal? (hash-ref j 'status) "error")
+  (check-equal? (hash-ref j 'message) "boom: asr exploded")
+  (check-false (jobs-active? jobs)))
+
+(test-case "second job for the same episode is rejected while one runs"
+  (define jobs (make-job-manager void))
+  (define id
+    (job-start! jobs "download" "ep-job-busy"
+                (lambda (progress) (sleep 0.3))))
+  (check-exn exn:fail?
+             (lambda () (job-start! jobs "transcribe" "ep-job-busy" void)))
+  (check-equal? (hash-ref (wait-terminal jobs id) 'status) "done")
+  (check-false (jobs-active? jobs)))
+
 ;; raco test waits for all threads; the fake server must not outlive the test
 (kill-thread server-thread)

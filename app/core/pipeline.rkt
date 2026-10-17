@@ -338,8 +338,13 @@
   (with-lock (job-manager-sem mgr)
     (lambda ()
       (hash-update! (job-manager-jobs mgr) id
-                    (lambda (j) (for/fold ([j j]) ([k (hash-keys patch)]) (hash-set! j k (hash-ref patch k))))
-                    (hasheq)))))
+                    ;; patch keys mutate j in place; hash-set! returns void, so
+                    ;; the updater must return j itself, never the last set.
+                    (lambda (j)
+                      (for ([k (in-hash-keys patch)])
+                        (hash-set! j k (hash-ref patch k)))
+                      j)
+                    (make-hasheq)))))
 
 (define (job-start! mgr kind episode-id thunk)
   ;; Check-and-insert runs under the manager lock so two concurrent RPCs
