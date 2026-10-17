@@ -31,6 +31,14 @@ VERSION="${TAG#v}"
 [[ "$VERSION" == "$(tr -d '[:space:]' < "$ROOT/VERSION")" ]] || {
   echo "error: tag $TAG does not match VERSION '$(cat "$ROOT/VERSION")'" >&2; exit 1; }
 
+# Git Bash hands out msys-style paths (/d/...), which Racket's path
+# primitives misread as drive-relative; convert to Windows mixed form.
+if command -v cygpath >/dev/null 2>&1; then
+  ROOT="$(cygpath -m "$ROOT")"
+  DIST="$(cygpath -m "$DIST")"
+  KEY="$(cygpath -m "$KEY")"
+fi
+
 for artifact in "$DIST/podlens-$VERSION-macos-arm64.zip" \
                 "$DIST/podlens-$VERSION-macos-x64.zip" \
                 "$DIST/podlens-$VERSION-windows-x64.zip" \
@@ -62,6 +70,7 @@ fi
 
 SCRIPT="$(mktemp "${TMPDIR:-/tmp}/podlens-manifest-XXXXXX.rkt")"
 KEY_DER="$(mktemp "${TMPDIR:-/tmp}/podlens-key-XXXXXX.der")"
+command -v cygpath >/dev/null 2>&1 && KEY_DER="$(cygpath -m "$KEY_DER")"
 trap 'rm -f "$SCRIPT" "$KEY_DER"' EXIT
 
 # rivet's signer reads DER (OneAsymmetricKey); convert the PEM once here.
@@ -91,7 +100,11 @@ cat > "$SCRIPT" <<RKT
                    (sha256-file/hex path)
                    (file-size path)
                    installer
-                   '()))
+                   '()
+                   ;; component #f serializes as a legacy manifest without
+                   ;; the field, so clients predating rivet's component
+                   ;; discriminator (app/cli/tool) still parse the feed.
+                   #f))
 
 (define manifest
   (update-manifest app-id
