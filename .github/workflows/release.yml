@@ -15,7 +15,7 @@ concurrency:
 
 # Single source of truth for the rivet pin (matches ci.yml).
 env:
-  RIVET_PIN: v0.11.0
+  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
 
 jobs:
   validate:
