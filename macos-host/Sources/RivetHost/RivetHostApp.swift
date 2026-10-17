@@ -26,13 +26,16 @@ struct PodLensApp: App {
         }
         .commands {
             CommandGroup(after: .newItem) {
-                Button(L("menuCheckUpdates")) { model.checkForUpdates(manual: true) }
-                    .keyboardShortcut("u")
-                Divider()
                 Button(L("menuRefreshAll")) { model.store.refreshAll() }
                     .keyboardShortcut("r", modifiers: [.command])
                 Button(L("menuSettings")) { model.showSettings = true }
                     .keyboardShortcut(",")
+            }
+            // Family menu convention: Check for Updates… lives in the App
+            // menu directly below the system About item.
+            CommandGroup(after: .appInfo) {
+                Button(L("menuCheckUpdates")) { model.checkForUpdates(manual: true) }
+                    .keyboardShortcut("u")
             }
         }
         .windowStyle(.automatic)

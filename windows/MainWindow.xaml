@@ -41,6 +41,21 @@
                             Foreground="{ThemeResource AppAccentBrush}"
                             BorderThickness="0"
                             Click="Discover_Click" />
+                    <!-- Family menu convention: Check for Updates… and About
+                         live together in the Help menu. -->
+                    <Button x:Name="HelpButton" HorizontalAlignment="Stretch">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem x:Name="MenuCheckUpdates" Click="CheckUpdates_Click">
+                                    <MenuFlyoutItem.KeyboardAccelerators>
+                                        <KeyboardAccelerator Modifiers="Control" Key="U" />
+                                    </MenuFlyoutItem.KeyboardAccelerators>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem x:Name="MenuAbout" Click="MenuAbout_Click" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                 </StackPanel>
             </NavigationView.PaneHeader>
 
@@ -49,12 +64,6 @@
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;" /></NavigationViewItem.Icon>
                     <NavigationViewItem.Content>
                         <TextBlock x:Name="SettingsNavLabel" />
-                    </NavigationViewItem.Content>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="UpdatesNavItem" Tag="updates" IsSelected="False">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE777;" /></NavigationViewItem.Icon>
-                    <NavigationViewItem.Content>
-                        <TextBlock x:Name="UpdatesNavLabel" />
                     </NavigationViewItem.Content>
                 </NavigationViewItem>
             </NavigationView.FooterMenuItems>

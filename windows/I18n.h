@@ -37,6 +37,7 @@ inline constexpr Entry kStrings[] = {
     {"menu.refresh_feed", L"刷新当前订阅", L"Refresh This Feed"},
     {"menu.remove_feed", L"删除当前订阅", L"Remove This Feed"},
     {"menu.settings", L"设置…", L"Settings…"},
+    {"menu.about", L"关于 PodLens", L"About PodLens"},
     {"menu.check_updates", L"检查更新…", L"Check for Updates…"},
     {"menu.open_releases", L"打开发布页", L"Open Releases Page"},
     {"nav.pane_title", L"订阅列表", L"Subscriptions"},
