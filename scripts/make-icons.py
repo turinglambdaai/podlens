@@ -19,7 +19,7 @@ import math
 import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 BRANDING = Path(__file__).resolve().parent.parent / "assets" / "branding"
 
@@ -89,6 +89,66 @@ def write_icns(master: Image.Image, path: Path) -> None:
     path.write_bytes(icns)
 
 
+def draw_wave_mark(edge: int) -> Image.Image:
+    """The icon's dot-plus-arcs mark alone, RGBA, at `edge` pixels.
+
+    Geometry is authored on the 1024 master grid, so it scales by
+    edge / MASTER rather than reusing the master's absolute pixel radii."""
+    size = edge * SS
+    unit = edge / MASTER * SS
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    center = size / 2
+    dot_radius = 110 * unit
+    draw.ellipse(
+        (center - dot_radius, center - dot_radius,
+         center + dot_radius, center + dot_radius),
+        fill=WHITE,
+    )
+    stroke = round(78 * unit)
+    radius = 250 * unit
+    centerline = radius - stroke / 2  # arc width grows inwards
+    for start, end in ((128, 232), (308, 412)):  # degrees, mirrored arcs
+        bbox = (center - radius, center - radius, center + radius, center + radius)
+        draw.arc(bbox, start=start, end=end, fill=WHITE, width=stroke)
+        for angle in (start, end):
+            rad = math.radians(angle)
+            point = (center + centerline * math.cos(rad),
+                     center + centerline * math.sin(rad))
+            draw.ellipse(
+                (point[0] - stroke / 2, point[1] - stroke / 2,
+                 point[0] + stroke / 2, point[1] + stroke / 2),
+                fill=WHITE,
+            )
+    return image.resize((edge, edge), Image.LANCZOS)
+
+
+def load_wordmark_font(size: int):
+    for name in ("arialbd.ttf", "DejaVuSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def write_wizard_bitmap(path: Path, width: int, height: int, *,
+                        mark_edge: int, mark_xy: tuple[int, int],
+                        wordmark_size: int, wordmark_xy: tuple[int, int]) -> None:
+    """One WiX wizard bitmap at the stock-UI size: brand gradient backdrop,
+    the white wave mark and the wordmark, saved as 24-bit BMP so the WixVariable
+    extension consumes it as-is (banner 493x58, dialog 493x312)."""
+    image = ImageOps.colorize(
+        Image.linear_gradient("L").resize((width, height)),
+        black=ACCENT_DEEP, white=ACCENT).convert("RGB")
+    mark = draw_wave_mark(mark_edge)
+    image.paste(mark, mark_xy, mark)
+    ImageDraw.Draw(image).text(
+        wordmark_xy, "PodLens", font=load_wordmark_font(wordmark_size),
+        fill=WHITE, anchor="mm")
+    image.save(path, format="BMP")
+
+
 def main() -> None:
     BRANDING.mkdir(parents=True, exist_ok=True)
     master = draw_master()
@@ -105,7 +165,16 @@ def main() -> None:
 
     # Linux: one 512x512 PNG, consumed via rivet.rktd's linux-icon.
     master.resize((512, 512), Image.LANCZOS).save(BRANDING / "app.png")
-    for name in ("icon-source.png", "app.ico", "app.icns", "app.png"):
+    # Windows installer wizard bitmaps (rivet.rktd windows-installer-bitmaps).
+    write_wizard_bitmap(BRANDING / "wizard-banner.bmp", 493, 58,
+                        mark_edge=44, mark_xy=(16, 7),
+                        wordmark_size=26, wordmark_xy=(110, 29))
+    write_wizard_bitmap(BRANDING / "wizard-dialog.bmp", 493, 312,
+                        mark_edge=190, mark_xy=(152, 30),
+                        wordmark_size=58, wordmark_xy=(246, 262))
+
+    for name in ("icon-source.png", "app.ico", "app.icns", "app.png",
+                 "wizard-banner.bmp", "wizard-dialog.bmp"):
         print(f"{(BRANDING / name).name}: {(BRANDING / name).stat().st_size} bytes")
 
 
