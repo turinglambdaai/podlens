@@ -17,6 +17,7 @@
                    'primaryGenreName "News"
                    'feedUrl "https://feeds.npr.org/510318/podcast.xml"
                    'collectionViewUrl "https://podcasts.apple.com/us/podcast/npr-news-now/id289429419"
+                   'artworkUrl100 "https://example.com/art100x100bb.jpg"
                    'unrelated 1)
            (hasheq 'trackId 1234
                    'collectionName "Design Details"
@@ -40,7 +41,14 @@
   (check-equal? (hash-ref (car rows) 'genre) "News")
   (check-equal? (hash-ref (car rows) 'feed-url)
                 "https://feeds.npr.org/510318/podcast.xml")
+  (check-equal? (hash-ref (car rows) 'artwork)
+                "https://example.com/art600x600bb.jpg")
   (check-equal? (hash-ref (cadr rows) 'genre) "Design"))
+
+(test-case "artwork upscale"
+  (check-equal? (itunes-artwork-600 "https://x/a100x100bb.jpg") "https://x/a600x600bb.jpg")
+  ;; no size marker → returned untouched
+  (check-equal? (itunes-artwork-600 "https://x/a.jpg") "https://x/a.jpg"))
 
 (test-case "empty results"
   (check-equal? (parse-itunes-results (hasheq 'results '())) '()))

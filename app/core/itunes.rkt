@@ -16,7 +16,16 @@
 (provide itunes-search-podcasts
          itunes-search-url
          parse-itunes-results
+         itunes-artwork-600
          url-encode-query)
+
+;; Apple's search endpoint only hands out the 100px thumbnail, but the same
+;; CDN path renders at any size — swap the size marker for the 600px
+;; variant that hosts draw on cards and grid tiles.
+(define (itunes-artwork-600 url)
+  (if (string-contains? url "100x100")
+      (string-replace url "100x100bb" "600x600bb")
+      url))
 
 ;; Percent-encode for a query component (unreserved characters stay bare;
 ;; everything else goes out as UTF-8 %XX).
@@ -51,6 +60,7 @@
             'title (hash-ref r 'collectionName "")
             'artist (hash-ref r 'artistName "")
             'genre (hash-ref r 'primaryGenreName "")
+            'artwork (itunes-artwork-600 (hash-ref r 'artworkUrl100 ""))
             'feed-url (hash-ref r 'feedUrl "")
             'homepage (hash-ref r 'collectionViewUrl ""))))
 

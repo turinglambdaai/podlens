@@ -37,6 +37,7 @@
          feed-unplayed-count
          episode-all
          episodes-for-feed
+         recent-episodes
          episode-get
          episode-set-position!
          episode-set-done!
@@ -179,6 +180,13 @@
   (sort (filter (lambda (e) (equal? (hash-ref e 'feed-id) feed-id)) (episode-all))
         >
         #:key (lambda (e) (hash-ref e 'pub-date-epoch 0))))
+
+;; Cross-feed episodes, newest first — the home page's recent lane. The
+;; cap bounds the payload for long-lived libraries; every feed's newest
+;; episode still sorts to the front.
+(define (recent-episodes [limit 200])
+  (define sorted (sort (episode-all) > #:key episode-sort-key))
+  (take sorted (min limit (length sorted))))
 
 ;; Episodes not yet marked played — the sidebar badge number.
 (define (feed-unplayed-count feed-id)

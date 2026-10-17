@@ -125,6 +125,10 @@ public struct RivetAPI: Sendable {
         let rivetResult = try await client.call("episode-pipeline", arguments: [encode_String(id)])
         return try decode_String(rivetResult)
     }
+    public func episode_recent() async throws -> [[String]] {
+        let rivetResult = try await client.call("episode-recent", arguments: [])
+        return try decode__List_List_String_(rivetResult)
+    }
     public func episode_remove_audio(id: String) async throws -> Bool {
         let rivetResult = try await client.call("episode-remove-audio", arguments: [encode_String(id)])
         return try decode_Bool(rivetResult)

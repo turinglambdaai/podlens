@@ -76,6 +76,8 @@ scripts/update-keys.sh
 - Windows 播放尚无波形/无缝衔接/章节标记（播放/seek/倍速 1.0–2.0 已有，M1 已追平 macOS）
 - Linux 宿主已追平 Windows 的播放/管线/设置/更新面；尚无连续播放（播完自动接下一集）、睡眠定时与发现页 UI（catalog RPC 已可用，UI 待跟进）
 - 发现页全目录搜索（`catalog-search` RPC）目前只在 macOS 宿主与 CLI 落地；Windows 发现面板还是纯精选目录，搜索 UI 待跟进
+- Podcasts 式外壳（主页待播/节目网格/资料库页、`episode-recent` RPC 消费、封面图加载、窗口级播放条、逐句稿 chips）是 macOS 宿主先行；Windows/Linux 宿主仍是 0.2.0 的界面（契约是纯增量，旧行为不受影响），对齐跟进
+- 「最近更新/已下载」页基于 `episode-recent`（跨源、上限 200 条按更新时间排序）；极端老库中超出上限的已下载单集不会出现在该页
 - Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
 - macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
 - 翻译按句计费，成本由用户的 API key 承担

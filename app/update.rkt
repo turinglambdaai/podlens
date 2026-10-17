@@ -47,9 +47,7 @@
          current-update-base-url
          releases-page
          update-configured?
-         platform-symbol
-         architecture-symbol
-         installer-extension
+         payload-extension
          manifest-url
          destination-path
          update-state-snapshot
@@ -116,19 +114,14 @@
 
 ;; ---------- platform identity ----------
 
-;; rivet release tooling emits these exact symbols into update manifests
-(define (platform-symbol)
-  (case (system-type 'os)
-    [(macosx) 'macos]
-    [(windows) 'windows]
-    [else 'linux]))
-
-(define (architecture-symbol)
-  (case (system-type 'arch)
-    [(aarch64 arm64) 'arm64]
-    [else 'x64]))
-
-(define (installer-extension)
+;; platform-symbol / architecture-symbol come from rivet/distribution
+;; (rivet now exports them; the local duplicates were deleted when the
+;; names started colliding — upstream emits the same symbols into
+;; update manifests, so consuming them directly removes the drift).
+;; payload-extension stays local on purpose: rivet's installer-extension takes an
+;; installer kind, this one answers "what extension does THIS platform's
+;; PodLens payload carry".
+(define (payload-extension)
   (case (system-type 'os)
     [(macosx) ".zip"]
     [(windows) ".zip"]
@@ -288,7 +281,10 @@
                       (embedded-public-key)
                       update-key-id
                       (rollout-bucket)
-                      maximum-download-bytes))
+                      maximum-download-bytes
+                      ;; component: podlens feeds carry the legacy plain
+                      ;; app artifact (rivet release stamps #f today)
+                      #f))
     (define candidate (select-update config manifest))
     (cond
       [candidate
@@ -320,7 +316,7 @@
 ;; The download lands in <data-dir>/updates/ under a self-describing name;
 ;; hosts learn the exact path from update-state's downloadedPath and never
 ;; parse the name themselves.
-(define (destination-path data-dir candidate [extension (installer-extension)])
+(define (destination-path data-dir candidate [extension (payload-extension)])
   (define version
     (update-manifest-version (update-candidate-manifest candidate)))
   (build-path data-dir
@@ -364,7 +360,8 @@
                     (embedded-public-key)
                     update-key-id
                     (rollout-bucket)
-                    maximum-download-bytes))
+                    maximum-download-bytes
+                    #f))
   (define destination (destination-path data-dir candidate))
   (set-box! last-progress-seconds (current-seconds))
   (define worker-thread

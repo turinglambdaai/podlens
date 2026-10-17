@@ -63,3 +63,23 @@
   (check-true (feed-remove! fid))
   (check-false (feed-get fid))
   (check-equal? (length (episodes-for-feed fid)) 0))
+
+(test-case "recent-episodes merges feeds newest first"
+  (define fid-a (feed-add! "https://example.com/feed.xml" parsed))
+  (define newer
+    (hasheq 'title "Newer Show" 'author "T" 'description "d"
+            'artwork-url "https://example.com/newer.jpg"
+            'items
+            (list (hasheq 'guid "ep-n1" 'title "Fresh"
+                          'pub-date-epoch 300 'pub-date-display "z"
+                          'enclosure-url "https://example.com/n1.mp3"
+                          'enclosure-length 1 'enclosure-type "audio/mpeg"
+                          'duration-sec 30 'description ""))))
+  (define fid-b (feed-add! "https://example.com/newer.xml" newer))
+  (define merged (recent-episodes))
+  (check-true (>= (length merged) 3))
+  (check-equal? (hash-ref (car merged) 'title) "Fresh") ; newest across feeds
+  (check-equal? (hash-ref (car merged) 'feed-id) fid-b)
+  (check-equal? (hash-ref (cadr merged) 'pub-date-epoch) 200)
+  ;; the cap is respected
+  (check-equal? (length (recent-episodes 1)) 1))

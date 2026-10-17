@@ -27,4 +27,6 @@
     (check-true (non-empty-string? (catalog-entry-description e "en"))
                 (format "~a: missing en description" (catalog-entry-id e)))
     (check-true (non-empty-string? (catalog-entry-homepage e))
-                (format "~a: missing homepage" (catalog-entry-id e)))))
+                (format "~a: missing homepage" (catalog-entry-id e)))
+    (check-true (string-prefix? (catalog-entry-artwork e) "https://")
+                (format "~a: artwork must be https" (catalog-entry-id e)))))

@@ -70,7 +70,7 @@
     (update-artifact (platform-symbol) (architecture-symbol)
                      "https://example.invalid/podlens-1.4.0-macos-arm64.zip"
                      "0000000000000000000000000000000000000000000000000000000000000000"
-                     123456789 'zip '()))
+                     123456789 'zip '() #f))
   (define manifest
     (update-manifest app-identifier "1.4.0" 9 'stable
                      "2026-10-09T00:00:00Z" "0.0.0" #f #t 100
@@ -109,7 +109,7 @@
     (updater-config app-identifier app-version 'stable
                     (platform-symbol) (architecture-symbol)
                     (datum->pk-key pub-der 'SubjectPublicKeyInfo)
-                    update-key-id 42 (* 800 1024 1024)))
+                    update-key-id 42 (* 800 1024 1024) #f))
   (define (selectable manifest)
     (update-candidate? (select-update config manifest)))
   (check-true (selectable verified))
@@ -180,15 +180,15 @@
                       "2026-10-13T00:00:00Z" "0.0.0" #f #t 100
                       (list (update-artifact 'macos 'arm64
                                              "https://example.invalid/x.zip"
-                                             "00" 1 'zip '())))
+                                             "00" 1 'zip '() #f)))
      (update-artifact 'macos 'arm64
                       "https://example.invalid/x.zip"
-                      "00" 1 'zip '())))
+                      "00" 1 'zip '() #f)))
   (check-equal?
    (path->string (destination-path tmp candidate))
    (path->string
     (build-path tmp "updates" (string-append app-display-name "-9.9.9"
-                                             (installer-extension))))))
+                                             (payload-extension))))))
 
 ;; ---- download against a loopback CDN ---------------------------------------
 
@@ -255,11 +255,11 @@
                        (list (update-artifact 'macos 'arm64 artifact-url
                                               artifact-sha
                                               (bytes-length artifact-payload)
-                                              'zip '())))
+                                              'zip '() #f)))
       (update-artifact 'macos 'arm64 artifact-url
                        artifact-sha
                        (bytes-length artifact-payload)
-                       'zip '())))
+                       'zip '() #f)))
     (start-download! artifact-work-dir)
     (wait-for-terminal-state!)
     (define s (update-state-snapshot))
@@ -282,11 +282,11 @@
                        (list (update-artifact 'macos 'arm64 artifact-url
                                               (string-append artifact-sha "0000")
                                               (bytes-length artifact-payload)
-                                              'zip '())))
+                                              'zip '() #f)))
       (update-artifact 'macos 'arm64 artifact-url
                        (string-append artifact-sha "0000")
                        (bytes-length artifact-payload)
-                       'zip '())))
+                       'zip '() #f)))
     (start-download! artifact-work-dir)
     (wait-for-terminal-state!)
     (define s (update-state-snapshot))
@@ -308,11 +308,11 @@
                        (list (update-artifact 'macos 'arm64 artifact-url
                                               artifact-sha
                                               (add1 (bytes-length artifact-payload))
-                                              'zip '())))
+                                              'zip '() #f)))
       (update-artifact 'macos 'arm64 artifact-url
                        artifact-sha
                        (add1 (bytes-length artifact-payload))
-                       'zip '())))
+                       'zip '() #f)))
     (start-download! artifact-work-dir)
     (wait-for-terminal-state!)
     (check-equal? (hash-ref (update-state-snapshot) 'phase) "error")

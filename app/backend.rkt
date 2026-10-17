@@ -13,7 +13,9 @@
 ;;   episode-list row = (id title pub-display duration-sec downloaded
 ;;                       transcript-status summary-status position-sec done
 ;;                       has-translation description)
-;;   catalog-list row = (id category title description url homepage added)
+;;   episode-recent row = (feed-id feed-title feed-artwork <episode-list row…>)
+;;   catalog-list row = (id category title description url homepage added
+;;                       artwork-url)
 ;;   transcript row   = (start end text translation)
 ;;   chapters row     = (start-sec title)
 ;;   resume-last row  = (feed-id episode-id position-sec) or empty
@@ -132,12 +134,13 @@
           (catalog-entry-description e (lang!))
           (catalog-entry-url e)
           (catalog-entry-homepage e)
-          (if (set-member? subscribed-urls (catalog-entry-url e)) "1" "0"))))
+          (if (set-member? subscribed-urls (catalog-entry-url e)) "1" "0")
+          (catalog-entry-artwork e))))
 
 ;; Full-directory search over the iTunes Search API (free, no key; results
 ;; carry Apple's authoritative feedUrl). Row shape matches catalog-list so
 ;; hosts can render both with one component:
-;;   (id category title description url homepage added)
+;;   (id category title description url homepage added artwork-url)
 ;;   id is "itunes:<trackId>"; category slot = genre; description = artist.
 ;; Adding a result goes through the normal feed-add, like the catalog.
 (define-rpc (catalog-search [query String] : (List (List String)))
@@ -153,24 +156,43 @@
           (hash-ref r 'artist "")
           (hash-ref r 'feed-url)
           (hash-ref r 'homepage "")
-          (if (set-member? subscribed-urls (hash-ref r 'feed-url)) "1" "0"))))
+          (if (set-member? subscribed-urls (hash-ref r 'feed-url)) "1" "0")
+          (hash-ref r 'artwork ""))))
 
 ;; ---- episodes -------------------------------------------------------------------
 
+;; The shared episode-list projection; episode-recent prepends feed context.
+(define (episode-row e)
+  (define t (transcript-load (hash-ref e 'id)))
+  (list (hash-ref e 'id)
+        (hash-ref e 'title)
+        (hash-ref e 'pub-date-display)
+        (format "~a" (or (hash-ref e 'duration-sec #f) ""))
+        (if (hash-ref e 'downloaded-path #f) "1" "0")
+        (hash-ref e 'transcript-status "none")
+        (hash-ref e 'summary-status "none")
+        (format "~a" (hash-ref e 'position-sec 0))
+        (if (hash-ref e 'done #f) "1" "0")
+        (if (and t (pair? (hash-ref t 'translation '()))) "1" "0")
+        (hash-ref e 'description "")))
+
 (define-rpc (episode-list [feed-id String] : (List (List String)))
   (for/list ([e (in-list (episodes-for-feed feed-id))])
-    (define t (transcript-load (hash-ref e 'id)))
-    (list (hash-ref e 'id)
-          (hash-ref e 'title)
-          (hash-ref e 'pub-date-display)
-          (format "~a" (or (hash-ref e 'duration-sec #f) ""))
-          (if (hash-ref e 'downloaded-path #f) "1" "0")
-          (hash-ref e 'transcript-status "none")
-          (hash-ref e 'summary-status "none")
-          (format "~a" (hash-ref e 'position-sec 0))
-          (if (hash-ref e 'done #f) "1" "0")
-          (if (and t (pair? (hash-ref t 'translation '()))) "1" "0")
-          (hash-ref e 'description ""))))
+    (episode-row e)))
+
+;; The newest episodes across every subscription — the home page's
+;; recent lane and the library's Recently Updated list. Each row is the
+;; episode-list projection prefixed with the owning feed's identity (the
+;; episode id stays inside the episode-list portion) so hosts can brand
+;; cards with show title and artwork in one round trip:
+;;   (feed-id feed-title feed-artwork <episode-list row…>)
+(define-rpc (episode-recent : (List (List String)))
+  (for/list ([e (in-list (recent-episodes))])
+    (define f (feed-get (hash-ref e 'feed-id)))
+    (list* (hash-ref e 'feed-id "")
+           (if f (hash-ref f 'title "") "")
+           (if f (feed-artwork-of f) "")
+           (episode-row e))))
 
 (define-rpc (episode-download [id String] : String)
   (define e (episode-get id))

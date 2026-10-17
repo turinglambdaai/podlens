@@ -3,6 +3,38 @@ import MediaPlayer
 import SwiftUI
 import UserNotifications
 
+/// What the content column shows; the sidebar List selection drives it.
+enum SidebarItem: Hashable {
+    case home
+    case discover
+    case shows
+    case recent
+    case downloaded
+    case feed(Feed)
+}
+
+/// An episode across feeds — the shape home/library lanes consume
+/// (episode-recent RPC row: episode columns prefixed with feed context).
+struct RecentEpisode: Identifiable, Hashable {
+    let id: String
+    let feedId: String
+    let feedTitle: String
+    let artworkURL: String
+    let title: String
+    let pubDisplay: String
+    let durationSec: String
+    let downloaded: Bool
+    let transcriptStatus: String
+    let summaryStatus: String
+    let positionSec: Double
+    let done: Bool
+    let hasTranslation: Bool
+    let description: String
+
+    /// Seconds parsed from the wire's integer-string duration ("" → 0).
+    var duration: Double { Double(durationSec) ?? 0 }
+}
+
 /// All client state lives here; views stay dumb. Every backend round trip
 /// goes through the generated RivetAPI; backend events arrive via
 /// handleEvent and update job progress live.
@@ -80,12 +112,19 @@ final class PodLensStore: ObservableObject {
         let url: String
         let homepage: String
         let added: Bool
+        let artworkURL: String
     }
 
     @Published var feeds: [Feed] = []
     @Published var episodes: [Episode] = []
     @Published var catalog: [CatalogEntry] = []
-    @Published var showDiscover = false
+    /// The content-column destination driven by the sidebar selection.
+    @Published var sidebarItem: SidebarItem = .home
+    @Published var recentEpisodes: [RecentEpisode] = []
+    /// Transcript/summary tab of the detail column; the player bar's
+    /// transcript button jumps here.
+    @Published var detailTab = 0
+
     @Published var searchResults: [CatalogEntry] = []
     @Published var isSearching = false
     @Published var searchError: String?
@@ -146,7 +185,7 @@ final class PodLensStore: ObservableObject {
             if selectedFeed?.id == feedId {
                 loadEpisodes(feedId: feedId)
             }
-            loadFeeds()
+            Task { await loadFeeds() }
             // drop finished jobs; the dictionary only needs running state
             jobs = jobs.filter { $0.value.status == "running" }
         case .open_url(let url):
@@ -158,19 +197,17 @@ final class PodLensStore: ObservableObject {
 
     // MARK: feeds & episodes
 
-    func loadCatalog() {
+    func loadCatalog() async {
         guard let api else { return }
-        Task {
-            do {
-                let rows = try await api.catalog_list()
-                let entries = rows.map {
-                    CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
-                                 description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1")
-                }
-                await MainActor.run { self.catalog = entries }
-            } catch {
-                statusLine = L("fetchFailed") + " \(error)"
+        do {
+            let rows = try await api.catalog_list()
+            catalog = rows.map {
+                CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
+                             description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1",
+                             artworkURL: $0.count > 7 ? $0[7] : "")
             }
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
@@ -182,49 +219,120 @@ final class PodLensStore: ObservableObject {
     /// backend). Results reuse CatalogEntry so the UI renders one row type.
     func searchDirectory(_ query: String) {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard let api, !q.isEmpty else { return }
+        guard api != nil, !q.isEmpty else { return }
         isSearching = true
         searchError = nil
-        Task {
-            do {
-                let rows = try await api.catalog_search(query: q)
-                let entries = rows.map {
-                    CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
-                                 description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1")
-                }
-                await MainActor.run {
-                    self.searchResults = entries
-                    self.isSearching = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.searchError = "\(error)"
-                    self.isSearching = false
-                }
+        Task { await searchDirectoryRun(q) }
+    }
+
+    private func searchDirectoryRun(_ q: String) async {
+        guard let api else { return }
+        do {
+            let rows = try await api.catalog_search(query: q)
+            searchResults = rows.map {
+                CatalogEntry(id: "\($0[0])|\($0[1])", category: $0[1], title: $0[2],
+                             description: $0[3], url: $0[4], homepage: $0[5], added: $0[6] == "1",
+                             artworkURL: $0.count > 7 ? $0[7] : "")
             }
+            isSearching = false
+        } catch {
+            searchError = "\(error)"
+            isSearching = false
         }
     }
 
-    func loadFeeds() {
+    func loadFeeds() async {
         guard let api else { return }
-        Task {
-            do {
-                let rows = try await api.feed_list()
-                feeds = rows.map {
-                    Feed(id: $0[0], title: $0[1], author: $0[2], artworkURL: $0[3],
-                         episodeCount: Int($0[4]) ?? 0, latestTitle: $0[5], latestPub: $0[6],
-                         unplayed: Int($0[7]) ?? 0)
-                }
-                // First launch with an empty library lands on Discover instead
-                // of a blank window — once; a user who closes it is not nagged.
-                if feeds.isEmpty && !didAutoOpenDiscover {
-                    didAutoOpenDiscover = true
-                    showDiscover = true
-                }
-            } catch {
-                statusLine = L("fetchFailed") + " \(error)"
+        do {
+            let rows = try await api.feed_list()
+            feeds = rows.map {
+                Feed(id: $0[0], title: $0[1], author: $0[2], artworkURL: $0[3],
+                     episodeCount: Int($0[4]) ?? 0, latestTitle: $0[5], latestPub: $0[6],
+                     unplayed: Int($0[7]) ?? 0)
+            }
+            await loadRecentEpisodes()
+            // First launch with an empty library lands on Discover instead
+            // of a blank window — once; a user who leaves is not nagged.
+            if feeds.isEmpty && !didAutoOpenDiscover {
+                didAutoOpenDiscover = true
+                sidebarItem = .discover
+            }
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
+        }
+    }
+
+    // MARK: cross-feed lanes (home / library pages)
+
+    func loadRecentEpisodes() async {
+        guard let api else { return }
+        do {
+            let rows = try await api.episode_recent()
+            recentEpisodes = rows.map {
+                // feed context prefix, then the episode-list columns
+                RecentEpisode(id: $0[3], feedId: $0[0], feedTitle: $0[1], artworkURL: $0[2],
+                              title: $0[4], pubDisplay: $0[5], durationSec: $0[6],
+                              downloaded: $0[7] == "1", transcriptStatus: $0[8],
+                              summaryStatus: $0[9], positionSec: Double($0[10]) ?? 0,
+                              done: $0[11] == "1", hasTranslation: $0[12] == "1",
+                              description: $0[13])
+            }
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
+        }
+    }
+
+    /// The 待播 lane: episodes in progress first, then each feed's newest
+    /// unplayed episode — what Apple Podcasts means by Up Next for a
+    /// library without an explicit queue.
+    var upNext: [RecentEpisode] {
+        var seenFeeds = Set<String>()
+        var lane: [RecentEpisode] = []
+        for e in recentEpisodes where !e.done {
+            let inProgress = e.positionSec > 5
+            if inProgress {
+                lane.append(e)
+                seenFeeds.insert(e.feedId)
             }
         }
+        for e in recentEpisodes where !e.done {
+            if !seenFeeds.contains(e.feedId) {
+                lane.append(e)
+                seenFeeds.insert(e.feedId)
+            }
+        }
+        return Array(lane.prefix(12))
+    }
+
+    /// Feeds with listening momentum first — the home shows grid.
+    var homeShows: [Feed] {
+        feeds.sorted { $0.unplayed > $1.unplayed }
+    }
+
+    var downloadedEpisodes: [RecentEpisode] {
+        recentEpisodes.filter { $0.downloaded }
+    }
+
+    /// Select an episode from a cross-feed lane without navigating away:
+    /// the owning feed becomes the playback context (autoplay chain, show
+    /// title) while the sidebar stays on the page the user is reading.
+    func selectRecent(_ item: RecentEpisode, autoplay: Bool = true) {
+        let episode = Episode(id: item.id, title: item.title, pubDisplay: item.pubDisplay,
+                              durationSec: item.durationSec, downloaded: item.downloaded,
+                              transcriptStatus: item.transcriptStatus,
+                              summaryStatus: item.summaryStatus,
+                              positionSec: item.positionSec, done: item.done,
+                              hasTranslation: item.hasTranslation, description: item.description)
+        if let feed = feeds.first(where: { $0.id == item.feedId }) {
+            selectedFeed = feed
+            loadEpisodes(feedId: feed.id)
+        }
+        selectedEpisode = episode
+        loadTranscript(episode)
+        loadSummary(episode)
+        loadChapters(episode)
+        loadEstimate(episode)
+        startPlayback(for: episode, autoplay: autoplay)
     }
 
     func selectFeed(_ feed: Feed) {
@@ -261,15 +369,17 @@ final class PodLensStore: ObservableObject {
                     self.catalog = self.catalog.map { entry in
                         entry.url == trimmed ? CatalogEntry(id: entry.id, category: entry.category,
                                                             title: entry.title, description: entry.description,
-                                                            url: entry.url, homepage: entry.homepage, added: true) : entry
+                                                            url: entry.url, homepage: entry.homepage, added: true,
+                                                            artworkURL: entry.artworkURL) : entry
                     }
                     self.searchResults = self.searchResults.map { entry in
                         entry.url == trimmed ? CatalogEntry(id: entry.id, category: entry.category,
                                                             title: entry.title, description: entry.description,
-                                                            url: entry.url, homepage: entry.homepage, added: true) : entry
+                                                            url: entry.url, homepage: entry.homepage, added: true,
+                                                            artworkURL: entry.artworkURL) : entry
                     }
                 }
-                loadFeeds()
+                await loadFeeds()
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
             }
@@ -281,7 +391,8 @@ final class PodLensStore: ObservableObject {
         Task {
             _ = try? await api.feed_remove(id: feed.id)
             if selectedFeed == feed { selectedFeed = nil; episodes = [] }
-            loadFeeds()
+            if case .feed(let f) = sidebarItem, f == feed { sidebarItem = .shows }
+            await loadFeeds()
         }
     }
 
@@ -291,7 +402,7 @@ final class PodLensStore: ObservableObject {
             do {
                 let n = try await api.feed_refresh_all()
                 statusLine = String(format: L("refreshAllDone"), n)
-                loadFeeds()
+                await loadFeeds()
             } catch {
                 statusLine = L("fetchFailed") + " \(error)"
             }
@@ -419,9 +530,27 @@ final class PodLensStore: ObservableObject {
             _ = try? await api.episode_set_done(id: episode.id, done: done ? "1" : "0")
             await MainActor.run {
                 if let feedId = self?.selectedFeed?.id { self?.loadEpisodes(feedId: feedId) }
-                self?.loadFeeds()
+                Task { await self?.loadFeeds() }
             }
         }
+    }
+
+    /// Mark-done from a cross-feed lane (home cards / library rows); no
+    /// feed page needs to be open for the write to land.
+    func setRecentDone(_ item: RecentEpisode, done: Bool) {
+        withEpisode(item.id) { [weak self] api in
+            _ = try? await api.episode_set_done(id: item.id, done: done ? "1" : "0")
+            await MainActor.run {
+                if let feedId = self?.selectedFeed?.id { self?.loadEpisodes(feedId: feedId) }
+                Task { await self?.loadFeeds() }
+            }
+        }
+    }
+
+    /// Whether the currently selected episode has a readable transcript —
+    /// drives the player bar's transcript shortcut.
+    var transcriptAvailable: Bool {
+        selectedEpisode?.transcriptStatus == "done" || !segments.isEmpty
     }
 
     /// Reopen whatever episode last saved a playback position. Selects and
@@ -694,12 +823,10 @@ final class PodLensStore: ObservableObject {
         requestNotificationPermission()
         Task {
             let added = (try? await api.feed_refresh_all()) ?? 0
-            await MainActor.run {
-                self.loadFeeds()
-                if added > 0 {
-                    self.statusLine = String(format: L("refreshAllDone"), Int(added))
-                    self.notifyNewEpisodes(Int(added))
-                }
+            await MainActor.run { self.statusLine = added > 0 ? String(format: L("refreshAllDone"), Int(added)) : self.statusLine }
+            await loadFeeds()
+            if added > 0 {
+                notifyNewEpisodes(Int(added))
             }
         }
     }

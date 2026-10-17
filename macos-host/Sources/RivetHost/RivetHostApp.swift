@@ -7,6 +7,15 @@ import RivetSystem
 struct PodLensApp: App {
     @StateObject private var model = AppModel()
 
+    init() {
+        // Cover art streams through the shared session; without a real
+        // disk cache every relaunch refetches the whole library's art.
+        let megabyte = 1024 * 1024
+        URLCache.shared = URLCache(memoryCapacity: 32 * megabyte,
+                                   diskCapacity: 256 * megabyte,
+                                   diskPath: "podlens-artwork")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -88,7 +97,10 @@ final class AppModel: ObservableObject {
         store.bind(api: api)
         ready = true
         bootStatus = L("ready")
-        store.loadFeeds()
+        // Structured, sequential boot: home data lands before the resume
+        // and update checks, and no unstructured tasks race the RPCs.
+        await store.loadFeeds()
+        await store.loadCatalog()
         store.resumeLast()
         silentUpdateCheck()
     }

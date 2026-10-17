@@ -5,6 +5,51 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **A Podcasts-grade shell for the macOS host.** The sidebar gains Home
+  and Discover entries plus a Library section (Recently Updated,
+  Shows, Downloaded) and cover-art subscription rows with unplayed
+  badges. The Home page carries an Up Next lane — in-progress episodes
+  first, then each show's newest unplayed episode, as large artwork
+  cards with a play pill and a menu (understand / download / mark
+  played) — a shows grid, and a latest-episodes lane with see-all
+  links into the library pages. The player bar moves to the window's
+  bottom edge, Apple Podcasts style, and gains cover art plus a
+  transcript shortcut; episode rows everywhere show cover art,
+  Understand-pipeline status chips (transcript / translation /
+  summary / downloaded / played) and mid-episode progress. Dates
+  render as short "10月17日" / "Oct 17" instead of raw RFC-822.
+- **Cover art end to end.** `catalog-list` and `catalog-search` rows
+  gain an `artwork-url` column: curated entries ship hand-verified
+  Apple-CDN artwork, and iTunes search results upscale the 100px
+  thumbnail to 600px on the same CDN path. Hosts load artwork through
+  a memory-cached async loader over a disk-backed URL cache; feeds
+  without a cover get a quiet placeholder instead of a letter tile.
+- **`episode-recent` RPC** — the newest episodes across every
+  subscription, one row = `(feed-id feed-title feed-artwork
+  <episode-list row…>)`, so the home and library pages brand every
+  card with show title and artwork in one round trip.
+- Discover stops being a modal sheet: the sidebar's Discover entry
+  opens a full page with directory search and the curated catalog as
+  artwork cards. A first launch with an empty library lands there.
+
+### Fixed
+- Views observe the store directly now. The old views read the store
+  through the app model, so store updates only landed when the model
+  itself happened to re-render — lists drew once at boot and then
+  froze.
+- Boot RPCs are structured and sequential (feeds → catalog → resume →
+  update check) and page-level loads no longer race the API binding;
+  the per-step pipeline actions (download / transcribe / translate /
+  summarize / delete audio / mark played) live in a More menu behind
+  the primary Understand button.
+- Update channel rebuilt against rivet HEAD: `updater-config` carries
+  the new component field, the duplicate `platform-symbol` /
+  `architecture-symbol` helpers are gone (rivet/distribution exports
+  them now), and the local OS-to-extension helper is renamed to
+  `payload-extension` so it no longer collides with rivet's
+  installer-kind contract.
+
 ## 0.2.0 - 2026-10-15
 
 ### Added
