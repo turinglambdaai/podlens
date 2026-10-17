@@ -287,6 +287,8 @@ std::wstring FormatSeconds(double seconds) {
   return buffer;
 }
 
+muxc::Border MakeChip(std::wstring const& text);
+
 // WinRT TimeSpans tick in 100 ns units; playback math speaks in seconds.
 double TimeSpanSeconds(winrt::Windows::Foundation::TimeSpan const& span) {
   return static_cast<double>(span.count()) / 1e7;
@@ -669,11 +671,11 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
     }
     item.Content(box_value(content));
     if (!feed.artwork.empty()) {
-      muxc::Image icon;
+      muxc::ImageIcon icon;
       icon.Width(24);
       icon.Height(24);
       try {
-        winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage bitmap(
+        winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage bitmap(
             winrt::Windows::Foundation::Uri(to_wide(feed.artwork)));
         icon.Source(bitmap);
       } catch (...) {
@@ -1232,7 +1234,7 @@ void MainWindow::RenderRecent(std::vector<std::vector<std::string>> rows) {
 // The Up Next lane: in-progress episodes first, then each show's newest
 // unplayed episode — Apple Podcasts' queue semantics for a library with
 // no explicit queue.
-std::vector<RecentRow> MainWindow::UpNext() const {
+std::vector<MainWindow::RecentRow> MainWindow::UpNext() const {
   std::vector<RecentRow> lane;
   std::set<std::string> seen_feeds;
   for (auto const& item : recent_) {
@@ -1262,7 +1264,7 @@ FeedRow const* MainWindow::FeedById(std::string const& id) const {
 
 // The selected episode may come from any lane; the feed page's episodes_
 // vector only carries it once the owning feed's list has loaded.
-EpisodeRow const* MainWindow::SelectedEpisode() const {
+MainWindow::EpisodeRow const* MainWindow::SelectedEpisode() const {
   for (auto const& candidate : episodes_) {
     if (candidate.id == selected_episode_id_) return &candidate;
   }
@@ -1319,7 +1321,7 @@ muxc::Border MainWindow::MakeArtwork(std::wstring const& url, double size) {
     muxc::Image image;
     image.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
     try {
-      winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage bitmap(
+      winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage bitmap(
           winrt::Windows::Foundation::Uri(url));
       image.Source(bitmap);
     } catch (...) {
@@ -1338,7 +1340,7 @@ muxc::Border MainWindow::MakeEpisodeCard(RecentRow const& item, bool show_feed) 
   artwork.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
   if (!item.artwork.empty()) {
     try {
-      artwork.Source(winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+      artwork.Source(winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage(
           winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
     } catch (...) {
     }
@@ -1499,7 +1501,7 @@ muxc::Border MainWindow::MakeUpNextCard(RecentRow const& item) {
   artwork.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
   if (!item.artwork.empty()) {
     try {
-      artwork.Source(winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+      artwork.Source(winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage(
           winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
     } catch (...) {
     }
@@ -1740,7 +1742,7 @@ void MainWindow::UpdatePlayerInfo() {
       PlayerShow().Text(winrt::hstring(to_wide(item.feed_title)));
       try {
         PlayerArtwork().Source(
-            winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+            winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage(
                 winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
       } catch (...) {
       }
@@ -1756,7 +1758,7 @@ void MainWindow::UpdatePlayerInfo() {
     PlayerShow().Text(winrt::hstring(to_wide(feed->title)));
     try {
       PlayerArtwork().Source(
-          winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+          winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage(
               winrt::Windows::Foundation::Uri(to_wide(feed->artwork))));
     } catch (...) {
     }
