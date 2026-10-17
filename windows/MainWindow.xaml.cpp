@@ -2481,8 +2481,8 @@ void MainWindow::LoadDiscover() {
           homepage.Text(winrt::hstring(to_wide(row[4])));
           homepage.FontSize(12);
           homepage.Opacity(0.6);
-          muxc::Border artwork_host = MakeArtwork(
-              to_wide(row.size() > 7 ? row[7] : ""), 56);
+          muxc::Border artwork_host =
+              window->MakeArtwork(to_wide(row.size() > 7 ? row[7] : ""), 56);
           artwork_host.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Top);
 
           bool const added = row[6] == "1";
@@ -2598,7 +2598,7 @@ void MainWindow::RemoveFeed_Click(winrt::Windows::Foundation::IInspectable const
           error = e.what();
         }
       }
-      dispatcher.TryEnqueue([weak, error] {
+      dispatcher.TryEnqueue([weak, error, feed_id] {
         if (auto window = weak.get()) {
           if (error.empty()) {
             window->SetStatus(true, std::wstring(podlens::Tr("status.feed_removed")));
