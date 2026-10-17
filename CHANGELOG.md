@@ -5,6 +5,8 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+## 0.3.0 - 2026-10-17
+
 ### Added
 - **A Podcasts-grade shell on every platform.** All three hosts now
   share the same interaction model, Apple Podcasts style: a sidebar
@@ -40,6 +42,12 @@ All notable changes to PodLens are documented here. Format follows
   with an empty library lands there.
 
 ### Fixed
+- The Windows title bar shows the PodLens brand icon now. WinUI
+  renders a generic placeholder unless the window is handed an icon
+  explicitly, so the exe carried the brand icon (taskbar, shortcuts)
+  while the title bar ran a foreign default glyph. Upstream rivet
+  embeds it at resource ID 1 and the host loads it at construction
+  (rivet#284).
 - Jobs no longer die inside their own error handler. The job-store
   update folded over `hash-set!` results, but `hash-set!` returns
   void, so the first multi-key patch — progress, done, or error —
