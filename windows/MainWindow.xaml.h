@@ -136,6 +136,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void RenderDownloadedPage();
   void RenderShowsPage();
   void SelectRecent(RecentRow const& row, bool autoplay);
+  void SelectFeedById(std::string const& feed_id);
   std::vector<RecentRow> UpNext() const;
   FeedRow const* FeedById(std::string const& id) const;
   EpisodeRow const* SelectedEpisode() const;

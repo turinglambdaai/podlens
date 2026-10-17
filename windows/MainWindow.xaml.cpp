@@ -1255,7 +1255,7 @@ std::vector<MainWindow::RecentRow> MainWindow::UpNext() const {
   return lane;
 }
 
-FeedRow const* MainWindow::FeedById(std::string const& id) const {
+MainWindow::FeedRow const* MainWindow::FeedById(std::string const& id) const {
   for (auto const& feed : feeds_) {
     if (feed.id == id) return &feed;
   }
@@ -1321,8 +1321,8 @@ muxc::Border MainWindow::MakeArtwork(std::wstring const& url, double size) {
     muxc::Image image;
     image.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
     try {
-      winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage bitmap(
-          winrt::Windows::Foundation::Uri(url));
+      winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage bitmap{
+          winrt::Windows::Foundation::Uri(url)};
       image.Source(bitmap);
     } catch (...) {
     }
@@ -1704,7 +1704,7 @@ void MainWindow::RenderDownloadedPage() {
 }
 
 void MainWindow::RenderShowsPage() {
-  ShowsGrid().Children().Clear();
+  ShowsGrid().Items().Clear();
   for (auto const& feed : feeds_) {
     auto tile = MakeShowTile(feed);
     std::string const feed_id = feed.id;
@@ -1713,7 +1713,7 @@ void MainWindow::RenderShowsPage() {
     tile.Tapped([weak = get_weak(), feed_id](auto&&, auto&&) {
       if (auto window = weak.get()) window->SelectFeedById(feed_id);
     });
-    ShowsGrid().Children().Append(tile);
+    ShowsGrid().Items().Append(tile);
   }
 }
 
