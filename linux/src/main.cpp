@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <ctime>
+#include <set>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -193,6 +195,7 @@ std::string estimate_line(std::string const& json) {
 struct FeedRow {
   std::string id;
   std::string title;
+  std::string artwork;
   std::string count;
   int unplayed{0};
 };
@@ -211,6 +214,15 @@ struct EpisodeRow {
   std::string description;
 };
 
+// episode-recent row: the episode-list projection prefixed with the owning
+// feed's identity (feed-id feed-title feed-artwork <episode row…>)
+struct RecentRow {
+  std::string feed_id;
+  std::string feed_title;
+  std::string artwork;
+  EpisodeRow episode;
+};
+
 struct ChapterMark {
   double start{0};
   std::string title;
@@ -225,12 +237,27 @@ struct AppState {
   GtkButton* summarize_button{nullptr};
   GtkButton* mark_button{nullptr};
   GtkButton* remove_audio_button{nullptr};
-  GtkListBox* feed_list{nullptr};
+  GtkListBox* feed_list{nullptr};  // the navigation sidebar
   GtkLabel* episodes_caption{nullptr};
   GtkListBox* episode_list{nullptr};
   GtkStack* list_stack{nullptr};
   GtkLabel* empty_icon{nullptr};
   GtkLabel* empty_text{nullptr};
+
+  // Page host + library pages (Podcasts-style home / library lanes).
+  GtkStack* page_stack{nullptr};
+  GtkBox* home_list{nullptr};
+  GtkBox* recent_list{nullptr};
+  GtkBox* downloaded_list{nullptr};
+  GtkFlowBox* shows_flow{nullptr};
+  GtkBox* discover_box{nullptr};
+  GtkEntry* discover_entry{nullptr};
+  GtkBox* discover_results{nullptr};
+  bool discover_loaded{false};
+
+  // Cross-feed lane data behind home / recent / downloaded.
+  std::vector<RecentRow> recents;
+  std::string current_page{"home"};
 
   // Detail pane
   GtkBox* detail_box{nullptr};
@@ -246,6 +273,9 @@ struct AppState {
 
   // Player bar
   GtkBox* player_bar{nullptr};
+  GtkImage* player_artwork{nullptr};
+  GtkLabel* player_title{nullptr};
+  GtkLabel* player_show{nullptr};
   GtkButton* play_button{nullptr};
   GtkButton* skip_back_button{nullptr};
   GtkButton* skip_forward_button{nullptr};
@@ -310,9 +340,19 @@ struct AppState {
 AppState g_state;
 
 // Forward declarations.
-void rebuild_episode_list();
 void reload_feeds();
 void reload_episodes();
+void reload_recent();
+void show_page(char const* name);
+void render_home();
+void render_recent_page();
+void render_downloaded_page();
+void render_shows();
+void select_recent(RecentRow const& row, bool autoplay);
+void show_episode_details(EpisodeRow const* episode);
+std::string format_pub_date(std::string const& raw);
+void load_discover();
+void start_playback();
 void load_transcript();
 void load_summary();
 void load_estimate();
@@ -363,7 +403,18 @@ void apply_css() {
       ".pl-section { font-size: 13px; font-weight: 700; opacity: 0.85; "
       "margin-top: 10px; }\n"
       ".pl-statusbar { border-top: 1px solid alpha(currentColor, 0.15); "
-      "padding: 3px 12px; }\n");
+      "padding: 3px 12px; }\n"
+      ".pl-page-title { font-size: 22px; font-weight: 700; }\n"
+      ".pl-tile-label { font-size: 12px; }\n"
+      ".pl-artwork { border-radius: 6px; background: "
+      "alpha(currentColor, 0.10); }\n"
+      ".pl-card-art { border-radius: 6px; }\n"
+      ".pl-upnext { border-radius: 12px; overflow: hidden; }\n"
+      ".pl-upnext:hover { filter: brightness(1.08); }\n"
+      ".pl-lane { padding: 10px; border-radius: 8px; }\n"
+      ".pl-lane:hover { background: alpha(currentColor, 0.06); }\n"
+      ".pl-flow > child { margin: 6px; }\n"
+      ".pl-progress { min-height: 4px; }\n");
   gtk_style_context_add_provider_for_display(
       gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -389,6 +440,81 @@ void popup_context_menu(GtkWidget* anchor, GMenuModel* model, double x,
   gtk_popover_present(GTK_POPOVER(popover));
 }
 
+// ---------------------------------------------------------------------------
+// Cover art — streams the URL through the system curl into a pixbuf. Zero
+// new dependencies (no libsoup); a missing/broken curl or URL just leaves
+// the quiet placeholder. The GCancellable rides the GtkImage and is
+// cancelled on destroy, so a torn-down page never writes into a dead
+// widget.
+// ---------------------------------------------------------------------------
+
+void load_artwork(GtkImage* image, std::string const& url) {
+  if (url.empty()) return;
+  GError* error = nullptr;
+  auto* cancellable = g_cancellable_new();
+  // Destroying the image cancels the in-flight fetch, so the completion
+  // callback never touches a dead widget.
+  g_object_set_data_full(G_OBJECT(image), "artwork-cancel", cancellable,
+                         +[](gpointer data) {
+                           g_object_unref(static_cast<GCancellable*>(data));
+                         });
+  g_signal_connect(image, "destroy",
+                   G_CALLBACK(+[](GtkWidget*, gpointer data) {
+                     g_cancellable_cancel(static_cast<GCancellable*>(data));
+                   }),
+                   cancellable);
+  auto* proc = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE, &error, "curl",
+                                "-fsSL", "--max-time", "20", url.c_str(),
+                                static_cast<void*>(nullptr));
+  if (proc == nullptr) {
+    g_error_free(error);
+    return;
+  }
+  // The pixbuf callback unrefs the process through this slot; register it
+  // before the fetch so even the fastest failure path finds it.
+  g_object_set_data_full(G_OBJECT(image), "artwork-proc", proc,
+                         +[](gpointer data) {
+                           g_object_unref(static_cast<GSubprocess*>(data));
+                         });
+  GInputStream* stream = g_subprocess_get_stdout_pipe(proc);
+  gdk_pixbuf_new_from_stream_async(
+      stream, cancellable,
+      reinterpret_cast<GAsyncReadyCallback>(+[](GObject*, GAsyncResult* result,
+                                                gpointer data) {
+        auto* image = GTK_IMAGE(data);
+        GError* load_error = nullptr;
+        auto* pixbuf = gdk_pixbuf_new_from_stream_finish(result, &load_error);
+        if (load_error != nullptr) {
+          g_error_free(load_error);
+        }
+        if (pixbuf == nullptr) return;
+        if (gtk_widget_get_parent(GTK_WIDGET(image)) != nullptr) {
+          gtk_image_set_from_pixbuf(image, pixbuf);
+        }
+        g_object_unref(pixbuf);
+      }),
+      image);
+}
+
+// "Fri, 16 Oct 2026 21:30:00 +0000" -> "Oct 16"; unparsable input passes
+// through untouched. (The Linux host speaks English by design.)
+std::string format_pub_date(std::string const& raw) {
+  std::tm tm{};
+  char const* const formats[] = {"%a, %d %b %Y %H:%M:%S %Z",
+                                 "%a, %d %b %Y %H:%M:%S %z",
+                                 "%Y-%m-%d %H:%M:%S %z",
+                                 "%a, %d %b %Y"};
+  for (char const* format : formats) {
+    tm = {};
+    if (strptime(raw.c_str(), format, &tm) != nullptr) {
+      char buffer[32];
+      strftime(buffer, sizeof(buffer), "%b %e", &tm);
+      return buffer;
+    }
+  }
+  return raw;
+}
+
 // Carries a C++ value on a GObject for the duration of one dialog.
 template <typename T>
 void carry_data(GObject* object, char const* key, T value) {
@@ -402,25 +528,63 @@ T const* carried_data(GObject* object, char const* key) {
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar — feeds
+// Sidebar — destinations + subscriptions
 // ---------------------------------------------------------------------------
 
+GtkWidget* make_nav_row(char const* icon_name, char const* label,
+                        char const* dest) {
+  auto* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  auto* icon = gtk_image_new_from_icon_name(icon_name);
+  gtk_box_append(GTK_BOX(box), icon);
+  auto* text = gtk_label_new(label);
+  gtk_label_set_xalign(GTK_LABEL(text), 0.0f);
+  gtk_box_append(GTK_BOX(box), text);
+
+  auto* row = gtk_list_box_row_new();
+  gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+  carry_data<std::string>(G_OBJECT(row), "dest", dest);
+  return row;
+}
+
+GtkWidget* make_header_row(char const* label) {
+  auto* text = gtk_label_new(label);
+  gtk_label_set_xalign(GTK_LABEL(text), 0.0f);
+  gtk_widget_add_css_class(text, "pl-caption");
+  auto* row = gtk_list_box_row_new();
+  gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), text);
+  gtk_list_box_row_set_selectable(GTK_LIST_BOX_ROW(row), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(row), FALSE);
+  return row;
+}
+
 GtkWidget* make_feed_row(FeedRow const& feed) {
-  auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+  auto* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  auto* artwork = gtk_image_new();
+  gtk_image_set_pixel_size(GTK_IMAGE(artwork), 28);
+  gtk_widget_add_css_class(artwork, "pl-artwork");
+  gtk_widget_set_valign(artwork, GTK_ALIGN_START);
+  gtk_box_append(GTK_BOX(box), artwork);
+  load_artwork(GTK_IMAGE(artwork), feed.artwork);
+
+  auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
   auto* title = gtk_label_new(feed.title.c_str());
   gtk_label_set_ellipsize(GTK_LABEL(title), PANGO_ELLIPSIZE_END);
   gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
   gtk_widget_add_css_class(title, "pl-title");
-  gtk_box_append(GTK_BOX(box), title);
-  std::string meta = feed.count + " episodes";
+  gtk_box_append(GTK_BOX(lines), title);
+  std::string meta = feed.count + " eps";
   if (feed.unplayed > 0) {
-    meta += " · " + std::to_string(feed.unplayed) + " unplayed";
+    auto* chip = gtk_label_new((std::to_string(feed.unplayed) + " new").c_str());
+    gtk_widget_add_css_class(chip, "pl-chip");
+    gtk_label_set_xalign(GTK_LABEL(chip), 0.0f);
+    gtk_box_append(GTK_BOX(lines), GTK_WIDGET(chip));
   }
   auto* meta_label = gtk_label_new(meta.c_str());
   gtk_label_set_ellipsize(GTK_LABEL(meta_label), PANGO_ELLIPSIZE_END);
   gtk_label_set_xalign(GTK_LABEL(meta_label), 0.0f);
   gtk_widget_add_css_class(meta_label, "pl-meta");
-  gtk_box_append(GTK_BOX(box), meta_label);
+  gtk_box_append(GTK_BOX(lines), meta_label);
+  gtk_box_append(GTK_BOX(box), lines);
 
   auto* row = gtk_list_box_row_new();
   gtk_widget_set_margin_top(box, 4);
@@ -439,59 +603,82 @@ void render_feeds(std::vector<std::vector<std::string>> const& rows) {
   while (GtkWidget* child = gtk_widget_get_first_child(GTK_WIDGET(list))) {
     gtk_list_box_remove(list, child);
   }
-  g_state.suppress_feed_selection = false;
+  gtk_list_box_append(list, make_nav_row("user-home-symbolic", "Home", "home"));
+  gtk_list_box_append(list,
+                      make_nav_row("application-rss+xml-symbolic", "Discover",
+                                   "discover"));
+  gtk_list_box_append(list, make_header_row("Library"));
+  gtk_list_box_append(list, make_nav_row("document-open-recent-symbolic",
+                                         "Recently Updated", "recent"));
+  gtk_list_box_append(list,
+                      make_nav_row("view-grid-symbolic", "Shows", "shows"));
+  gtk_list_box_append(list, make_nav_row("folder-download-symbolic",
+                                         "Downloaded", "downloaded"));
+  gtk_list_box_append(list, make_header_row("Subscriptions"));
 
   for (auto const& row : rows) {
     if (row.size() < 5) continue;
     FeedRow feed;
     feed.id = row[0];
     feed.title = row[1];
+    feed.artwork = row.size() > 3 ? row[3] : "";
     feed.count = row[4];
     feed.unplayed = row.size() > 7 ? std::atoi(row[7].c_str()) : 0;
     g_state.feeds.push_back(feed);
     gtk_list_box_append(list, make_feed_row(feed));
   }
 
-  bool const empty = g_state.feeds.empty();
-  gtk_stack_set_visible_child_name(GTK_STACK(g_state.list_stack),
-                                   empty ? "empty" : "list");
-  if (empty) {
-    gtk_label_set_text(g_state.empty_icon, "📻");
-    gtk_label_set_text(
-        g_state.empty_text,
-        "No subscriptions yet — add a feed with ＋ Add Feed.");
-  }
-
-  // Keep or restore the selection: resume-on-launch selects its feed once
-  // the list exists; otherwise the previously selected feed survives a
-  // refresh.
+  // Re-select the row matching the current view (a refresh keeps the user
+  // in place; the sidebar rows were just rebuilt).
+  std::string wanted_dest = g_state.current_page;
+  std::string wanted_feed;
+  if (g_state.current_page == "episodes") wanted_feed = g_state.selected_feed_id;
+  g_state.suppress_feed_selection = true;
+  int index = 0;
   GtkListBoxRow* select = nullptr;
-  std::string const wanted = !g_state.pending_resume_feed_id.empty()
-                                 ? g_state.pending_resume_feed_id
-                                 : g_state.selected_feed_id;
-  g_state.pending_resume_feed_id.clear();
-  if (!wanted.empty()) {
+  while (auto* child = gtk_list_box_get_row_at_index(list, index)) {
+    if (auto const* dest = carried_data<std::string>(G_OBJECT(child), "dest")) {
+      if (*dest == wanted_dest) select = child;
+    }
+    if (auto const* feed_id =
+            carried_data<std::string>(G_OBJECT(child), "feed-id")) {
+      if (!wanted_feed.empty() && *feed_id == wanted_feed) select = child;
+    }
+    if (select != nullptr) {
+      gtk_list_box_select_row(list, select);
+      break;
+    }
+    ++index;
+  }
+  g_state.suppress_feed_selection = false;
+
+  reload_recent();
+  if (g_state.current_page == "home") render_home();
+  if (g_state.current_page == "shows") render_shows();
+
+  // Keep or restore the selection: resume-on-launch opens its feed's page;
+  // otherwise the sidebar selection follows the page the user is on (the
+  // list was just rebuilt, so re-select the current feed's row).
+  if (!g_state.pending_resume_feed_id.empty()) {
+    g_state.selected_feed_id = g_state.pending_resume_feed_id;
+    g_state.pending_resume_feed_id.clear();
+    show_page("episodes");
+    reload_episodes();
+  }
+  if (!g_state.selected_feed_id.empty()) {
     int index = 0;
-    for (auto const& feed : g_state.feeds) {
-      if (feed.id == wanted) {
-        select = gtk_list_box_get_row_at_index(list, index);
-        break;
+    g_state.suppress_feed_selection = true;
+    while (auto* child = gtk_list_box_get_row_at_index(list, index)) {
+      if (auto const* feed_id =
+              carried_data<std::string>(G_OBJECT(child), "feed-id")) {
+        if (*feed_id == g_state.selected_feed_id) {
+          gtk_list_box_select_row(list, child);
+          break;
+        }
       }
       ++index;
     }
-  }
-  if (select != nullptr) {
-    gtk_list_box_select_row(list, select);
-  } else {
-    g_state.selected_feed_id.clear();
-    g_state.episodes.clear();
-    g_state.selected_episode_id.clear();
-    gtk_label_set_text(g_state.episodes_caption, "Episodes");
-    rebuild_episode_list();
-    gtk_label_set_text(g_state.detail_title, "");
-    gtk_label_set_text(g_state.detail_meta, "");
-    gtk_label_set_text(g_state.detail_notes, "");
-    gtk_widget_set_visible(GTK_WIDGET(g_state.detail_box), FALSE);
+    g_state.suppress_feed_selection = false;
   }
   update_action_buttons();
 }
@@ -507,12 +694,19 @@ void reload_feeds() {
       });
 }
 
-void on_feed_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
+void on_nav_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
   if (g_state.suppress_feed_selection) return;
   if (row == nullptr) return;
+  if (auto const* dest = carried_data<std::string>(G_OBJECT(row), "dest")) {
+    show_page(dest->c_str());
+    return;
+  }
   auto const* id = carried_data<std::string>(G_OBJECT(row), "feed-id");
   if (id == nullptr) return;
-  if (g_state.selected_feed_id == *id) return;  // already showing this feed
+  if (g_state.selected_feed_id == *id &&
+      g_state.current_page == "episodes") {
+    return;  // already showing this feed
+  }
   g_state.selected_feed_id = *id;
   for (auto const& feed : g_state.feeds) {
     if (feed.id == *id) {
@@ -521,6 +715,7 @@ void on_feed_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
     }
   }
   reload_episodes();
+  show_page("episodes");
 }
 
 // Walks up from a gesture widget to the row carrying `key`.
@@ -700,6 +895,582 @@ void reload_episodes() {
       });
 }
 
+// ---------------------------------------------------------------------------
+// Cross-feed lanes — home / recently updated / downloaded / shows
+// ---------------------------------------------------------------------------
+
+// The Up Next lane: in-progress episodes first, then each show's newest
+// unplayed episode — Apple Podcasts' queue semantics for a library with
+// no explicit queue.
+std::vector<RecentRow> up_next() {
+  std::vector<RecentRow> lane;
+  std::set<std::string> seen_feeds;
+  for (auto const& item : g_state.recents) {
+    if (item.episode.done) continue;
+    if (item.episode.position_sec > 5) {
+      lane.push_back(item);
+      seen_feeds.insert(item.feed_id);
+    }
+  }
+  for (auto const& item : g_state.recents) {
+    if (item.episode.done) continue;
+    if (lane.size() >= 12) break;
+    if (seen_feeds.count(item.feed_id) == 0) {
+      lane.push_back(item);
+      seen_feeds.insert(item.feed_id);
+    }
+  }
+  return lane;
+}
+
+GtkWidget* make_card_artwork(std::string const& url) {
+  auto* artwork = gtk_image_new();
+  gtk_image_set_pixel_size(GTK_IMAGE(artwork), 56);
+  gtk_widget_add_css_class(artwork, "pl-card-art");
+  gtk_widget_set_valign(artwork, GTK_ALIGN_START);
+  load_artwork(GTK_IMAGE(artwork), url);
+  return artwork;
+}
+
+GtkWidget* make_chip_label(std::string const& text) {
+  auto* chip = gtk_label_new(text.c_str());
+  gtk_widget_add_css_class(chip, "pl-chip");
+  gtk_widget_set_valign(chip, GTK_ALIGN_START);
+  return chip;
+}
+
+GtkWidget* make_progress_line(RecentRow const& item) {
+  auto* progress = gtk_progress_bar_new();
+  gtk_progress_bar_set_fraction(
+      GTK_PROGRESS_BAR(progress),
+      item.episode.duration_sec > 0
+          ? std::min(1.0, item.episode.position_sec / item.episode.duration_sec)
+          : 0.0);
+  gtk_widget_add_css_class(progress, "pl-progress");
+  return progress;
+}
+
+GtkWidget* make_episode_card(RecentRow const& item, bool show_feed) {
+  auto* card = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+  gtk_widget_add_css_class(card, "pl-lane");
+  gtk_box_append(GTK_BOX(card), make_card_artwork(item.artwork));
+
+  auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+  gtk_widget_set_hexpand(lines, TRUE);
+  auto* title = gtk_label_new(item.episode.title.c_str());
+  gtk_label_set_wrap(GTK_LABEL(title), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+  gtk_widget_add_css_class(title, "pl-title");
+  gtk_box_append(GTK_BOX(lines), title);
+
+  std::string meta;
+  if (show_feed) meta += item.feed_title + " · ";
+  meta += format_pub_date(item.episode.pub);
+  if (item.episode.duration_sec > 0) {
+    meta += " · " + format_seconds(item.episode.duration_sec);
+  }
+  auto* meta_label = gtk_label_new(meta.c_str());
+  gtk_label_set_xalign(GTK_LABEL(meta_label), 0.0f);
+  gtk_widget_add_css_class(meta_label, "pl-meta");
+  gtk_box_append(GTK_BOX(lines), meta_label);
+
+  auto* chips = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  if (item.episode.done) gtk_box_append(GTK_BOX(chips), make_chip_label("played"));
+  if (item.episode.downloaded) gtk_box_append(GTK_BOX(chips), make_chip_label("downloaded"));
+  if (item.episode.transcript_status == "done") gtk_box_append(GTK_BOX(chips), make_chip_label("transcript"));
+  if (item.episode.transcript_status == "running") gtk_box_append(GTK_BOX(chips), make_chip_label("transcribing"));
+  if (item.episode.has_translation) gtk_box_append(GTK_BOX(chips), make_chip_label("translated"));
+  if (item.episode.summary_status == "done") gtk_box_append(GTK_BOX(chips), make_chip_label("summary"));
+  if (!item.episode.description.empty()) {
+    auto* notes = gtk_label_new(item.episode.description.c_str());
+    gtk_label_set_ellipsize(GTK_LABEL(notes), PANGO_ELLIPSIZE_END);
+    gtk_label_set_xalign(GTK_LABEL(notes), 0.0f);
+    gtk_widget_add_css_class(notes, "pl-meta");
+    gtk_box_append(GTK_BOX(chips), notes);
+  }
+  if (gtk_widget_get_first_child(chips) != nullptr) {
+    gtk_box_append(GTK_BOX(lines), chips);
+  }
+  if (item.episode.position_sec > 5 && !item.episode.done) {
+    gtk_box_append(GTK_BOX(lines), make_progress_line(item));
+  }
+  gtk_box_append(GTK_BOX(card), lines);
+
+  auto* play = gtk_button_new_from_icon_name("media-playback-start-symbolic");
+  gtk_widget_set_valign(play, GTK_ALIGN_CENTER);
+  gtk_widget_add_css_class(play, "flat");
+  carry_data<RecentRow>(G_OBJECT(play), "recent-row", item);
+  g_signal_connect(play, "clicked",
+                   G_CALLBACK(+[](GtkButton* button, gpointer) {
+                     auto const* row =
+                         carried_data<RecentRow>(G_OBJECT(button), "recent-row");
+                     if (row != nullptr) select_recent(*row, true);
+                   }),
+                   nullptr);
+  gtk_box_append(GTK_BOX(card), play);
+
+  RecentRow const row_copy = item;
+  carry_data<RecentRow>(G_OBJECT(card), "recent-row", row_copy);
+  auto* gesture = gtk_gesture_click_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture), GDK_BUTTON_PRIMARY);
+  g_signal_connect(
+      gesture, "released",
+      G_CALLBACK(+[](GtkGestureClick*, int, double, double, gpointer data) {
+        auto* card_widget = GTK_WIDGET(data);
+        auto const* row =
+            carried_data<RecentRow>(G_OBJECT(card_widget), "recent-row");
+        if (row != nullptr) select_recent(*row, false);
+      }),
+      card);
+  gtk_widget_add_controller(card, GTK_EVENT_CONTROLLER(gesture));
+  return card;
+}
+
+GtkWidget* make_up_next_card(RecentRow const& item) {
+  auto* overlay = gtk_overlay_new();
+  auto* artwork = gtk_image_new();
+  gtk_widget_add_css_class(artwork, "pl-card-art");
+  gtk_widget_set_size_request(artwork, 200, 200);
+  gtk_widget_set_halign(artwork, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(artwork, GTK_ALIGN_FILL);
+  load_artwork(GTK_IMAGE(artwork), item.artwork);
+  gtk_overlay_set_child(GTK_OVERLAY(overlay), artwork);
+
+  auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_widget_set_margin_top(lines, 100);
+  gtk_widget_set_margin_start(lines, 14);
+  gtk_widget_set_margin_end(lines, 14);
+  gtk_widget_set_margin_bottom(lines, 12);
+  gtk_widget_set_valign(lines, GTK_ALIGN_END);
+  gtk_widget_set_halign(lines, GTK_ALIGN_FILL);
+
+  std::string const lane = item.episode.position_sec > 5
+                               ? std::string("Continue listening")
+                               : std::string("New Episode");
+  std::string const meta_text =
+      item.episode.pub.empty()
+          ? lane
+          : lane + " · " + format_pub_date(item.episode.pub);
+  auto* meta = gtk_label_new(nullptr);
+  gtk_label_set_markup(GTK_LABEL(meta), meta_text.c_str());
+  gtk_label_set_xalign(GTK_LABEL(meta), 0.0f);
+  gtk_widget_add_css_class(meta, "pl-meta");
+  gtk_widget_add_css_class(meta, "pl-scrim");
+  gtk_box_append(GTK_BOX(lines), meta);
+
+  auto* title = gtk_label_new(item.episode.title.c_str());
+  gtk_label_set_wrap(GTK_LABEL(title), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+  gtk_label_set_lines(GTK_LABEL(title), 2);
+  gtk_label_set_ellipsize(GTK_LABEL(title), PANGO_ELLIPSIZE_END);
+  gtk_widget_add_css_class(title, "pl-title");
+  gtk_widget_add_css_class(title, "pl-scrim");
+  gtk_box_append(GTK_BOX(lines), title);
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), lines);
+  gtk_overlay_set_measure_overlay(GTK_OVERLAY(overlay), lines, TRUE);
+
+  auto* frame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_add_css_class(frame, "pl-upnext");
+  gtk_box_append(GTK_BOX(frame), overlay);
+  RecentRow const row_copy = item;
+  carry_data<RecentRow>(G_OBJECT(frame), "recent-row", row_copy);
+  auto* gesture = gtk_gesture_click_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture), GDK_BUTTON_PRIMARY);
+  g_signal_connect(
+      gesture, "released",
+      G_CALLBACK(+[](GtkGestureClick*, int, double, double, gpointer data) {
+        auto* card_widget = GTK_WIDGET(data);
+        auto const* row =
+            carried_data<RecentRow>(G_OBJECT(card_widget), "recent-row");
+        if (row != nullptr) select_recent(*row, true);
+      }),
+      frame);
+  gtk_widget_add_controller(frame, GTK_EVENT_CONTROLLER(gesture));
+  return frame;
+}
+
+GtkWidget* make_section_caption(char const* text) {
+  auto* caption = gtk_label_new(text);
+  gtk_label_set_xalign(GTK_LABEL(caption), 0.0f);
+  gtk_widget_add_css_class(caption, "pl-section");
+  return caption;
+}
+
+void render_home() {
+  while (GtkWidget* child =
+             gtk_widget_get_first_child(GTK_WIDGET(g_state.home_list))) {
+    gtk_box_remove(g_state.home_list, child);
+  }
+
+  auto const lane = up_next();
+  if (!lane.empty()) {
+    gtk_box_append(g_state.home_list, make_section_caption("Up Next"));
+    auto* lane_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(lane_scroll),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
+    auto* lane_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    for (auto const& item : lane) {
+      gtk_box_append(GTK_BOX(lane_row), make_up_next_card(item));
+    }
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(lane_scroll), lane_row);
+    gtk_box_append(g_state.home_list, lane_scroll);
+  }
+
+  if (!g_state.feeds.empty()) {
+    gtk_box_append(g_state.home_list, make_section_caption("My Shows"));
+    auto* shows_flow = gtk_flow_box_new();
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(shows_flow),
+                                    GTK_SELECTION_NONE);
+    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(shows_flow), 8);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(shows_flow), 4);
+    gtk_widget_add_css_class(shows_flow, "pl-flow");
+    gtk_widget_set_halign(GTK_WIDGET(shows_flow), GTK_ALIGN_START);
+    for (auto const& feed : g_state.feeds) {
+      auto* tile = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+      auto* artwork = gtk_image_new();
+      gtk_image_set_pixel_size(GTK_IMAGE(artwork), 96);
+      gtk_widget_add_css_class(artwork, "pl-card-art");
+      load_artwork(GTK_IMAGE(artwork), feed.artwork);
+      gtk_box_append(GTK_BOX(tile), artwork);
+      auto* title = gtk_label_new(feed.title.c_str());
+      gtk_label_set_ellipsize(GTK_LABEL(title), PANGO_ELLIPSIZE_END);
+      gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+      gtk_widget_add_css_class(title, "pl-tile-label");
+      gtk_widget_set_size_request(title, 96, -1);
+      gtk_box_append(GTK_BOX(tile), title);
+      carry_data<std::string>(G_OBJECT(tile), "feed-id", feed.id);
+      auto* gesture = gtk_gesture_click_new();
+      gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture),
+                                    GDK_BUTTON_PRIMARY);
+      g_signal_connect(
+          gesture, "released",
+          G_CALLBACK(+[](GtkGestureClick*, int, double, double, gpointer data) {
+            auto* tile_widget = GTK_WIDGET(data);
+            auto const* feed_id = carried_data<std::string>(
+                G_OBJECT(tile_widget), "feed-id");
+            if (feed_id == nullptr) return;
+            g_state.selected_feed_id = *feed_id;
+            reload_episodes();
+            show_page("episodes");
+            // sync the sidebar selection to this feed's row
+            g_state.suppress_feed_selection = true;
+            int index = 0;
+            while (auto* child = gtk_list_box_get_row_at_index(
+                       g_state.feed_list, index)) {
+              if (auto const* carried = carried_data<std::string>(
+                      G_OBJECT(child), "feed-id")) {
+                if (*carried == *feed_id) {
+                  gtk_list_box_select_row(g_state.feed_list, child);
+                  break;
+                }
+              }
+              ++index;
+            }
+            g_state.suppress_feed_selection = false;
+          }),
+          tile);
+      gtk_widget_add_controller(tile, GTK_EVENT_CONTROLLER(gesture));
+      gtk_flow_box_append(GTK_FLOW_BOX(shows_flow), tile);
+    }
+    gtk_box_append(g_state.home_list, shows_flow);
+  }
+
+  if (!g_state.recents.empty()) {
+    gtk_box_append(g_state.home_list, make_section_caption("Latest Episodes"));
+    int shown = 0;
+    for (auto const& item : g_state.recents) {
+      gtk_box_append(g_state.home_list, make_episode_card(item, true));
+      if (++shown >= 6) break;
+    }
+  }
+}
+
+void render_recent_page() {
+  while (GtkWidget* child =
+             gtk_widget_get_first_child(GTK_WIDGET(g_state.recent_list))) {
+    gtk_box_remove(g_state.recent_list, child);
+  }
+  if (g_state.recents.empty()) {
+    auto* empty = gtk_label_new("No episodes yet — try Refresh All Feeds.");
+    gtk_widget_add_css_class(empty, "pl-meta");
+    gtk_widget_set_margin_top(empty, 24);
+    gtk_box_append(g_state.recent_list, empty);
+    return;
+  }
+  for (auto const& item : g_state.recents) {
+    gtk_box_append(g_state.recent_list, make_episode_card(item, true));
+  }
+}
+
+void render_downloaded_page() {
+  while (GtkWidget* child =
+             gtk_widget_get_first_child(GTK_WIDGET(g_state.downloaded_list))) {
+    gtk_box_remove(g_state.downloaded_list, child);
+  }
+  bool any = false;
+  for (auto const& item : g_state.recents) {
+    if (!item.episode.downloaded) continue;
+    gtk_box_append(g_state.downloaded_list, make_episode_card(item, true));
+    any = true;
+  }
+  if (!any) {
+    auto* empty = gtk_label_new("No downloaded episodes.");
+    gtk_widget_add_css_class(empty, "pl-meta");
+    gtk_widget_set_margin_top(empty, 24);
+    gtk_box_append(g_state.downloaded_list, empty);
+  }
+}
+
+void render_shows() {
+  while (GtkWidget* child =
+             gtk_widget_get_first_child(GTK_WIDGET(g_state.shows_flow))) {
+    gtk_flow_box_remove(g_state.shows_flow, child);
+  }
+  for (auto const& feed : g_state.feeds) {
+    auto* tile = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    auto* artwork = gtk_image_new();
+    gtk_image_set_pixel_size(GTK_IMAGE(artwork), 120);
+    gtk_widget_add_css_class(artwork, "pl-card-art");
+    load_artwork(GTK_IMAGE(artwork), feed.artwork);
+    gtk_box_append(GTK_BOX(tile), artwork);
+    auto* title = gtk_label_new(feed.title.c_str());
+    gtk_label_set_ellipsize(GTK_LABEL(title), PANGO_ELLIPSIZE_END);
+    gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+    gtk_widget_add_css_class(title, "pl-tile-label");
+    gtk_widget_set_size_request(title, 120, -1);
+    gtk_box_append(GTK_BOX(tile), title);
+    carry_data<std::string>(G_OBJECT(tile), "feed-id", feed.id);
+    gtk_flow_box_append(g_state.shows_flow, tile);
+  }
+}
+
+void show_page(char const* name) {
+  g_state.current_page = name;
+  gtk_stack_set_visible_child_name(g_state.page_stack, name);
+  if (std::string(name) == "home") render_home();
+  if (std::string(name) == "recent") render_recent_page();
+  if (std::string(name) == "downloaded") render_downloaded_page();
+  if (std::string(name) == "shows") render_shows();
+  if (std::string(name) == "discover" && !g_state.discover_loaded) {
+    load_discover();
+  }
+}
+
+void reload_recent() {
+  if (g_state.api == nullptr) return;
+  (void)g_state.api->episode_recent_async(
+      [](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+        on_result(std::move(result),
+                  [](std::vector<std::vector<std::string>> const& rows) {
+                    g_state.recents.clear();
+                    for (auto const& row : rows) {
+                      if (row.size() < 14) continue;
+                      RecentRow item;
+                      item.feed_id = row[0];
+                      item.feed_title = row[1];
+                      item.artwork = row[2];
+                      item.episode.id = row[3];
+                      item.episode.title = row[4];
+                      item.episode.pub = row[5];
+                      item.episode.duration_sec = std::atof(row[6].c_str());
+                      item.episode.downloaded = row[7] == "1";
+                      item.episode.transcript_status = row[8];
+                      item.episode.summary_status = row[9];
+                      item.episode.position_sec = std::atof(row[10].c_str());
+                      item.episode.done = row[11] == "1";
+                      item.episode.has_translation = row[12] == "1";
+                      item.episode.description = row[13];
+                      g_state.recents.push_back(item);
+                    }
+                    if (g_state.current_page == "home") render_home();
+                    if (g_state.current_page == "recent") render_recent_page();
+                    if (g_state.current_page == "downloaded") {
+                      render_downloaded_page();
+                    }
+                  });
+      });
+}
+
+void select_recent(RecentRow const& row, bool autoplay) {
+  if (!g_state.selected_episode_id.empty() &&
+      g_state.selected_episode_id != row.episode.id) {
+    stop_playback(true);
+  }
+  g_state.selected_feed_id = row.feed_id;
+  g_state.selected_episode_id = row.episode.id;
+  for (auto const& feed : g_state.feeds) {
+    if (feed.id == row.feed_id) {
+      gtk_label_set_text(g_state.episodes_caption, feed.title.c_str());
+      break;
+    }
+  }
+  reload_episodes();
+  show_episode_details(&row.episode);
+  if (autoplay) start_playback();
+}
+
+// ---------------------------------------------------------------------------
+// Discover — full-directory search + the curated catalog as artwork cards
+// ---------------------------------------------------------------------------
+
+GtkWidget* make_discover_card(std::vector<std::string> const& row) {
+  if (row.size() < 7) return nullptr;
+  auto* card = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+  gtk_widget_add_css_class(card, "pl-lane");
+  auto* artwork = gtk_image_new();
+  gtk_image_set_pixel_size(GTK_IMAGE(artwork), 56);
+  gtk_widget_add_css_class(artwork, "pl-card-art");
+  load_artwork(GTK_IMAGE(artwork), row.size() > 7 ? row[7] : "");
+  gtk_box_append(GTK_BOX(card), artwork);
+
+  auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+  gtk_widget_set_hexpand(lines, TRUE);
+  auto* title = gtk_label_new(row[2].c_str());
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+  gtk_widget_add_css_class(title, "pl-title");
+  gtk_box_append(GTK_BOX(lines), title);
+  auto* description = gtk_label_new(row[3].c_str());
+  gtk_label_set_wrap(GTK_LABEL(description), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(description), 0.0f);
+  gtk_widget_add_css_class(description, "pl-meta");
+  gtk_box_append(GTK_BOX(lines), description);
+  gtk_box_append(GTK_BOX(card), lines);
+
+  bool const added = row[6] == "1";
+  auto* action = gtk_button_new_with_label(added ? "Added" : "Add");
+  gtk_widget_set_sensitive(action, !added);
+  if (!added) {
+    gtk_widget_add_css_class(action, "suggested-action");
+    carry_data<std::string>(G_OBJECT(action), "feed-url", row[4]);
+    g_signal_connect(
+        action, "clicked",
+        G_CALLBACK(+[](GtkButton* button, gpointer) {
+          auto const* url = carried_data<std::string>(G_OBJECT(button), "feed-url");
+          if (url == nullptr || g_state.api == nullptr) return;
+          std::string const feed_url = *url;
+          (void)g_state.api->feed_add_async(
+              feed_url,
+              [](rivet_app::Result<std::string> result) {
+                on_result(std::move(result),
+                          [](std::string const&) {
+                            reload_feeds();
+                            reload_recent();
+                            if (g_state.discover_loaded) load_discover();
+                          });
+              });
+        }),
+        nullptr);
+  }
+  gtk_widget_set_valign(action, GTK_ALIGN_CENTER);
+  gtk_box_append(GTK_BOX(card), action);
+  return card;
+}
+
+void render_discover_results(std::vector<std::vector<std::string>> const& rows,
+                             std::string const& error) {
+  while (GtkWidget* child =
+             gtk_widget_get_first_child(GTK_WIDGET(g_state.discover_results))) {
+    gtk_box_remove(g_state.discover_results, child);
+  }
+  if (!error.empty()) {
+    auto* note = gtk_label_new(("Search failed: " + error).c_str());
+    gtk_widget_add_css_class(note, "pl-meta");
+    gtk_box_append(g_state.discover_results, note);
+    return;
+  }
+  for (auto const& row : rows) {
+    if (auto* card = make_discover_card(row)) {
+      gtk_box_append(g_state.discover_results, card);
+    }
+  }
+}
+
+void on_discover_search_clicked(GtkButton*, gpointer) {
+  if (g_state.api == nullptr) return;
+  auto const query = std::string(gtk_editable_get_text(GTK_EDITABLE(g_state.discover_entry)));
+  if (query.empty()) return;
+  (void)g_state.api->catalog_search_async(
+      query,
+      [](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+        on_result(
+            std::move(result),
+            [](std::vector<std::vector<std::string>> const& rows) {
+              render_discover_results(rows, std::string());
+            });
+      });
+}
+
+void load_discover() {
+  g_state.discover_loaded = true;
+  if (g_state.api == nullptr) return;
+  (void)g_state.api->catalog_list_async(
+      [](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+        on_result(std::move(result),
+                  [](std::vector<std::vector<std::string>> const& rows) {
+                    while (GtkWidget* child = gtk_widget_get_first_child(
+                               GTK_WIDGET(g_state.discover_box))) {
+                      gtk_box_remove(g_state.discover_box, child);
+                    }
+                    std::string current_category;
+                    for (auto const& row : rows) {
+                      if (row.size() < 7) continue;
+                      if (row[1] != current_category) {
+                        current_category = row[1];
+                        gtk_box_append(g_state.discover_box,
+                                       make_section_caption(row[1].c_str()));
+                      }
+                      if (auto* card = make_discover_card(row)) {
+                        gtk_box_append(g_state.discover_box, card);
+                      }
+                    }
+                  });
+      });
+}
+
+void show_episode_details(EpisodeRow const* episode) {
+  g_state.transcript.clear();
+  g_state.summary_json.clear();
+  if (episode != nullptr) {
+    gtk_label_set_text(g_state.detail_title, episode->title.c_str());
+    std::string meta = format_pub_date(episode->pub);
+    if (episode->duration_sec > 0) {
+      meta += " · " + format_seconds(episode->duration_sec);
+    }
+    if (episode->position_sec > 5 && !episode->done) {
+      meta += " · at " + format_seconds(episode->position_sec);
+    }
+    gtk_label_set_text(g_state.detail_meta, meta.c_str());
+    gtk_label_set_text(g_state.detail_notes, episode->description.c_str());
+    gtk_widget_set_visible(GTK_WIDGET(g_state.detail_box), TRUE);
+    // the window-level player bar follows the selection
+    gtk_widget_set_visible(GTK_WIDGET(g_state.player_bar), TRUE);
+    gtk_label_set_text(GTK_LABEL(g_state.player_title), episode->title.c_str());
+    for (auto const& feed : g_state.feeds) {
+      if (feed.id == g_state.selected_feed_id) {
+        gtk_label_set_text(GTK_LABEL(g_state.player_show), feed.title.c_str());
+        load_artwork(g_state.player_artwork, feed.artwork);
+        break;
+      }
+    }
+    for (auto const& item : g_state.recents) {
+      if (item.episode.id == g_state.selected_episode_id) {
+        gtk_label_set_text(GTK_LABEL(g_state.player_title),
+                           item.episode.title.c_str());
+        gtk_label_set_text(GTK_LABEL(g_state.player_show),
+                           item.feed_title.c_str());
+        load_artwork(g_state.player_artwork, item.artwork);
+        break;
+      }
+    }
+  }
+  gtk_stack_set_visible_child_name(g_state.reading_stack, "transcript");
+  load_transcript();
+  load_summary();
+  load_estimate();
+  load_chapters();
+  update_action_buttons();
+}
+
 void on_episode_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
   if (g_state.suppress_episode_selection) return;
   if (row == nullptr) return;
@@ -710,28 +1481,7 @@ void on_episode_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
     stop_playback(true);
   }
   g_state.selected_episode_id = *id;
-  g_state.transcript.clear();
-  g_state.summary_json.clear();
-
-  if (auto const* episode = selected_episode()) {
-    gtk_label_set_text(g_state.detail_title, episode->title.c_str());
-    std::string meta = episode->pub;
-    if (episode->duration_sec > 0) {
-      meta += " · " + format_seconds(episode->duration_sec);
-    }
-    if (episode->position_sec > 5 && !episode->done) {
-      meta += " · at " + format_seconds(episode->position_sec);
-    }
-    gtk_label_set_text(g_state.detail_meta, meta.c_str());
-    gtk_label_set_text(g_state.detail_notes, episode->description.c_str());
-    gtk_widget_set_visible(GTK_WIDGET(g_state.detail_box), TRUE);
-  }
-  gtk_stack_set_visible_child_name(g_state.reading_stack, "transcript");
-  load_transcript();
-  load_summary();
-  load_estimate();
-  load_chapters();
-  update_action_buttons();
+  show_episode_details(selected_episode());
 }
 
 void on_episode_row_pressed(GtkGestureClick* gesture, int, double x, double y,
@@ -764,6 +1514,10 @@ void on_episode_row_pressed(GtkGestureClick* gesture, int, double x, double y,
 EpisodeRow const* selected_episode() {
   for (auto const& episode : g_state.episodes) {
     if (episode.id == g_state.selected_episode_id) return &episode;
+  }
+  // episodes loaded from a lane card, before the feed page finished loading
+  for (auto const& item : g_state.recents) {
+    if (item.episode.id == g_state.selected_episode_id) return &item.episode;
   }
   return nullptr;
 }
@@ -1582,6 +2336,7 @@ void on_mark_clicked(GtkButton*, gpointer) {
       id, done, [](rivet_app::Result<bool>) {
         dispatch_ui([] {
           reload_feeds();
+          reload_recent();
           reload_episodes();
         });
       });
@@ -2465,7 +3220,8 @@ void subscribe_to_events() {
                   event)) {
             dispatch_ui([] {
               reload_feeds();
-              reload_episodes();
+              reload_recent();
+              if (g_state.current_page == "episodes") reload_episodes();
             });
           } else if (auto const* progress =
                          std::get_if<rivet_app::Job_progressEvent>(&event)) {
@@ -2682,15 +3438,6 @@ GtkWidget* make_button_with_icon(char const* icon, char const* label) {
   return button;
 }
 
-void rebuild_episode_list() {
-  g_state.suppress_episode_selection = true;
-  while (GtkWidget* child =
-             gtk_widget_get_first_child(GTK_WIDGET(g_state.episode_list))) {
-    gtk_list_box_remove(g_state.episode_list, child);
-  }
-  g_state.suppress_episode_selection = false;
-}
-
 void on_shutdown(GApplication*, gpointer) {
   // Exactly-once teardown: the GTK shutdown signal and the signal hook can
   // both reach this; whichever lands first does the work.
@@ -2761,10 +3508,6 @@ void on_activate(GtkApplication* app, gpointer) {
 
   auto* sidebar = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_size_request(sidebar, 240, -1);
-  auto* caption = gtk_label_new("Subscriptions");
-  gtk_label_set_xalign(GTK_LABEL(caption), 0.0f);
-  gtk_widget_add_css_class(caption, "pl-caption");
-  gtk_box_append(GTK_BOX(sidebar), caption);
   auto* feed_scroll = gtk_scrolled_window_new();
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(feed_scroll),
                                  GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
@@ -2811,10 +3554,150 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_stack_add_named(GTK_STACK(list_stack), empty_box, "empty");
   gtk_stack_set_visible_child_name(GTK_STACK(list_stack), "empty");
 
-  // Episodes on top, detail below; the divider starts half/half.
-  auto* vertical = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-  gtk_paned_set_start_child(GTK_PANED(vertical), list_stack);
-  gtk_paned_set_position(GTK_PANED(vertical), 320);
+  // The episodes page wraps the caption + the list stack (existing shell).
+  auto* episodes_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_box_append(GTK_BOX(episodes_page), episode_caption);
+  gtk_box_append(GTK_BOX(episodes_page), list_stack);
+
+  // Library pages: home / discover / recent / shows / downloaded, each a
+  // scrolled column with its own caption — the Podcasts page model.
+  auto* page_stack = gtk_stack_new();
+  gtk_stack_add_named(GTK_STACK(page_stack), episodes_page, "episodes");
+
+  {
+    auto* home_page = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(home_page),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    auto* home_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_margin_top(home_box, 6);
+    gtk_widget_set_margin_start(home_box, 14);
+    gtk_widget_set_margin_end(home_box, 14);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(home_page), home_box);
+    gtk_stack_add_named(GTK_STACK(page_stack), home_page, "home");
+    g_state.home_list = GTK_BOX(home_box);
+  }
+  {
+    auto* recent_page = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(recent_page),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    auto* recent_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_margin_top(recent_box, 6);
+    gtk_widget_set_margin_start(recent_box, 14);
+    gtk_widget_set_margin_end(recent_box, 14);
+    auto* recent_caption = gtk_label_new("Recently Updated");
+    gtk_label_set_xalign(GTK_LABEL(recent_caption), 0.0f);
+    gtk_widget_add_css_class(recent_caption, "pl-page-title");
+    gtk_box_append(GTK_BOX(recent_box), recent_caption);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(recent_page), recent_box);
+    gtk_stack_add_named(GTK_STACK(page_stack), recent_page, "recent");
+    g_state.recent_list = GTK_BOX(recent_box);
+  }
+  {
+    auto* shows_page = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(shows_page),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    auto* shows_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_margin_top(shows_box, 6);
+    gtk_widget_set_margin_start(shows_box, 14);
+    gtk_widget_set_margin_end(shows_box, 14);
+    auto* shows_caption = gtk_label_new("Shows");
+    gtk_label_set_xalign(GTK_LABEL(shows_caption), 0.0f);
+    gtk_widget_add_css_class(shows_caption, "pl-page-title");
+    gtk_box_append(GTK_BOX(shows_box), shows_caption);
+    auto* shows_flow = gtk_flow_box_new();
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(shows_flow),
+                                    GTK_SELECTION_NONE);
+    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(shows_flow), 6);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(shows_flow), 3);
+    gtk_widget_add_css_class(shows_flow, "pl-flow");
+    gtk_box_append(GTK_BOX(shows_box), shows_flow);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(shows_page), shows_box);
+    gtk_stack_add_named(GTK_STACK(page_stack), shows_page, "shows");
+    g_state.shows_flow = GTK_FLOW_BOX(shows_flow);
+    // clicking a tile opens that feed's episode page
+    g_signal_connect(
+        shows_flow, "child-activated",
+        G_CALLBACK(+[](GtkFlowBox*, GtkFlowBoxChild* child, gpointer) {
+          auto* tile = gtk_flow_box_child_get_child(child);
+          if (tile == nullptr) return;
+          auto const* feed_id =
+              carried_data<std::string>(G_OBJECT(tile), "feed-id");
+          if (feed_id == nullptr) return;
+          g_state.selected_feed_id = *feed_id;
+          for (auto const& feed : g_state.feeds) {
+            if (feed.id == *feed_id) {
+              gtk_label_set_text(g_state.episodes_caption, feed.title.c_str());
+              break;
+            }
+          }
+          reload_episodes();
+          show_page("episodes");
+        }),
+        nullptr);
+  }
+  {
+    auto* downloaded_page = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(downloaded_page),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    auto* downloaded_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_margin_top(downloaded_box, 6);
+    gtk_widget_set_margin_start(downloaded_box, 14);
+    gtk_widget_set_margin_end(downloaded_box, 14);
+    auto* downloaded_caption = gtk_label_new("Downloaded");
+    gtk_label_set_xalign(GTK_LABEL(downloaded_caption), 0.0f);
+    gtk_widget_add_css_class(downloaded_caption, "pl-page-title");
+    gtk_box_append(GTK_BOX(downloaded_box), downloaded_caption);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(downloaded_page),
+                                  downloaded_box);
+    gtk_stack_add_named(GTK_STACK(page_stack), downloaded_page, "downloaded");
+    g_state.downloaded_list = GTK_BOX(downloaded_box);
+  }
+  {
+    // Discover: search row over the curated catalog as artwork cards.
+    auto* discover_page = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(discover_page),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    auto* discover_page_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_top(discover_page_box, 6);
+    gtk_widget_set_margin_start(discover_page_box, 14);
+    gtk_widget_set_margin_end(discover_page_box, 14);
+    auto* discover_caption = gtk_label_new("Discover");
+    gtk_label_set_xalign(GTK_LABEL(discover_caption), 0.0f);
+    gtk_widget_add_css_class(discover_caption, "pl-page-title");
+    gtk_box_append(GTK_BOX(discover_page_box), discover_caption);
+
+    auto* search_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    auto* entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
+                                   "Search all podcasts, press return…");
+    gtk_widget_set_hexpand(entry, TRUE);
+    gtk_box_append(GTK_BOX(search_row), entry);
+    auto* search_button =
+        gtk_button_new_from_icon_name("system-search-symbolic");
+    gtk_box_append(GTK_BOX(search_row), search_button);
+    gtk_box_append(GTK_BOX(discover_page_box), search_row);
+    auto* results = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_box_append(GTK_BOX(discover_page_box), results);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(discover_page),
+                                  discover_page_box);
+    gtk_stack_add_named(GTK_STACK(page_stack), discover_page, "discover");
+    g_state.discover_box = GTK_BOX(results);
+    g_state.discover_entry = GTK_ENTRY(entry);
+    g_signal_connect(search_button, "clicked",
+                     G_CALLBACK(on_discover_search_clicked), nullptr);
+    g_signal_connect(
+        entry, "activate", G_CALLBACK(+[](GtkEntry*, gpointer) {
+          on_discover_search_clicked(nullptr, nullptr);
+        }),
+        nullptr);
+  }
+
+  gtk_stack_set_visible_child_name(GTK_STACK(page_stack), "home");
+
+  // Page column | detail column; the divider starts generous to the pages.
+  auto* vertical = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_paned_set_start_child(GTK_PANED(vertical), page_stack);
+  gtk_paned_set_position(GTK_PANED(vertical), 420);
 
   // Detail pane: header, action row (Understand + progress), reading stack.
   auto* detail = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
@@ -2823,6 +3706,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_margin_end(detail, 14);
   gtk_widget_set_margin_bottom(detail, 6);
   gtk_widget_set_visible(detail, FALSE);
+  gtk_widget_set_size_request(detail, 360, -1);
 
   auto* detail_title = GTK_LABEL(gtk_label_new(""));
   gtk_label_set_xalign(detail_title, 0.0f);
@@ -2919,15 +3803,36 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_vexpand(reading, TRUE);
   gtk_box_append(GTK_BOX(detail), reading);
   gtk_paned_set_end_child(GTK_PANED(vertical), detail);
+  gtk_widget_set_vexpand(GTK_WIDGET(vertical), TRUE);
 
   gtk_box_append(GTK_BOX(pane), vertical);
   gtk_paned_set_end_child(GTK_PANED(body), pane);
 
-  // Player bar: play/pause, ±15/30 s, chapter jumps, seek scale, clock and
-  // rate. Visible whenever an episode is selected.
+  // Player bar: cover, now playing, transcript shortcut, play/pause,
+  // ±15/30 s, chapter jumps, seek scale, clock and rate. Visible whenever
+  // an episode is selected.
   auto* player_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
   gtk_widget_add_css_class(player_bar, "pl-statusbar");
   gtk_widget_set_visible(player_bar, FALSE);
+  auto* player_artwork = gtk_image_new();
+  gtk_image_set_pixel_size(GTK_IMAGE(player_artwork), 44);
+  gtk_widget_add_css_class(player_artwork, "pl-card-art");
+  gtk_box_append(GTK_BOX(player_bar), GTK_WIDGET(player_artwork));
+  auto* now_playing = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  auto* player_title = gtk_label_new("");
+  gtk_label_set_ellipsize(GTK_LABEL(player_title), PANGO_ELLIPSIZE_END);
+  gtk_widget_add_css_class(player_title, "pl-title");
+  gtk_box_append(GTK_BOX(now_playing), player_title);
+  auto* player_show = gtk_label_new("");
+  gtk_label_set_ellipsize(GTK_LABEL(player_show), PANGO_ELLIPSIZE_END);
+  gtk_widget_add_css_class(player_show, "pl-meta");
+  gtk_box_append(GTK_BOX(now_playing), player_show);
+  gtk_widget_set_size_request(now_playing, 200, -1);
+  gtk_box_append(GTK_BOX(player_bar), now_playing);
+  auto* player_transcript =
+      gtk_button_new_from_icon_name("text-x-generic-symbolic");
+  gtk_widget_set_tooltip_text(player_transcript, "Transcript");
+  gtk_box_append(GTK_BOX(player_bar), player_transcript);
   auto* play_button = gtk_button_new_from_icon_name(
       "media-playback-start-symbolic");
   gtk_box_append(GTK_BOX(player_bar), play_button);
@@ -3000,6 +3905,10 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.position_text = position_text;
   g_state.duration_text = duration_text;
   g_state.feed_list = GTK_LIST_BOX(feed_list);
+  g_state.page_stack = GTK_STACK(page_stack);
+  g_state.player_artwork = GTK_IMAGE(player_artwork);
+  g_state.player_title = GTK_LABEL(player_title);
+  g_state.player_show = GTK_LABEL(player_show);
   g_state.episodes_caption = GTK_LABEL(episode_caption);
   g_state.episode_list = GTK_LIST_BOX(episode_list);
   g_state.list_stack = GTK_STACK(list_stack);
@@ -3030,7 +3939,7 @@ void on_activate(GtkApplication* app, gpointer) {
                     G_VARIANT_TYPE("(ss)"), on_episode_done_activated);
 
   g_signal_connect(feed_list, "row-selected",
-                   G_CALLBACK(on_feed_row_selected), nullptr);
+                   G_CALLBACK(on_nav_row_selected), nullptr);
   g_signal_connect(episode_list, "row-selected",
                    G_CALLBACK(on_episode_row_selected), nullptr);
   {
@@ -3062,6 +3971,12 @@ void on_activate(GtkApplication* app, gpointer) {
   g_signal_connect(mark, "clicked", G_CALLBACK(on_mark_clicked), nullptr);
   g_signal_connect(remove_audio, "clicked",
                    G_CALLBACK(on_remove_audio_clicked), nullptr);
+  g_signal_connect(player_transcript, "clicked",
+                   G_CALLBACK(+[](GtkButton*, gpointer) {
+                     gtk_stack_set_visible_child_name(
+                         g_state.reading_stack, "transcript");
+                   }),
+                   nullptr);
   g_signal_connect(play_button, "clicked", G_CALLBACK(on_play_clicked),
                    nullptr);
   g_signal_connect(skip_back, "clicked", G_CALLBACK(on_skip_back_clicked),
