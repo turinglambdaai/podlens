@@ -10,10 +10,13 @@ struct PodLensApp: App {
     init() {
         // Cover art streams through the shared session; without a real
         // disk cache every relaunch refetches the whole library's art.
+        // The disk path must be absolute — a bare name lands in whatever
+        // directory the app happened to start from.
         let megabyte = 1024 * 1024
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         URLCache.shared = URLCache(memoryCapacity: 32 * megabyte,
                                    diskCapacity: 256 * megabyte,
-                                   diskPath: "podlens-artwork")
+                                   diskPath: cacheDir.appendingPathComponent("podlens-artwork").path)
     }
 
     var body: some Scene {
