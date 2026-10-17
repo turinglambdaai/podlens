@@ -2432,10 +2432,12 @@ GtkWidget* build_primary_menu() {
   g_menu_append(menu, "Refresh All Feeds", "app.refresh-all");
   auto* settings_menu = g_menu_new();
   g_menu_append(settings_menu, "Settings…", "app.settings");
-  g_menu_append(settings_menu, "Check for Updates…", "app.check-updates");
   g_menu_append_submenu(menu, "Options", G_MENU_MODEL(settings_menu));
   g_object_unref(settings_menu);
+  // Family menu convention: Check for Updates… and About are a pair in the
+  // Help menu.
   auto* help = g_menu_new();
+  g_menu_append(help, "Check for Updates…", "app.check-updates");
   g_menu_append(help, "About", "app.about");
   g_menu_append_submenu(menu, "Help", G_MENU_MODEL(help));
   g_object_unref(help);

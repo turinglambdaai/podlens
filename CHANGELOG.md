@@ -5,6 +5,7 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ### Added
 - **A Podcasts-grade shell for the macOS host.** The sidebar gains Home
   and Discover entries plus a Library section (Recently Updated,
@@ -49,6 +50,13 @@ All notable changes to PodLens are documented here. Format follows
   them now), and the local OS-to-extension helper is renamed to
   `payload-extension` so it no longer collides with rivet's
   installer-kind contract.
+
+### Changed
+- "Check for Updates…" moved next to About per the family menu
+  convention: it now lives in the App menu on macOS, in a Help menu
+  (Ctrl+U accelerator) in the Windows sidebar, and in the Help section
+  of the Linux primary menu — replacing the Windows navigation item and
+  the Linux Options entry.
 
 ## 0.2.0 - 2026-10-15
 

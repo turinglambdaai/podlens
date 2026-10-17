@@ -301,7 +301,11 @@ MainWindow::MainWindow() {
   DiscoverButton().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("menu.discover")))));
   SettingsNavLabel().Text(std::wstring(podlens::Tr("menu.settings")));
-  UpdatesNavLabel().Text(std::wstring(podlens::Tr("menu.check_updates")));
+  HelpButton().Content(box_value(
+      winrt::hstring(std::wstring(podlens::Tr("menu.help")))));
+  MenuCheckUpdates().Text(
+      winrt::hstring(std::wstring(podlens::Tr("menu.check_updates"))));
+  MenuAbout().Text(winrt::hstring(std::wstring(podlens::Tr("menu.about"))));
   EpisodesHeader().Text(std::wstring(podlens::Tr("episodes.header")));
   DetailEmptyTitle().Text(std::wstring(podlens::Tr("detail.none")));
   DetailEmptyHint().Text(std::wstring(podlens::Tr("detail.hint")));
@@ -1645,10 +1649,6 @@ void MainWindow::Nav_SelectionChanged(
     RunSettingsDialog();
     return;
   }
-  if (key == L"updates") {
-    RunUpdateCheck(/*silent=*/false);
-    return;
-  }
   // a feed: load its episodes and show the detail view
   if (!key.empty()) {
     ShowView(View::Detail);
@@ -2216,6 +2216,13 @@ void MainWindow::Settings_Click(winrt::Windows::Foundation::IInspectable const&,
 void MainWindow::CheckUpdates_Click(winrt::Windows::Foundation::IInspectable const&,
                                     Microsoft::UI::Xaml::RoutedEventArgs const&) {
   RunUpdateCheck(/*silent=*/false);
+}
+
+// The Help menu's About entry: podlens keeps its About facts (version,
+// license, support links) inside the settings dialog, so this routes there.
+void MainWindow::MenuAbout_Click(winrt::Windows::Foundation::IInspectable const&,
+                                 Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  RunSettingsDialog();
 }
 
 void MainWindow::RunSettingsDialog() {
