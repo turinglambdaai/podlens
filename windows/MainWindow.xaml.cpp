@@ -20,6 +20,7 @@
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Microsoft.UI.Windowing.h>
 
 #include <chrono>
 #include <cmath>
@@ -300,6 +301,16 @@ MainWindow::MainWindow() {
   InitializeComponent();
 
   Title(winrt::hstring(std::wstring(podlens::Tr("app.title"))));
+
+  // The title bar shows WinUI's generic placeholder unless the window is
+  // handed an icon explicitly; rivet embeds the app icon in the exe at
+  // resource ID 1 for exactly this use (rivet-cli/build.rkt).
+  if (HICON icon =
+          ::LoadIconW(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1))) {
+    AppWindow().SetIcon(winrt::Microsoft::UI::IconId{
+        static_cast<std::uint64_t>(reinterpret_cast<UINT_PTR>(icon))});
+  }
+
   SubtitleText().Text(std::wstring(podlens::Tr("app.subtitle")));
   StatusLine().Text(std::wstring(podlens::Tr("status.starting")));
   AddFeedButton().Content(box_value(winrt::hstring(
