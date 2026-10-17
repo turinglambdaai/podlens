@@ -6,19 +6,24 @@ All notable changes to PodLens are documented here. Format follows
 ## [Unreleased]
 
 ### Added
-- **A Podcasts-grade shell for the macOS host.** The sidebar gains Home
-  and Discover entries plus a Library section (Recently Updated,
-  Shows, Downloaded) and cover-art subscription rows with unplayed
-  badges. The Home page carries an Up Next lane — in-progress episodes
-  first, then each show's newest unplayed episode, as large artwork
-  cards with a play pill and a menu (understand / download / mark
-  played) — a shows grid, and a latest-episodes lane with see-all
-  links into the library pages. The player bar moves to the window's
-  bottom edge, Apple Podcasts style, and gains cover art plus a
-  transcript shortcut; episode rows everywhere show cover art,
-  Understand-pipeline status chips (transcript / translation /
-  summary / downloaded / played) and mid-episode progress. Dates
-  render as short "10月17日" / "Oct 17" instead of raw RFC-822.
+- **A Podcasts-grade shell on every platform.** All three hosts now
+  share the same interaction model, Apple Podcasts style: a sidebar
+  with Home and Discover destinations plus a Library section
+  (Recently Updated, Shows, Downloaded) and cover-art subscription
+  rows with unplayed badges; a Home page whose Up Next lane puts
+  in-progress episodes first and then each show's newest unplayed
+  episode as large artwork cards with a play pill and a menu
+  (understand / download / mark played); a shows grid; a
+  latest-episodes lane with see-all links; the player bar riding the
+  window's bottom edge with cover art and a transcript shortcut; and
+  episode rows everywhere showing cover art, Understand-pipeline
+  status chips (transcript / translation / summary / downloaded /
+  played) and mid-episode progress. Dates render as short "10月17日" /
+  "Oct 17" instead of raw RFC-822. (macOS ships the full shell;
+  Windows mirrors it on NavigationView; Linux mirrors it on a GTK4
+  page stack with FlowBox tiles — Linux keeps its English-only UI,
+  and Linux cover art streams through the system curl instead of a
+  bundled HTTP stack, failing quietly to the placeholder.)
 - **Cover art end to end.** `catalog-list` and `catalog-search` rows
   gain an `artwork-url` column: curated entries ship hand-verified
   Apple-CDN artwork, and iTunes search results upscale the 100px
@@ -29,9 +34,10 @@ All notable changes to PodLens are documented here. Format follows
   subscription, one row = `(feed-id feed-title feed-artwork
   <episode-list row…>)`, so the home and library pages brand every
   card with show title and artwork in one round trip.
-- Discover stops being a modal sheet: the sidebar's Discover entry
-  opens a full page with directory search and the curated catalog as
-  artwork cards. A first launch with an empty library lands there.
+- Discover stops being a modal sheet (or, on Linux, a missing page):
+  the sidebar's Discover entry opens a full page with directory
+  search and the curated catalog as artwork cards. A first launch
+  with an empty library lands there.
 
 ### Fixed
 - Views observe the store directly now. The old views read the store
