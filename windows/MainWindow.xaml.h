@@ -29,8 +29,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                             Microsoft::UI::Xaml::Controls::NavigationViewSelectionChangedEventArgs const&);
   void AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
                      Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void Discover_Click(winrt::Windows::Foundation::IInspectable const&,
-                      Microsoft::UI::Xaml::RoutedEventArgs const&);
   void MenuAbout_Click(winrt::Windows::Foundation::IInspectable const&,
                        Microsoft::UI::Xaml::RoutedEventArgs const&);
   void RefreshFeed_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -43,8 +41,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                       Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Pipeline_Click(winrt::Windows::Foundation::IInspectable const&,
                       Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void MarkToggle_Click(winrt::Windows::Foundation::IInspectable const&,
-                        Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void MarkMenu_Click(winrt::Windows::Foundation::IInspectable const&,
+                      Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Transcribe_Click(winrt::Windows::Foundation::IInspectable const&,
                         Microsoft::UI::Xaml::RoutedEventArgs const&);
   void Translate_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -89,17 +87,65 @@ struct MainWindow : MainWindowT<MainWindow> {
                              Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
 
  private:
+  struct FeedRow {
+    std::string id;
+    std::string title;
+    std::string artwork;
+    std::string count;
+    int unplayed = 0;
+  };
+  struct EpisodeRow {
+    std::string id;
+    std::string title;
+    std::string pub;
+    std::string description;
+    double position_sec = 0;
+    double duration_sec = 0;
+    bool downloaded = false;
+    bool done = false;
+    bool has_translation = false;
+    std::string transcript_status;
+    std::string summary_status;
+  };
+  // episode-recent row: the episode-list projection prefixed with the
+  // owning feed's identity (feed-id feed-title feed-artwork <row…>)
+  struct RecentRow {
+    std::string feed_id;
+    std::string feed_title;
+    std::string artwork;
+    EpisodeRow episode;
+  };
+
   winrt::fire_and_forget InitializeBackendAsync();
 
-  // view switching
-  enum class View { Detail, Discover };
-  void ShowView(View view);
+  // page switching — the content column shows exactly one page; the detail
+  // column lives on regardless (Apple Podcasts' sidebar/page/detail model)
+  enum class Page { Home, Discover, Recent, Shows, Downloaded, Episodes };
+  void ShowPage(Page page);
+  Page page_ = Page::Home;
 
   // data loading + rendering
   void ReloadFeeds();
   void RenderFeeds(std::vector<std::vector<std::string>> rows);
   void ReloadEpisodes();
   void RenderEpisodes(std::vector<std::vector<std::string>> rows);
+  void ReloadRecent();
+  void RenderRecent(std::vector<std::vector<std::string>> rows);
+  void RenderHomePage();
+  void RenderRecentPage();
+  void RenderDownloadedPage();
+  void RenderShowsPage();
+  void SelectRecent(RecentRow const& row, bool autoplay);
+  std::vector<RecentRow> UpNext() const;
+  FeedRow const* FeedById(std::string const& id) const;
+  EpisodeRow const* SelectedEpisode() const;
+  std::wstring FormatPubDate(std::wstring const& raw) const;
+  Microsoft::UI::Xaml::Controls::Border MakeArtwork(std::wstring const& url, double size);
+  Microsoft::UI::Xaml::Controls::Border MakeEpisodeCard(RecentRow const& item, bool show_feed);
+  Microsoft::UI::Xaml::Controls::Border MakeUpNextCard(RecentRow const& item);
+  Microsoft::UI::Xaml::Controls::TextBlock MakeSectionHeader(std::wstring const& title);
+  Microsoft::UI::Xaml::Controls::Button MakeSeeAllButton(wchar_t const* label);
+  Microsoft::UI::Xaml::Controls::StackPanel MakeShowTile(FeedRow const& feed);
   void LoadTranscript();
   void RenderTranscript();
   void ApplyMode();
@@ -108,6 +154,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void RenderDetailHeader();
   void UpdateDetailVisibility();
   void UpdateActionButtons();
+  void UpdatePlayerInfo();
   void HighlightRunningSegment(double position_seconds);
 
   // playback
@@ -135,6 +182,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   void StartJob(std::string const& kind, std::string const& episode_id);
   std::string SelectedFeedId();
   std::string SelectedEpisodeId();
+  // Loads a recent-row episode without navigating away: the owning feed
+  // becomes the playback context (autoplay chain, player metadata).
+  void SelectEpisodeContext(std::string const& feed_id, std::string const& episode_id,
+                            bool autoplay);
   std::wstring FindLocalAudio(std::string const& episode_id);
   void SetStatus(bool ok, std::wstring const& message);
   // flows shared by nav items and dialogs (winrt reference params cannot be
@@ -174,26 +225,6 @@ struct MainWindow : MainWindowT<MainWindow> {
                           std::string const& version,
                           std::string const& error);
 
-  struct FeedRow {
-    std::string id;
-    std::string title;
-    std::string artwork;
-    std::string count;
-    int unplayed = 0;
-  };
-  struct EpisodeRow {
-    std::string id;
-    std::string title;
-    std::string pub;
-    std::string description;
-    double position_sec = 0;
-    double duration_sec = 0;
-    bool downloaded = false;
-    bool done = false;
-    bool has_translation = false;
-    std::string transcript_status;
-    std::string summary_status;
-  };
   struct ChapterMark {
     double start = 0;
     std::wstring title;
@@ -203,10 +234,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::unique_ptr<rivet_app::API> api_;
   std::vector<FeedRow> feeds_;
   std::vector<EpisodeRow> episodes_;
+  std::vector<RecentRow> recent_;
   std::vector<std::vector<std::string>> transcript_;
   std::map<std::string, std::string> summary_by_episode_;
+  std::string selected_feed_id_;
   std::string selected_episode_id_;
-  View view_ = View::Detail;
+  bool suppress_nav_ = false;
   uint32_t mode_ = 0;  // 0 bilingual, 1 translation only, 2 original only
   bool summary_tab_active_ = false;
 

@@ -28,6 +28,10 @@
 #include <fstream>
 #include <future>
 #include <regex>
+#include <set>
+#include <sstream>
+#include <iomanip>
+#include <locale>
 #include <thread>
 #include <type_traits>
 
@@ -298,31 +302,29 @@ MainWindow::MainWindow() {
   StatusLine().Text(std::wstring(podlens::Tr("status.starting")));
   AddFeedButton().Content(box_value(winrt::hstring(
       L"＋ " + std::wstring(podlens::Tr("nav.add_feed")))));
-  DiscoverButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("menu.discover")))));
   SettingsNavLabel().Text(std::wstring(podlens::Tr("menu.settings")));
   HelpButton().Content(box_value(
       winrt::hstring(std::wstring(podlens::Tr("menu.help")))));
   MenuCheckUpdates().Text(
       winrt::hstring(std::wstring(podlens::Tr("menu.check_updates"))));
+  MenuRefreshAll().Text(
+      winrt::hstring(std::wstring(podlens::Tr("menu.refresh_all"))));
   MenuAbout().Text(winrt::hstring(std::wstring(podlens::Tr("menu.about"))));
   EpisodesHeader().Text(std::wstring(podlens::Tr("episodes.header")));
   DetailEmptyTitle().Text(std::wstring(podlens::Tr("detail.none")));
   DetailEmptyHint().Text(std::wstring(podlens::Tr("detail.hint")));
   DetailEmptyCta().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("empty.discover_cta")))));
+  DetailEmptyCta().Click([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) window->ShowPage(Page::Discover);
+  });
   EpisodesEmptyTitle().Text(std::wstring(podlens::Tr("empty.episodes_title")));
   EpisodesEmptyHint().Text(std::wstring(podlens::Tr("empty.episodes_hint")));
-  DownloadButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("action.download")))));
-  TranscribeButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("action.transcribe")))));
-  TranslateButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("action.translate")))));
-  SummarizeButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("action.summarize")))));
-  RemoveAudioButton().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("action.remove_audio")))));
+  MenuDownload().Text(std::wstring(podlens::Tr("action.download")));
+  MenuTranscribe().Text(std::wstring(podlens::Tr("action.transcribe")));
+  MenuTranslate().Text(std::wstring(podlens::Tr("action.translate")));
+  MenuSummarize().Text(std::wstring(podlens::Tr("action.summarize")));
+  MenuRemoveAudio().Text(std::wstring(podlens::Tr("action.remove_audio")));
   ModeLabel().Text(std::wstring(podlens::Tr("mode.label")));
   TranscriptTab().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("tab.transcript")))));
@@ -370,8 +372,10 @@ MainWindow::MainWindow() {
 
   PipelineButton().Content(box_value(
       winrt::hstring(std::wstring(podlens::Tr("action.pipeline")))));
-  MarkButton().Content(box_value(
-      winrt::hstring(std::wstring(podlens::Tr("action.mark_played")))));
+  MenuMark().Text(std::wstring(podlens::Tr("action.mark_played")));
+  muxc::ToolTipService::SetToolTip(
+      TranscriptButton(),
+      box_value(winrt::hstring(std::wstring(podlens::Tr("player.transcript")))));
 
   // The player is constructed up front: every call on a null projected
   // MediaPlayer throws, so deferring construction made playback itself
@@ -490,7 +494,8 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
             } else if (auto const changed =
                            std::get_if<rivet_app::Episodes_changedEvent>(&event)) {
               window->ReloadFeeds();
-              window->ReloadEpisodes();
+              window->ReloadRecent();
+              if (window->page_ == Page::Episodes) window->ReloadEpisodes();
             }
           } catch (std::exception const&) {
             // unknown event names are ignored — forward compatibility
@@ -505,6 +510,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
         window->api_ = std::make_unique<rivet_app::API>(*window->backend_);
         window->SetStatus(true, std::wstring(podlens::Tr("status.ready")));
         window->ReloadFeeds();
+        window->ReloadRecent();
         window->ResumeLast();
         // A previous update run may have left a failure report
         // (docs/UPDATE.md); surface it once, then start the throttled
@@ -527,34 +533,46 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
   }
 }
 
-// ---- view switching ---------------------------------------------------------
+// ---- page switching ---------------------------------------------------------
 
-void MainWindow::ShowView(View view) {
-  view_ = view;
+void MainWindow::ShowPage(Page page) {
+  page_ = page;
+  HomePage().Visibility(page == Page::Home ? Visibility::Visible
+                                           : Visibility::Collapsed);
+  DiscoverView().Visibility(page == Page::Discover ? Visibility::Visible
+                                                   : Visibility::Collapsed);
+  RecentPage().Visibility(page == Page::Recent ? Visibility::Visible
+                                               : Visibility::Collapsed);
+  ShowsPage().Visibility(page == Page::Shows ? Visibility::Visible
+                                             : Visibility::Collapsed);
+  DownloadedPage().Visibility(page == Page::Downloaded ? Visibility::Visible
+                                                       : Visibility::Collapsed);
+  EpisodesPage().Visibility(page == Page::Episodes ? Visibility::Visible
+                                                   : Visibility::Collapsed);
+  if (page == Page::Discover && DiscoverList().Children().Size() == 0) {
+    LoadDiscover();
+  }
+  if (page == Page::Home) RenderHomePage();
+  if (page == Page::Shows) RenderShowsPage();
+  if (page == Page::Downloaded) RenderDownloadedPage();
   UpdateDetailVisibility();
 }
 
 void MainWindow::UpdateDetailVisibility() {
-  bool const feeds_empty = feeds_.empty();
   bool const has_episode = !selected_episode_id_.empty();
 
-  DetailEmpty().Visibility(
-      feeds_empty || (!has_episode && view_ == View::Detail)
-          ? Visibility::Visible
-          : Visibility::Collapsed);
-  if (feeds_empty) {
+  bool const empty_library = feeds_.empty();
+  DetailEmpty().Visibility(has_episode ? Visibility::Collapsed
+                                       : Visibility::Visible);
+  if (empty_library) {
     DetailEmptyTitle().Text(std::wstring(podlens::Tr("empty.feeds_title")));
     DetailEmptyHint().Text(std::wstring(podlens::Tr("empty.feeds_hint")));
   } else {
     DetailEmptyTitle().Text(std::wstring(podlens::Tr("detail.none")));
     DetailEmptyHint().Text(std::wstring(podlens::Tr("detail.hint")));
   }
-
-  DiscoverView().Visibility(view_ == View::Discover ? Visibility::Visible
-                                                    : Visibility::Collapsed);
-  DetailViewHost().Visibility(
-      (view_ == View::Detail && has_episode) ? Visibility::Visible
-                                             : Visibility::Collapsed);
+  DetailViewHost().Visibility(has_episode ? Visibility::Visible
+                                          : Visibility::Collapsed);
   PlayerBar().Visibility(has_episode ? Visibility::Visible
                                      : Visibility::Collapsed);
 }
@@ -579,9 +597,46 @@ void MainWindow::ReloadFeeds() {
       });
 }
 
+muxc::NavigationViewItem MakeNavItem(char const* tag, wchar_t const* glyph,
+                                     wchar_t const* label) {
+  muxc::NavigationViewItem item;
+  item.Tag(box_value(winrt::hstring(to_wide(tag))));
+  item.Content(box_value(winrt::hstring(label)));
+  muxc::FontIcon icon;
+  icon.Glyph(winrt::hstring(glyph));
+  item.Icon(icon);
+  return item;
+}
+
+// Nav layout: home, discover, a Library section (recent / shows /
+// downloaded), a subscriptions header, then one cover-art row per feed.
+// Feed rows start at fixed index 7 — ResumeLast and SelectFeedById rely on
+// that offset.
 void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
   feeds_.clear();
   Nav().MenuItems().Clear();
+
+  Nav().MenuItems().Append(
+      MakeNavItem("home", L"\xE80F", podlens::Tr("nav.home").data()));
+  Nav().MenuItems().Append(
+      MakeNavItem("discover", L"\uE8A9", podlens::Tr("nav.discover").data()));
+
+  muxc::NavigationViewItemHeader library_header;
+  library_header.Content(box_value(
+      winrt::hstring(std::wstring(podlens::Tr("library.title")))));
+  Nav().MenuItems().Append(library_header);
+  Nav().MenuItems().Append(MakeNavItem(
+      "library-recent", L"\xE823", podlens::Tr("library.recent").data()));
+  Nav().MenuItems().Append(MakeNavItem(
+      "library-shows", L"\uE8A9", podlens::Tr("library.shows").data()));
+  Nav().MenuItems().Append(MakeNavItem(
+      "library-downloaded", L"\xE896", podlens::Tr("library.downloaded").data()));
+
+  muxc::NavigationViewItemHeader subs_header;
+  subs_header.Content(box_value(
+      winrt::hstring(std::wstring(podlens::Tr("menu.subs")))));
+  Nav().MenuItems().Append(subs_header);
+
   for (auto const& row : rows) {
     if (row.size() < 5) continue;
     FeedRow feed;
@@ -594,34 +649,64 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
 
     muxc::NavigationViewItem item;
     item.Tag(box_value(winrt::hstring(to_wide(feed.id))));
-    std::wstring label =
-        to_wide(feed.title) + L"  (" + to_wide(feed.count) + L")";
+    muxc::StackPanel content;
+    content.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    content.Spacing(6);
+    muxc::TextBlock label;
+    label.Text(winrt::hstring(to_wide(feed.title)));
+    label.MaxLines(1);
+    label.TextTrimming(Microsoft::UI::Xaml::TextTrimming::CharacterEllipsis);
+    content.Children().Append(label);
+    muxc::TextBlock count_text;
+    count_text.Text(winrt::hstring(to_wide(feed.count)));
+    count_text.FontSize(12);
+    count_text.Opacity(0.65);
+    content.Children().Append(count_text);
     if (feed.unplayed > 0) {
-      label += L" · " + std::to_wstring(feed.unplayed) +
-               std::wstring(podlens::Tr("badge.unplayed"));
+      content.Children().Append(
+          MakeChip(std::to_wstring(feed.unplayed) +
+                   std::wstring(podlens::Tr("badge.unplayed"))));
     }
-    item.Content(box_value(winrt::hstring(label)));
-    muxc::FontIcon icon;
-    icon.Glyph(winrt::hstring(L"\xE8F1"));
-    item.Icon(icon);
+    item.Content(box_value(content));
+    if (!feed.artwork.empty()) {
+      muxc::Image icon;
+      icon.Width(24);
+      icon.Height(24);
+      try {
+        winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage bitmap(
+            winrt::Windows::Foundation::Uri(to_wide(feed.artwork)));
+        icon.Source(bitmap);
+      } catch (...) {
+      }
+      item.Icon(icon);
+    } else {
+      muxc::FontIcon icon;
+      icon.Glyph(winrt::hstring(L"\xE8F1"));
+      item.Icon(icon);
+    }
     Nav().MenuItems().Append(item);
   }
-  // Setting item.IsSelected before the pane's containers are realized is
-  // silently dropped; SelectedItem goes through the view and fires
-  // SelectionChanged reliably.
-  if (!feeds_.empty()) {
-    uint32_t select = 0;
-    if (!pending_resume_feed_id_.empty()) {
-      for (uint32_t i = 0; i < feeds_.size(); ++i) {
-        if (feeds_[i].id == pending_resume_feed_id_) {
-          select = i;
-          break;
+
+  // Resume-on-launch opens its feed's page; otherwise the startup page
+  // stays Home (SelectionChanged drives the actual switch).
+  if (!pending_resume_feed_id_.empty()) {
+    for (uint32_t i = 0; i < feeds_.size(); ++i) {
+      if (feeds_[i].id == pending_resume_feed_id_) {
+        pending_resume_feed_id_.clear();
+        selected_feed_id_ = feeds_[i].id;
+        ShowPage(Page::Episodes);
+        uint32_t const nav_index = 7 + i;
+        if (nav_index < Nav().MenuItems().Size()) {
+          suppress_nav_ = true;
+          Nav().SelectedItem(Nav().MenuItems().GetAt(nav_index));
+          suppress_nav_ = false;
         }
+        break;
       }
-      pending_resume_feed_id_.clear();
     }
-    Nav().SelectedItem(Nav().MenuItems().GetAt(select));
+    pending_resume_feed_id_.clear();
   }
+  ReloadRecent();
   UpdateDetailVisibility();
 }
 
@@ -785,16 +870,10 @@ void MainWindow::RenderEpisodes(std::vector<std::vector<std::string>> rows) {
 }
 
 void MainWindow::RenderDetailHeader() {
-  EpisodeRow const* episode = nullptr;
-  for (auto const& candidate : episodes_) {
-    if (candidate.id == selected_episode_id_) {
-      episode = &candidate;
-      break;
-    }
-  }
+  EpisodeRow const* episode = SelectedEpisode();
   if (!episode) return;
   DetailTitle().Text(winrt::hstring(to_wide(episode->title)));
-  std::wstring meta = to_wide(episode->pub);
+  std::wstring meta = FormatPubDate(to_wide(episode->pub));
   if (episode->duration_sec > 0) {
     meta += L" · " + FormatSeconds(episode->duration_sec);
   }
@@ -802,48 +881,44 @@ void MainWindow::RenderDetailHeader() {
     meta += L" · " + std::wstring(podlens::Tr("detail.position_prefix")) +
             FormatSeconds(episode->position_sec);
   }
+  if (FeedRow const* feed = FeedById(selected_feed_id_)) {
+    meta = to_wide(feed->title) + L" · " + meta;
+  }
   DetailMeta().Text(winrt::hstring(meta));
   DetailNotes().Text(episode->description.empty()
                          ? L""
                          : winrt::hstring(to_wide(episode->description)));
-  MarkButton().Content(box_value(winrt::hstring(std::wstring(podlens::Tr(
-      episode->done ? "action.mark_unplayed" : "action.mark_played")))));
+  MenuMark().Text(std::wstring(podlens::Tr(
+      episode->done ? "action.mark_unplayed" : "action.mark_played")));
   DurationText().Text(winrt::hstring(FormatSeconds(episode->duration_sec)));
 }
 
 void MainWindow::UpdateActionButtons() {
-  EpisodeRow const* episode = nullptr;
-  for (auto const& candidate : episodes_) {
-    if (candidate.id == selected_episode_id_) {
-      episode = &candidate;
-      break;
-    }
-  }
+  EpisodeRow const* episode = SelectedEpisode();
   if (!episode) {
     PipelineButton().IsEnabled(false);
-    DownloadButton().IsEnabled(false);
-    TranscribeButton().IsEnabled(false);
-    TranslateButton().IsEnabled(false);
-    SummarizeButton().IsEnabled(false);
-    MarkButton().IsEnabled(false);
-    RemoveAudioButton().Visibility(Visibility::Collapsed);
+    MenuDownload().IsEnabled(false);
+    MenuTranscribe().IsEnabled(false);
+    MenuTranslate().IsEnabled(false);
+    MenuSummarize().IsEnabled(false);
+    MenuMark().IsEnabled(false);
+    MenuRemoveAudio().Visibility(Visibility::Collapsed);
     return;
   }
   bool const transcript_running = episode->transcript_status == "running";
   bool const summary_running = episode->summary_status == "running";
   PipelineButton().IsEnabled(true);
-  DownloadButton().IsEnabled(!episode->downloaded);
-  TranscribeButton().IsEnabled(!transcript_running &&
-                               episode->transcript_status != "done");
-  TranslateButton().IsEnabled(episode->transcript_status == "done" &&
-                              !episode->has_translation);
-  SummarizeButton().IsEnabled(episode->transcript_status == "done" &&
-                              !summary_running && episode->summary_status != "done");
-  MarkButton().IsEnabled(true);
+  MenuDownload().IsEnabled(!episode->downloaded);
+  MenuTranscribe().IsEnabled(!transcript_running &&
+                             episode->transcript_status != "done");
+  MenuTranslate().IsEnabled(episode->transcript_status == "done" &&
+                            !episode->has_translation);
+  MenuSummarize().IsEnabled(episode->transcript_status == "done" &&
+                            !summary_running && episode->summary_status != "done");
+  MenuMark().IsEnabled(true);
   // Delete Audio only makes sense while local audio exists (Linux parity)
-  RemoveAudioButton().Visibility(episode->downloaded ? Visibility::Visible
-                                                     : Visibility::Collapsed);
-  RemoveAudioButton().IsEnabled(true);
+  MenuRemoveAudio().Visibility(episode->downloaded ? Visibility::Visible
+                                                   : Visibility::Collapsed);
 }
 
 // ---- transcript ----------------------------------------------------------------
@@ -1108,6 +1183,586 @@ void MainWindow::RenderSummary() {
   }
 }
 
+// ---- cross-feed lanes (home / library pages) ---------------------------------
+
+void MainWindow::ReloadRecent() {
+  if (!api_) return;
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  (void)api_->episode_recent_async(
+      [dispatcher, weak](rivet_app::Result<std::vector<std::vector<std::string>>> result) {
+        dispatcher.TryEnqueue([weak, result]() mutable {
+          if (auto window = weak.get()) {
+            try {
+              window->RenderRecent(result.get());
+            } catch (std::exception const& e) {
+              window->SetStatus(false, to_wide(e.what()));
+            }
+          }
+        });
+      });
+}
+
+void MainWindow::RenderRecent(std::vector<std::vector<std::string>> rows) {
+  recent_.clear();
+  for (auto const& row : rows) {
+    if (row.size() < 14) continue;
+    RecentRow item;
+    item.feed_id = row[0];
+    item.feed_title = row[1];
+    item.artwork = row[2];
+    item.episode.id = row[3];
+    item.episode.title = row[4];
+    item.episode.pub = row[5];
+    item.episode.duration_sec = std::wcstod(to_wide(row[6]).c_str(), nullptr);
+    item.episode.downloaded = row[7] == "1";
+    item.episode.transcript_status = row[8];
+    item.episode.summary_status = row[9];
+    item.episode.position_sec = std::wcstod(to_wide(row[10]).c_str(), nullptr);
+    item.episode.done = row[11] == "1";
+    item.episode.has_translation = row[12] == "1";
+    item.episode.description = row[13];
+    recent_.push_back(item);
+  }
+  if (page_ == Page::Home) RenderHomePage();
+  if (page_ == Page::Recent) RenderRecentPage();
+  if (page_ == Page::Downloaded) RenderDownloadedPage();
+}
+
+// The Up Next lane: in-progress episodes first, then each show's newest
+// unplayed episode — Apple Podcasts' queue semantics for a library with
+// no explicit queue.
+std::vector<RecentRow> MainWindow::UpNext() const {
+  std::vector<RecentRow> lane;
+  std::set<std::string> seen_feeds;
+  for (auto const& item : recent_) {
+    if (item.episode.done) continue;
+    if (item.episode.position_sec > 5) {
+      lane.push_back(item);
+      seen_feeds.insert(item.feed_id);
+    }
+  }
+  for (auto const& item : recent_) {
+    if (item.episode.done) continue;
+    if (seen_feeds.count(item.feed_id) == 0) {
+      lane.push_back(item);
+      seen_feeds.insert(item.feed_id);
+    }
+    if (lane.size() >= 12) break;
+  }
+  return lane;
+}
+
+FeedRow const* MainWindow::FeedById(std::string const& id) const {
+  for (auto const& feed : feeds_) {
+    if (feed.id == id) return &feed;
+  }
+  return nullptr;
+}
+
+// The selected episode may come from any lane; the feed page's episodes_
+// vector only carries it once the owning feed's list has loaded.
+EpisodeRow const* MainWindow::SelectedEpisode() const {
+  for (auto const& candidate : episodes_) {
+    if (candidate.id == selected_episode_id_) return &candidate;
+  }
+  for (auto const& item : recent_) {
+    if (item.episode.id == selected_episode_id_) return &item.episode;
+  }
+  return nullptr;
+}
+
+// "Fri, 16 Oct 2026 21:30:00 +0000" -> "10月17日" / "Oct 17"; anything the
+// scanner cannot read passes through untouched.
+std::wstring MainWindow::FormatPubDate(std::wstring const& raw) const {
+  std::string const utf8 = to_utf8(raw);
+  std::tm tm{};
+  char const* const formats[] = {"%a, %d %b %Y %H:%M:%S %Z",
+                                 "%a, %d %b %Y %H:%M:%S %z",
+                                 "%Y-%m-%d %H:%M:%S %z",
+                                 "%a, %d %b %Y"};
+  bool parsed = false;
+  for (char const* format : formats) {
+    std::istringstream stream(utf8);
+    stream.imbue(std::locale::classic());
+    if (stream >> std::get_time(&tm, format)) {
+      parsed = true;
+      break;
+    }
+  }
+  if (!parsed) return raw;
+  wchar_t buffer[32];
+  std::wstring const month_names[] = {
+      L"", L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun",
+      L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec"};
+  int const month = std::max(0, std::min(11, tm.tm_mon));
+  if (podlens::kUiLang == podlens::Lang::Zh) {
+    swprintf(buffer, 32, L"%d月%d日", tm.tm_mon + 1, tm.tm_mday);
+  } else {
+    swprintf(buffer, 32, L"%s %d", month_names[month].c_str(), tm.tm_mday);
+  }
+  return buffer;
+}
+
+// Cover art with a quiet accent fallback; BitmapImage streams the URL on
+// its own so a slow CDN never blocks the list.
+muxc::Border MainWindow::MakeArtwork(std::wstring const& url, double size) {
+  muxc::Border host;
+  host.Width(size);
+  host.Height(size);
+  host.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{6});
+  host.Background(Microsoft::UI::Xaml::Application::Current()
+                      .Resources()
+                      .Lookup(box_value(winrt::hstring(L"AppAccentSoftBrush")))
+                      .as<Microsoft::UI::Xaml::Media::Brush>());
+  if (!url.empty()) {
+    muxc::Image image;
+    image.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
+    try {
+      winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage bitmap(
+          winrt::Windows::Foundation::Uri(url));
+      image.Source(bitmap);
+    } catch (...) {
+    }
+    host.Child(image);
+  }
+  return host;
+}
+
+// The shared cross-feed episode card: artwork, title, show/date/duration
+// meta, status chips, notes, progress and a play button.
+muxc::Border MainWindow::MakeEpisodeCard(RecentRow const& item, bool show_feed) {
+  muxc::Image artwork;
+  artwork.Width(56);
+  artwork.Height(56);
+  artwork.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
+  if (!item.artwork.empty()) {
+    try {
+      artwork.Source(winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+          winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
+    } catch (...) {
+    }
+  }
+  muxc::Border artwork_host;
+  artwork_host.Child(artwork);
+  artwork_host.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{6});
+  artwork_host.Background(Microsoft::UI::Xaml::Application::Current()
+                              .Resources()
+                              .Lookup(box_value(winrt::hstring(L"AppAccentSoftBrush")))
+                              .as<Microsoft::UI::Xaml::Media::Brush>());
+  artwork_host.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Top);
+
+  muxc::TextBlock title;
+  title.Text(winrt::hstring(to_wide(item.episode.title)));
+  title.FontSize(13);
+  title.FontWeight(Microsoft::UI::Text::FontWeights::SemiBold());
+  title.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+  title.MaxLines(2);
+
+  std::wstring meta;
+  if (show_feed) meta += to_wide(item.feed_title) + L" · ";
+  meta += FormatPubDate(to_wide(item.episode.pub));
+  if (item.episode.duration_sec > 0) {
+    meta += L" · " + FormatSeconds(item.episode.duration_sec);
+  }
+  muxc::TextBlock meta_text;
+  meta_text.Text(winrt::hstring(meta));
+  meta_text.FontSize(12);
+  meta_text.Foreground(Microsoft::UI::Xaml::Application::Current()
+                           .Resources()
+                           .Lookup(box_value(winrt::hstring(L"AppInkSoftBrush")))
+                           .as<Microsoft::UI::Xaml::Media::Brush>());
+
+  muxc::StackPanel chips;
+  chips.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+  chips.Spacing(4);
+  if (item.episode.done) chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.done"))));
+  if (item.episode.downloaded) chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.downloaded"))));
+  if (item.episode.transcript_status == "done") chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.transcript"))));
+  if (item.episode.transcript_status == "running") chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.transcript_running"))));
+  if (item.episode.has_translation) chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.translated"))));
+  if (item.episode.summary_status == "done") chips.Children().Append(MakeChip(std::wstring(podlens::Tr("badge.summary"))));
+
+  muxc::TextBlock notes;
+  notes.Text(winrt::hstring(to_wide(item.episode.description)));
+  notes.FontSize(12);
+  notes.Opacity(0.55);
+  notes.MaxLines(1);
+  notes.TextTrimming(Microsoft::UI::Xaml::TextTrimming::CharacterEllipsis);
+
+  muxc::StackPanel lines;
+  lines.Spacing(4);
+  lines.Children().Append(title);
+  lines.Children().Append(meta_text);
+  muxc::StackPanel chips_row;
+  chips_row.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+  chips_row.Spacing(10);
+  if (chips.Children().Size() > 0) chips_row.Children().Append(chips);
+  if (!item.episode.description.empty()) chips_row.Children().Append(notes);
+  if (chips_row.Children().Size() > 0) lines.Children().Append(chips_row);
+  if (item.episode.position_sec > 5 && !item.episode.done) {
+    muxc::ProgressBar progress;
+    progress.Maximum(item.episode.duration_sec > 0 ? item.episode.duration_sec : 1);
+    progress.Value(item.episode.position_sec);
+    progress.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 2, 0, 0});
+    lines.Children().Append(progress);
+  }
+
+  muxc::Button play;
+  play.Width(36);
+  play.Height(36);
+  play.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{18});
+  play.Background(Microsoft::UI::Xaml::Application::Current()
+                      .Resources()
+                      .Lookup(box_value(winrt::hstring(L"AppAccentSoftBrush")))
+                      .as<Microsoft::UI::Xaml::Media::Brush>());
+  play.BorderThickness(winrt::Microsoft::UI::Xaml::Thickness{0});
+  muxc::FontIcon play_glyph;
+  play_glyph.Glyph(winrt::hstring(L"\xE768"));
+  play_glyph.FontSize(14);
+  play.Content(box_value(play_glyph));
+  play.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Center);
+  play.Click([weak = get_weak(), item](auto&&, auto&&) {
+    if (auto window = weak.get()) window->SelectRecent(item, true);
+  });
+
+  muxc::Grid layout;
+  layout.ColumnSpacing(12);
+  layout.ColumnDefinitions().Append(muxc::ColumnDefinition());
+  layout.ColumnDefinitions().Append(muxc::ColumnDefinition());
+  layout.ColumnDefinitions().GetAt(0).Width({1, Microsoft::UI::Xaml::GridUnitType::Star});
+  layout.ColumnDefinitions().GetAt(1).Width({0, Microsoft::UI::Xaml::GridUnitType::Auto});
+  muxc::StackPanel left;
+  left.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+  left.Spacing(12);
+  left.Children().Append(artwork_host);
+  left.Children().Append(lines);
+  muxc::Grid::SetColumn(left, 0);
+  muxc::Grid::SetColumn(play, 1);
+  layout.Children().Append(left);
+  layout.Children().Append(play);
+
+  muxc::Border card;
+  card.Child(layout);
+  card.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{8});
+  card.Padding(winrt::Microsoft::UI::Xaml::Thickness{12, 10, 12, 10});
+  card.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 8});
+  card.Background(Microsoft::UI::Xaml::Application::Current()
+                      .Resources()
+                      .Lookup(box_value(winrt::hstring(L"AppCardBrush")))
+                      .as<Microsoft::UI::Xaml::Media::Brush>());
+  RecentRow const row_copy = item;
+  card.Tapped([weak = get_weak(), row_copy](auto&&, auto&&) {
+    if (auto window = weak.get()) window->SelectRecent(row_copy, false);
+  });
+  return card;
+}
+
+void MainWindow::SelectRecent(RecentRow const& row, bool autoplay) {
+  SelectEpisodeContext(row.feed_id, row.episode.id, autoplay);
+}
+
+void MainWindow::SelectEpisodeContext(std::string const& feed_id,
+                                      std::string const& episode_id,
+                                      bool autoplay) {
+  if (!selected_episode_id_.empty() && selected_episode_id_ != episode_id) {
+    StopPlayback(true);
+  }
+  selected_feed_id_ = feed_id;
+  selected_episode_id_ = episode_id;
+  ReloadEpisodes();
+  transcript_.clear();
+  RenderTranscript();
+  RenderSummary();
+  RenderDetailHeader();
+  UpdateDetailVisibility();
+  UpdateActionButtons();
+  UpdatePlayerInfo();
+  summary_tab_active_ = false;
+  TranscriptTab().IsChecked(true);
+  SummaryTab().IsChecked(false);
+  TranscriptList().Visibility(Visibility::Visible);
+  SummaryView().Visibility(Visibility::Collapsed);
+  if (!episode_id.empty()) {
+    LoadTranscript();
+    LoadSummary(episode_id);
+    LoadChapters();
+    LoadEstimate();
+  }
+  if (autoplay) StartPlayback();
+}
+
+// Up Next card: full-bleed cover, gradient scrim, lane meta + title; the
+// whole card plays.
+muxc::Border MainWindow::MakeUpNextCard(RecentRow const& item) {
+  muxc::Image artwork;
+  artwork.Stretch(Microsoft::UI::Xaml::Media::Stretch::UniformToFill);
+  if (!item.artwork.empty()) {
+    try {
+      artwork.Source(winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+          winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
+    } catch (...) {
+    }
+  }
+
+  std::wstring const lane = item.episode.position_sec > 5
+                                ? std::wstring(podlens::Tr("meta.continue"))
+                                : std::wstring(podlens::Tr("meta.new_episode"));
+  std::wstring const meta_text =
+      item.episode.pub.empty()
+          ? lane
+          : lane + L" · " + FormatPubDate(to_wide(item.episode.pub));
+
+  muxc::StackPanel overlay;
+  overlay.Padding(winrt::Microsoft::UI::Xaml::Thickness{12});
+  overlay.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Bottom);
+  muxc::TextBlock meta;
+  meta.Text(winrt::hstring(meta_text));
+  meta.FontSize(12);
+  meta.Foreground(Microsoft::UI::Xaml::Media::SolidColorBrush(
+      winrt::Windows::UI::Color{0xFF, 0xFF, 0xFF, 0xFF}));
+  muxc::TextBlock title;
+  title.Text(winrt::hstring(to_wide(item.episode.title)));
+  title.FontSize(14);
+  title.FontWeight(Microsoft::UI::Text::FontWeights::SemiBold());
+  title.Foreground(Microsoft::UI::Xaml::Media::SolidColorBrush(
+      winrt::Windows::UI::Color{0xFF, 0xFF, 0xFF, 0xFF}));
+  title.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+  title.MaxLines(2);
+  overlay.Children().Append(meta);
+  overlay.Children().Append(title);
+
+  Microsoft::UI::Xaml::Media::LinearGradientBrush scrim;
+  Microsoft::UI::Xaml::Media::GradientStop top;
+  top.Color(winrt::Windows::UI::Color{0x00, 0x00, 0x00, 0x00});
+  top.Offset(0.0);
+  Microsoft::UI::Xaml::Media::GradientStop bottom;
+  bottom.Color(winrt::Windows::UI::Color{0xC8, 0x00, 0x00, 0x00});
+  bottom.Offset(1.0);
+  scrim.GradientStops().Append(top);
+  scrim.GradientStops().Append(bottom);
+  overlay.Background(scrim);
+
+  muxc::Grid card_grid;
+  card_grid.Width(230);
+  card_grid.Height(230);
+  card_grid.Children().Append(artwork);
+  card_grid.Children().Append(overlay);
+  muxc::Border card;
+  card.Child(card_grid);
+  card.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{12});
+  card.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 4, 8, 4});
+  RecentRow const row_copy = item;
+  card.Tapped([weak = get_weak(), row_copy](auto&&, auto&&) {
+    if (auto window = weak.get()) window->SelectRecent(row_copy, true);
+  });
+  return card;
+}
+
+muxc::TextBlock MainWindow::MakeSectionHeader(std::wstring const& title) {
+  auto label = SectionLabel(title);
+  label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 14, 0, 4});
+  return label;
+}
+
+muxc::Button MainWindow::MakeSeeAllButton(wchar_t const* label) {
+  muxc::Button button;
+  button.Background(Microsoft::UI::Xaml::Application::Current()
+                        .Resources()
+                        .Lookup(box_value(winrt::hstring(L"AppAccentSoftBrush")))
+                        .as<Microsoft::UI::Xaml::Media::Brush>());
+  button.BorderThickness(winrt::Microsoft::UI::Xaml::Thickness{0});
+  button.Padding(winrt::Microsoft::UI::Xaml::Thickness{10, 2, 10, 2});
+  button.Content(box_value(winrt::hstring(std::wstring(label) + L" →")));
+  return button;
+}
+
+muxc::StackPanel MainWindow::MakeShowTile(FeedRow const& feed) {
+  muxc::StackPanel tile;
+  tile.Width(130);
+  tile.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 12, 12});
+  auto art = MakeArtwork(to_wide(feed.artwork), 130);
+  art.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{10});
+  tile.Children().Append(art);
+  muxc::TextBlock title;
+  title.Text(winrt::hstring(to_wide(feed.title)));
+  title.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 6, 0, 0});
+  title.MaxLines(1);
+  title.TextTrimming(Microsoft::UI::Xaml::TextTrimming::CharacterEllipsis);
+  tile.Children().Append(title);
+  wchar_t count_text[32];
+  swprintf(count_text, 32, podlens::Tr("shows.count").data(),
+           std::atoi(feed.count.c_str()));
+  muxc::TextBlock count_label;
+  count_label.Text(winrt::hstring(count_text));
+  count_label.FontSize(12);
+  count_label.Opacity(0.65);
+  tile.Children().Append(count_label);
+  return tile;
+}
+
+void MainWindow::RenderHomePage() {
+  HomeList().Children().Clear();
+  if (recent_.empty() && feeds_.empty()) return;
+
+  auto const lane = UpNext();
+  if (!lane.empty()) {
+    HomeList().Children().Append(
+        MakeSectionHeader(std::wstring(podlens::Tr("home.up_next"))));
+    muxc::ScrollViewer lane_scroller;
+    lane_scroller.HorizontalScrollBarVisibility(
+        Microsoft::UI::Xaml::Controls::ScrollBarVisibility::Auto);
+    lane_scroller.VerticalScrollBarVisibility(
+        Microsoft::UI::Xaml::Controls::ScrollBarVisibility::Disabled);
+    muxc::StackPanel lane_row;
+    lane_row.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    lane_scroller.Content(lane_row);
+    lane_scroller.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 4, 0, 6});
+    for (auto const& item : lane) {
+      lane_row.Children().Append(MakeUpNextCard(item));
+    }
+    HomeList().Children().Append(lane_scroller);
+  }
+
+  muxc::StackPanel shows_header;
+  shows_header.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+  shows_header.Spacing(8);
+  shows_header.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 14, 0, 0});
+  shows_header.Children().Append(
+      MakeSectionHeader(std::wstring(podlens::Tr("home.my_shows"))));
+  auto see_shows = MakeSeeAllButton(podlens::Tr("library.shows").data());
+  see_shows.Click([weak = get_weak()](auto&&, auto&&) {
+    if (auto window = weak.get()) window->ShowPage(Page::Shows);
+  });
+  shows_header.Children().Append(see_shows);
+  HomeList().Children().Append(shows_header);
+
+  muxc::StackPanel shows_row;
+  shows_row.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+  muxc::ScrollViewer shows_scroller;
+  shows_scroller.HorizontalScrollBarVisibility(
+      Microsoft::UI::Xaml::Controls::ScrollBarVisibility::Auto);
+  shows_scroller.VerticalScrollBarVisibility(
+      Microsoft::UI::Xaml::Controls::ScrollBarVisibility::Disabled);
+  shows_scroller.Content(shows_row);
+  shows_scroller.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 4, 0, 0});
+  for (auto const& feed : feeds_) {
+    auto tile = MakeShowTile(feed);
+    std::string const feed_id = feed.id;
+    tile.Tapped([weak = get_weak(), feed_id](auto&&, auto&&) {
+      if (auto window = weak.get()) window->SelectFeedById(feed_id);
+    });
+    shows_row.Children().Append(tile);
+  }
+  HomeList().Children().Append(shows_scroller);
+
+  if (!recent_.empty()) {
+    HomeList().Children().Append(
+        MakeSectionHeader(std::wstring(podlens::Tr("home.latest"))));
+    int shown = 0;
+    for (auto const& item : recent_) {
+      HomeList().Children().Append(MakeEpisodeCard(item, true));
+      if (++shown >= 6) break;
+    }
+  }
+}
+
+void MainWindow::RenderRecentPage() {
+  RecentList().Children().Clear();
+  if (recent_.empty()) {
+    muxc::TextBlock empty;
+    empty.Text(winrt::hstring(std::wstring(podlens::Tr("page.recent_empty"))));
+    empty.Opacity(0.7);
+    empty.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 24, 0, 0});
+    RecentList().Children().Append(empty);
+    return;
+  }
+  for (auto const& item : recent_) {
+    RecentList().Children().Append(MakeEpisodeCard(item, true));
+  }
+}
+
+void MainWindow::RenderDownloadedPage() {
+  DownloadedList().Children().Clear();
+  std::vector<RecentRow> rows;
+  for (auto const& item : recent_) {
+    if (item.episode.downloaded) rows.push_back(item);
+  }
+  if (rows.empty()) {
+    muxc::TextBlock empty;
+    empty.Text(winrt::hstring(std::wstring(podlens::Tr("page.downloaded_empty"))));
+    empty.Opacity(0.7);
+    empty.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 24, 0, 0});
+    DownloadedList().Children().Append(empty);
+    return;
+  }
+  for (auto const& item : rows) {
+    DownloadedList().Children().Append(MakeEpisodeCard(item, true));
+  }
+}
+
+void MainWindow::RenderShowsPage() {
+  ShowsGrid().Children().Clear();
+  for (auto const& feed : feeds_) {
+    auto tile = MakeShowTile(feed);
+    std::string const feed_id = feed.id;
+    tile.Width(150);
+    tile.Margin(winrt::Microsoft::UI::Xaml::Thickness{4, 4, 16, 16});
+    tile.Tapped([weak = get_weak(), feed_id](auto&&, auto&&) {
+      if (auto window = weak.get()) window->SelectFeedById(feed_id);
+    });
+    ShowsGrid().Children().Append(tile);
+  }
+}
+
+void MainWindow::SelectFeedById(std::string const& feed_id) {
+  selected_feed_id_ = feed_id;
+  ReloadEpisodes();
+  ShowPage(Page::Episodes);
+  for (uint32_t i = 0; i < Nav().MenuItems().Size(); ++i) {
+    if (auto const item =
+            Nav().MenuItems().GetAt(i).try_as<muxc::NavigationViewItem>()) {
+      auto const tag = winrt::unbox_value_or<winrt::hstring>(item.Tag(), {});
+      if (to_utf8(std::wstring(tag)) == feed_id) {
+        suppress_nav_ = true;
+        Nav().SelectedItem(item);
+        suppress_nav_ = false;
+        break;
+      }
+    }
+  }
+}
+
+void MainWindow::UpdatePlayerInfo() {
+  for (auto const& item : recent_) {
+    if (item.episode.id == selected_episode_id_) {
+      PlayerTitle().Text(winrt::hstring(to_wide(item.episode.title)));
+      PlayerShow().Text(winrt::hstring(to_wide(item.feed_title)));
+      try {
+        PlayerArtwork().Source(
+            winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+                winrt::Windows::Foundation::Uri(to_wide(item.artwork))));
+      } catch (...) {
+      }
+      return;
+    }
+  }
+  for (auto const& episode : episodes_) {
+    if (episode.id == selected_episode_id_) {
+      PlayerTitle().Text(winrt::hstring(to_wide(episode.title)));
+    }
+  }
+  if (FeedRow const* feed = FeedById(selected_feed_id_)) {
+    PlayerShow().Text(winrt::hstring(to_wide(feed->title)));
+    try {
+      PlayerArtwork().Source(
+          winrt::Windows::UI::Xaml::Media::Imaging::BitmapImage(
+              winrt::Windows::Foundation::Uri(to_wide(feed->artwork))));
+    } catch (...) {
+    }
+  }
+}
+
 // ---- playback -------------------------------------------------------------------
 
 void MainWindow::StartPlayback() {
@@ -1127,13 +1782,7 @@ void MainWindow::StartPlayback() {
     duration_ = 0;
     ticks_since_save_ = 0;
 
-    EpisodeRow const* episode = nullptr;
-    for (auto const& candidate : episodes_) {
-      if (candidate.id == episode_id) {
-        episode = &candidate;
-        break;
-      }
-    }
+    EpisodeRow const* episode = SelectedEpisode();
     if (episode && episode->position_sec > 5 && !episode->done) {
       player_.Position(
           std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
@@ -1464,15 +2113,7 @@ void MainWindow::ResumeLast() {
               if (row.size() < 3) return;
               window->pending_resume_feed_id_ = row[0];
               window->pending_resume_episode_id_ = row[1];
-              bool selected = false;
-              for (uint32_t i = 0; i < window->feeds_.size(); ++i) {
-                if (window->feeds_[i].id == row[0]) {
-                  window->Nav().SelectedItem(window->Nav().MenuItems().GetAt(i));
-                  selected = true;
-                  break;
-                }
-              }
-              if (!selected) window->ReloadFeeds();
+              window->ReloadFeeds();
             } catch (std::exception const&) {
             }
           }
@@ -1530,11 +2171,7 @@ void MainWindow::SetStatus(bool ok, std::wstring const& message) {
 }
 
 std::string MainWindow::SelectedFeedId() {
-  if (auto const item = Nav().SelectedItem().try_as<muxc::NavigationViewItem>()) {
-    auto const tag = winrt::unbox_value_or<winrt::hstring>(item.Tag(), {});
-    return to_utf8(std::wstring(tag));
-  }
-  return {};
+  return selected_feed_id_;
 }
 
 std::string MainWindow::SelectedEpisodeId() {
@@ -1615,6 +2252,7 @@ void MainWindow::StartJob(std::string const& kind, std::string const& episode_id
     }
     dispatcher.TryEnqueue([weak, kind, episode_id] {
       if (auto window = weak.get()) {
+        window->ReloadRecent();
         window->ReloadEpisodes();
         if (window->selected_episode_id_ == episode_id) {
           if (kind == "transcribe" || kind == "translate" ||
@@ -1640,7 +2278,7 @@ void MainWindow::Nav_ItemInvoked(winrt::Windows::Foundation::IInspectable const&
 void MainWindow::Nav_SelectionChanged(
     winrt::Windows::Foundation::IInspectable const&,
     muxc::NavigationViewSelectionChangedEventArgs const&) {
-  if (!initialized_) return;
+  if (!initialized_ || suppress_nav_) return;
   auto const item = Nav().SelectedItem().try_as<muxc::NavigationViewItem>();
   if (!item) return;
   auto const tag = winrt::unbox_value_or<winrt::hstring>(item.Tag(), {});
@@ -1649,10 +2287,16 @@ void MainWindow::Nav_SelectionChanged(
     RunSettingsDialog();
     return;
   }
-  // a feed: load its episodes and show the detail view
+  if (key == L"home") { ShowPage(Page::Home); return; }
+  if (key == L"discover") { ShowPage(Page::Discover); return; }
+  if (key == L"library-recent") { ShowPage(Page::Recent); return; }
+  if (key == L"library-shows") { ShowPage(Page::Shows); return; }
+  if (key == L"library-downloaded") { ShowPage(Page::Downloaded); return; }
   if (!key.empty()) {
-    ShowView(View::Detail);
+    // a subscription: the feed's episode page
+    selected_feed_id_ = to_utf8(key);
     ReloadEpisodes();
+    ShowPage(Page::Episodes);
   }
 }
 
@@ -1679,6 +2323,7 @@ void MainWindow::EpisodeList_SelectionChanged(
     LoadChapters();
     LoadEstimate();
   }
+  UpdatePlayerInfo();
 }
 
 void MainWindow::Mode_SelectionChanged(
@@ -1749,6 +2394,7 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
           if (error.empty()) {
             window->SetStatus(true, std::wstring(podlens::Tr("status.feed_added")));
             window->ReloadFeeds();
+            window->ReloadRecent();
           } else {
             window->SetStatus(false, to_wide(error));
           }
@@ -1756,11 +2402,6 @@ void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,
       });
     }).detach();
   });
-}
-
-void MainWindow::Discover_Click(winrt::Windows::Foundation::IInspectable const&,
-                                Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  LoadDiscover();
 }
 
 void MainWindow::AddFromCatalog(std::string const& url) {
@@ -1838,6 +2479,9 @@ void MainWindow::LoadDiscover() {
           homepage.Text(winrt::hstring(to_wide(row[4])));
           homepage.FontSize(12);
           homepage.Opacity(0.6);
+          muxc::Border artwork_host = MakeArtwork(
+              to_wide(row.size() > 7 ? row[7] : ""), 56);
+          artwork_host.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Top);
 
           bool const added = row[6] == "1";
           muxc::Button action;
@@ -1886,7 +2530,7 @@ void MainWindow::LoadDiscover() {
         window->DiscoverList().Children().Append(note);
 
         window->SetStatus(true, std::wstring(podlens::Tr("discover.title")));
-        window->ShowView(View::Discover);
+        window->ShowPage(Page::Discover);
       }
     });
   }).detach();
@@ -1916,7 +2560,8 @@ void MainWindow::RefreshFeed_Click(winrt::Windows::Foundation::IInspectable cons
           window->SetStatus(false, to_wide(error));
         }
         window->ReloadFeeds();
-        window->ReloadEpisodes();
+        window->ReloadRecent();
+        if (window->page_ == Page::Episodes) window->ReloadEpisodes();
       }
     });
   }).detach();
@@ -1958,7 +2603,13 @@ void MainWindow::RemoveFeed_Click(winrt::Windows::Foundation::IInspectable const
           } else {
             window->SetStatus(false, to_wide(error));
           }
+          if (window->selected_feed_id_ == feed_id) {
+            window->selected_feed_id_.clear();
+            window->selected_episode_id_.clear();
+            window->ShowPage(Page::Home);
+          }
           window->ReloadFeeds();
+          window->ReloadRecent();
         }
       });
     }).detach();
@@ -2051,7 +2702,7 @@ void MainWindow::RemoveAudio_Click(winrt::Windows::Foundation::IInspectable cons
       });
 }
 
-void MainWindow::MarkToggle_Click(winrt::Windows::Foundation::IInspectable const&,
+void MainWindow::MarkMenu_Click(winrt::Windows::Foundation::IInspectable const&,
                                   Microsoft::UI::Xaml::RoutedEventArgs const&) {
   EpisodeRow const* episode = nullptr;
   for (auto const& candidate : episodes_) {

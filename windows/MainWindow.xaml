@@ -4,10 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-      Layout mirrors docs/DESIGN-ROADMAP.md §4: sidebar (feeds) / episode
-      list / detail, with a persistent player bar and a quiet status line.
-      All list content is built in code (MainWindow.xaml.cpp) because the
-      C++/WinRT host has no x:Bind surface; this file owns structure only.
+      Layout mirrors Apple Podcasts: a NavigationView sidebar (Home /
+      Discover / Library pages / subscriptions with cover art) feeding a
+      page column and a persistent detail column, with the player bar
+      riding the whole window. All list content is built in code
+      (MainWindow.xaml.cpp) because the C++/WinRT host has no x:Bind
+      surface; this file owns structure only.
     -->
 
     <Grid>
@@ -23,7 +25,7 @@
                         IsSettingsVisible="False"
                         IsPaneToggleButtonVisible="False"
                         PaneDisplayMode="Left"
-                        OpenPaneLength="272"
+                        OpenPaneLength="264"
                         SelectionChanged="Nav_SelectionChanged"
                         ItemInvoked="Nav_ItemInvoked">
 
@@ -35,14 +37,6 @@
                     <Button x:Name="AddFeedButton" Margin="0,8,0,0"
                             HorizontalAlignment="Stretch"
                             Click="AddFeed_Click" />
-                    <Button x:Name="DiscoverButton"
-                            HorizontalAlignment="Stretch"
-                            Background="{ThemeResource AppAccentSoftBrush}"
-                            Foreground="{ThemeResource AppAccentBrush}"
-                            BorderThickness="0"
-                            Click="Discover_Click" />
-                    <!-- Family menu convention: Check for Updates… and About
-                         live together in the Help menu. -->
                     <Button x:Name="HelpButton" HorizontalAlignment="Stretch">
                         <Button.Flyout>
                             <MenuFlyout>
@@ -51,6 +45,7 @@
                                         <KeyboardAccelerator Modifiers="Control" Key="U" />
                                     </MenuFlyoutItem.KeyboardAccelerators>
                                 </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="MenuRefreshAll" Click="RefreshAll_Click" />
                                 <MenuFlyoutSeparator />
                                 <MenuFlyoutItem x:Name="MenuAbout" Click="MenuAbout_Click" />
                             </MenuFlyout>
@@ -70,45 +65,82 @@
 
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="340" />
+                    <ColumnDefinition Width="*" MinWidth="430" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="0.8*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- episode list -->
+                <!-- page column: exactly one child is visible at a time -->
                 <Grid Grid.Column="0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                    <!-- home -->
+                    <ScrollViewer x:Name="HomePage" Visibility="Visible">
+                        <StackPanel x:Name="HomeList" MaxWidth="620"
+                                    HorizontalAlignment="Left" Spacing="4"
+                                    Margin="16,4,16,16" />
+                    </ScrollViewer>
 
-                    <Grid Grid.Row="0" Margin="16,12,12,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="EpisodesHeader" FontWeight="SemiBold" FontSize="14" />
-                        <Button Grid.Column="1" x:Name="RefreshFeedButton" Background="Transparent"
-                                BorderThickness="0" Padding="6" Click="RefreshFeed_Click">
-                            <FontIcon Glyph="&#xE72C;" FontSize="14" />
-                        </Button>
-                        <Button Grid.Column="2" x:Name="RemoveFeedButton" Background="Transparent"
-                                BorderThickness="0" Padding="6" Click="RemoveFeed_Click">
-                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                        </Button>
+                    <!-- discover -->
+                    <ScrollViewer x:Name="DiscoverView" Visibility="Collapsed">
+                        <StackPanel x:Name="DiscoverList" MaxWidth="620"
+                                    HorizontalAlignment="Left" Spacing="4"
+                                    Margin="16,8,16,16" />
+                    </ScrollViewer>
+
+                    <!-- recently updated -->
+                    <ScrollViewer x:Name="RecentPage" Visibility="Collapsed">
+                        <StackPanel x:Name="RecentList" MaxWidth="620"
+                                    HorizontalAlignment="Left" Spacing="4"
+                                    Margin="16,8,16,16" />
+                    </ScrollViewer>
+
+                    <!-- shows grid -->
+                    <ScrollViewer x:Name="ShowsPage" Visibility="Collapsed">
+                        <GridView x:Name="ShowsGrid" Margin="8,8,8,16"
+                                  SelectionMode="Single" />
+                    </ScrollViewer>
+
+                    <!-- downloaded -->
+                    <ScrollViewer x:Name="DownloadedPage" Visibility="Collapsed">
+                        <StackPanel x:Name="DownloadedList" MaxWidth="620"
+                                    HorizontalAlignment="Left" Spacing="4"
+                                    Margin="16,8,16,16" />
+                    </ScrollViewer>
+
+                    <!-- one feed's episodes -->
+                    <Grid x:Name="EpisodesPage" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="16,12,12,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="EpisodesHeader" FontWeight="SemiBold" FontSize="14" />
+                            <Button Grid.Column="1" x:Name="RefreshFeedButton" Background="Transparent"
+                                    BorderThickness="0" Padding="6" Click="RefreshFeed_Click">
+                                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                            </Button>
+                            <Button Grid.Column="2" x:Name="RemoveFeedButton" Background="Transparent"
+                                    BorderThickness="0" Padding="6" Click="RemoveFeed_Click">
+                                <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            </Button>
+                        </Grid>
+
+                        <ListView Grid.Row="1" x:Name="EpisodeList" Margin="12,0"
+                                  SelectionMode="Single"
+                                  SelectionChanged="EpisodeList_SelectionChanged" />
+
+                        <StackPanel Grid.Row="1" x:Name="EpisodesEmpty" Margin="24,48,24,0"
+                                    Spacing="8" Visibility="Collapsed">
+                            <TextBlock x:Name="EpisodesEmptyTitle" FontWeight="SemiBold" FontSize="16" />
+                            <TextBlock x:Name="EpisodesEmptyHint" FontSize="13" Opacity="0.7"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
                     </Grid>
-
-                    <ListView Grid.Row="1" x:Name="EpisodeList" Margin="12,0"
-                              SelectionMode="Single"
-                              SelectionChanged="EpisodeList_SelectionChanged" />
-
-                    <StackPanel Grid.Row="1" x:Name="EpisodesEmpty" Margin="24,48,24,0"
-                                Spacing="8" Visibility="Collapsed">
-                        <TextBlock x:Name="EpisodesEmptyTitle" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock x:Name="EpisodesEmptyHint" FontSize="13" Opacity="0.7"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
                 </Grid>
 
                 <Border Grid.Column="1" Width="1" Margin="0,8"
@@ -128,14 +160,8 @@
                                    TextWrapping="Wrap" />
                         <Button x:Name="DetailEmptyCta" HorizontalAlignment="Center"
                                 Background="{ThemeResource AppAccentBrush}"
-                                Foreground="White" BorderThickness="0"
-                                Click="Discover_Click" />
+                                Foreground="White" BorderThickness="0" />
                     </StackPanel>
-
-                    <!-- discover -->
-                    <ScrollViewer x:Name="DiscoverView" Visibility="Collapsed">
-                        <StackPanel x:Name="DiscoverList" MaxWidth="720" Spacing="4" />
-                    </ScrollViewer>
 
                     <!-- episode detail -->
                     <Grid x:Name="DetailViewHost" Visibility="Collapsed">
@@ -163,15 +189,20 @@
                             <Button x:Name="PipelineButton" Padding="10,4" Click="Pipeline_Click"
                                     Background="{ThemeResource AppAccentBrush}" Foreground="White"
                                     BorderThickness="0" />
-                            <Button x:Name="DownloadButton" Padding="10,4" Click="Download_Click" />
-                            <Button x:Name="TranscribeButton" Padding="10,4" Click="Transcribe_Click" />
-                            <Button x:Name="TranslateButton" Padding="10,4" Click="Translate_Click" />
-                            <Button x:Name="SummarizeButton" Padding="10,4" Click="Summarize_Click" />
-                            <Button x:Name="MarkButton" Padding="10,4" Click="MarkToggle_Click" />
-                            <!-- only visible while the episode has local audio (parity
-                                 with the Linux host's Delete Audio button) -->
-                            <Button x:Name="RemoveAudioButton" Padding="10,4" Click="RemoveAudio_Click"
-                                    Visibility="Collapsed" />
+                            <Button x:Name="MoreButton" Padding="10,4">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem x:Name="MenuDownload" Click="Download_Click" />
+                                        <MenuFlyoutItem x:Name="MenuTranscribe" Click="Transcribe_Click" />
+                                        <MenuFlyoutItem x:Name="MenuTranslate" Click="Translate_Click" />
+                                        <MenuFlyoutItem x:Name="MenuSummarize" Click="Summarize_Click" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem x:Name="MenuMark" Click="MarkMenu_Click" />
+                                        <MenuFlyoutItem x:Name="MenuRemoveAudio" Click="RemoveAudio_Click"
+                                                        Visibility="Collapsed" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4"
@@ -212,6 +243,9 @@
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -237,7 +271,26 @@
                                          Invoked="PlayerAccel_Invoked" />
                 </Grid.KeyboardAccelerators>
 
-                <Button Grid.Column="0" x:Name="SleepButton" Width="36" Height="36"
+                <Border Grid.Column="0" x:Name="PlayerArtworkHost" Width="40" Height="40"
+                        CornerRadius="6" Background="{ThemeResource AppAccentSoftBrush}">
+                    <Image x:Name="PlayerArtwork" Stretch="UniformToFill" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock x:Name="PlayerTitle" FontSize="12" FontWeight="SemiBold"
+                               MaxLines="1" TextTrimming="CharacterEllipsis" Text="" />
+                    <TextBlock x:Name="PlayerShow" FontSize="11" Opacity="0.7"
+                               MaxLines="1" TextTrimming="CharacterEllipsis" Text="" />
+                </StackPanel>
+
+                <!-- PodLens' edge: jump straight into the transcript reader -->
+                <Button Grid.Column="2" x:Name="TranscriptButton" Width="36" Height="36"
+                        CornerRadius="18" Background="Transparent" BorderThickness="0"
+                        Padding="0" Click="TranscriptTab_Click">
+                    <FontIcon Glyph="&#xE8E9;" FontSize="14" />
+                </Button>
+
+                <Button Grid.Column="3" x:Name="SleepButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0">
                     <FontIcon Glyph="&#xE708;" FontSize="14" />
@@ -259,46 +312,46 @@
                 </Button>
 
                 <!-- chapter marks: hidden unless the episode carries chapters -->
-                <Button Grid.Column="1" x:Name="ChapterBackButton" Width="36" Height="36"
+                <Button Grid.Column="4" x:Name="ChapterBackButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Visibility="Collapsed" Click="ChapterBack_Click">
                     <FontIcon Glyph="&#xE915;" FontSize="13" />
                 </Button>
-                <Button Grid.Column="2" x:Name="ChapterForwardButton" Width="36" Height="36"
+                <Button Grid.Column="5" x:Name="ChapterForwardButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Visibility="Collapsed" Click="ChapterForward_Click">
                     <FontIcon Glyph="&#xE916;" FontSize="13" />
                 </Button>
 
-                <Button Grid.Column="3" x:Name="SkipBackButton" Width="36" Height="36"
+                <Button Grid.Column="6" x:Name="SkipBackButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Click="SkipBack_Click">
                     <FontIcon Glyph="&#xEB9E;" FontSize="14" />
                 </Button>
 
-                <Button Grid.Column="4" x:Name="PlayPauseButton" Width="40" Height="40"
+                <Button Grid.Column="7" x:Name="PlayPauseButton" Width="40" Height="40"
                         CornerRadius="20" Background="{ThemeResource AppAccentBrush}"
                         Foreground="White" BorderThickness="0" Click="PlayPause_Click">
                     <FontIcon x:Name="PlayPauseGlyph" Glyph="&#xE768;" FontSize="16" />
                 </Button>
 
-                <Button Grid.Column="5" x:Name="SkipForwardButton" Width="36" Height="36"
+                <Button Grid.Column="8" x:Name="SkipForwardButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
                         Padding="0" Click="SkipForward_Click">
                     <FontIcon Glyph="&#xEB9D;" FontSize="14" />
                 </Button>
 
-                <TextBlock Grid.Column="6" x:Name="PositionText" FontSize="12"
+                <TextBlock Grid.Column="9" x:Name="PositionText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <Slider Grid.Column="7" x:Name="SeekSlider" Minimum="0" Maximum="100"
+                <Slider Grid.Column="10" x:Name="SeekSlider" Minimum="0" Maximum="100"
                         StepFrequency="1" VerticalAlignment="Center"
                         ValueChanged="SeekSlider_ValueChanged"
                         PointerPressed="SeekSlider_PointerPressed"
                         PointerCaptureLost="SeekSlider_PointerReleased"
                         PointerReleased="SeekSlider_PointerReleased" />
-                <TextBlock Grid.Column="8" x:Name="DurationText" FontSize="12"
+                <TextBlock Grid.Column="11" x:Name="DurationText" FontSize="12"
                            FontFamily="Consolas" VerticalAlignment="Center" Text="00:00" />
-                <ComboBox Grid.Column="9" x:Name="RateSelector" MinWidth="92"
+                <ComboBox Grid.Column="12" x:Name="RateSelector" MinWidth="92"
                           VerticalAlignment="Center" SelectionChanged="Rate_SelectionChanged" />
             </Grid>
         </Border>

@@ -193,6 +193,22 @@ inline constexpr Entry kStrings[] = {
     {"about.license", L"以 GNU AGPL-3.0 授权发布", L"Released under the GNU AGPL-3.0"},
     {"about.website", L"访问官网", L"Website"},
     {"about.issue", L"问题反馈", L"Report an Issue"},
+    {"nav.home", L"主页", L"Home"},
+    {"nav.discover", L"发现", L"Discover"},
+    {"library.title", L"资料库", L"Library"},
+    {"library.recent", L"最近更新", L"Recently Updated"},
+    {"library.shows", L"节目", L"Shows"},
+    {"library.downloaded", L"已下载", L"Downloaded"},
+    {"home.up_next", L"待播清单", L"Up Next"},
+    {"home.my_shows", L"我的节目", L"My Shows"},
+    {"home.latest", L"最新单集", L"Latest Episodes"},
+    {"meta.new_episode", L"新单集", L"New Episode"},
+    {"meta.continue", L"继续收听", L"Continue Listening"},
+    {"shows.count", L"%d 集", L"%d episodes"},
+    {"page.recent_empty", L"暂无单集，点左下角「刷新全部订阅」试试",
+     L"No episodes yet — try Refresh All Feeds"},
+    {"page.downloaded_empty", L"还没有下载的单集", L"No downloaded episodes"},
+    {"player.transcript", L"逐句稿", L"Transcript"},
 };
 
 // Look up a UI string in the build-time language. Unknown keys return an
