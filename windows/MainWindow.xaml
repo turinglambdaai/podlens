@@ -46,7 +46,7 @@
                     <Button x:Name="HelpButton" HorizontalAlignment="Stretch">
                         <Button.Flyout>
                             <MenuFlyout>
-                                <MenuFlyoutItem x:Name="MenuCheckUpdates" Click="MenuCheckUpdates_Click">
+                                <MenuFlyoutItem x:Name="MenuCheckUpdates" Click="CheckUpdates_Click">
                                     <MenuFlyoutItem.KeyboardAccelerators>
                                         <KeyboardAccelerator Modifiers="Control" Key="U" />
                                     </MenuFlyoutItem.KeyboardAccelerators>

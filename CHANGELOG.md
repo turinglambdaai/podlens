@@ -5,7 +5,6 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### Added
 - **A Podcasts-grade shell for the macOS host.** The sidebar gains Home
   and Discover entries plus a Library section (Recently Updated,
