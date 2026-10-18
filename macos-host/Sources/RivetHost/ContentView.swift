@@ -1316,6 +1316,7 @@ struct SettingsSheet: View {
                             }))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 320)
+                            .accessibilityLabel(row.0)
                     }
                 }
             }

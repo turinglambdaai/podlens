@@ -1,0 +1,126 @@
+name: Product Acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acceptance-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RIVET_PIN: b1d05950537f8679b2cfb48aded383c5162c288f
+  KEEL_PIN: 0740fdfbdab7bf5dab32232c82f07dd98aa6a196
+
+jobs:
+  windows:
+    name: Windows packaged WinUI acceptance
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: stable
+      - name: Install pinned dependencies
+        shell: pwsh
+        run: |
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#$env:KEEL_PIN"
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#$env:RIVET_PIN"
+          raco pkg install --auto --no-docs --skip-installed crypto
+      - name: Run executable acceptance contract
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .rivet\acceptance | Out-Null
+          $report = & raco rivet acceptance --json
+          $status = $LASTEXITCODE
+          $report | Tee-Object -FilePath .rivet\acceptance\report.json
+          exit $status
+      - name: Upload Windows evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podlens-acceptance-windows
+          path: .rivet/acceptance
+          if-no-files-found: warn
+
+  macos:
+    name: macOS packaged SwiftUI acceptance (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, runner: macos-15, racket-arch: arm64 }
+          - { arch: x64, runner: macos-15-intel, racket-arch: x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: ${{ matrix.racket-arch }}
+          distribution: full
+          variant: CS
+          version: stable
+      - name: Install pinned dependencies
+        run: |
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}"
+          raco pkg install --auto --no-docs --skip-installed crypto
+      - name: Run executable acceptance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rivet/acceptance
+          raco rivet acceptance --json | tee .rivet/acceptance/report.json
+      - name: Upload macOS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podlens-acceptance-macos-${{ matrix.arch }}
+          path: .rivet/acceptance
+          if-no-files-found: warn
+
+  linux:
+    name: Linux packaged GTK4 acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up embeddable Racket CS
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@b1d05950537f8679b2cfb48aded383c5162c288f
+      - name: Install native and pinned Racket dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes at-spi2-core dbus-x11 libgtk-4-dev \
+            libadwaita-1-dev libjson-glib-dev libsecret-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            python3-pyatspi weston
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}"
+          raco pkg install --auto --no-docs --skip-installed crypto
+      - name: Run executable acceptance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rivet/acceptance
+          dbus-run-session -- bash -c \
+            'set -euo pipefail; raco rivet acceptance --json | tee .rivet/acceptance/report.json'
+      - name: Upload Linux evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podlens-acceptance-linux
+          path: .rivet/acceptance
+          if-no-files-found: warn

@@ -2942,6 +2942,8 @@ void MainWindow::ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
     muxc::TextBox input;
     input.Text(winrt::hstring(to_wide(row[1])));
     input.Width(380);
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+        input, winrt::hstring(to_wide(row[0])));
 
     muxc::StackPanel line;
     line.Spacing(4);
