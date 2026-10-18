@@ -134,7 +134,7 @@ do {
     }
     try press(save, "settings save")
 
-    _ = try waitFor("settings persisted by the embedded backend") {
+    _ = try waitFor("settings persisted by the embedded backend") { () -> Bool? in
         guard let data = try? Data(contentsOf: config),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               object["chat-model"] as? String == "acceptance-model" else { return nil }

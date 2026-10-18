@@ -101,13 +101,20 @@ try {
     $save = Wait-Until 'Save button' { Find-ByName $window @('Save', '保存') }
     Activate-Control $save
 
-    $config = Wait-Until 'settings persisted by the embedded backend' {
-        try {
-            $value = Get-Content -LiteralPath (Join-Path $data 'config.json') -Raw |
-                ConvertFrom-Json
-            if ($value.'chat-model' -eq 'acceptance-model') { return $value }
-        } catch {}
-        return $null
+    # Wait on the UI completion signal before opening config.json. On Windows,
+    # polling the file during the backend's atomic replace can momentarily lock
+    # the destination and turn the observer itself into the cause of failure.
+    [void](Wait-Until 'settings save completion' {
+        $status = Find-ById $window 'StatusLine'
+        if ($status -and $status.Current.Name -match 'Settings saved|设置已保存') {
+            return $true
+        }
+        return $false
+    })
+    $config = Get-Content -LiteralPath (Join-Path $data 'config.json') -Raw |
+        ConvertFrom-Json
+    if ($config.'chat-model' -ne 'acceptance-model') {
+        throw 'settings completion was reported without persisting chat-model'
     }
 
     $nodes = $window.FindAll(
