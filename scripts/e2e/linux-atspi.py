@@ -62,6 +62,18 @@ def find_named(root, name, expected_role=None):
     return None
 
 
+def find_editable_named(root, name):
+    for node in walk(root):
+        if (node.name or "") != name:
+            continue
+        try:
+            node.queryEditableText()
+            return node
+        except Exception:
+            continue
+    return None
+
+
 def contains(root, expected):
     return any((node.name or "") == expected or text(node) == expected for node in walk(root))
 
@@ -94,14 +106,19 @@ def main():
         "PodLens frame", lambda: next((n for n in walk(application) if role(n) == "frame"), None)
     )
     wait_for("embedded backend readiness", lambda: contains(window, "Ready"))
-    menu = wait_for("Main Menu", lambda: find_named(window, "Main Menu"))
+    menu = wait_for(
+        "Main Menu button", lambda: find_named(window, "Main Menu", "push button")
+    )
     press(menu)
     options = wait_for("Options menu", lambda: find_named(application, "Options"))
     press(options)
     settings = wait_for("Settings menu item", lambda: find_named(application, "Settings…"))
     press(settings)
 
-    field = wait_for("chat-model settings field", lambda: find_named(application, "chat-model"))
+    field = wait_for(
+        "chat-model settings field",
+        lambda: find_editable_named(application, "chat-model"),
+    )
     field.queryEditableText().setTextContents("acceptance-model")
     save = wait_for("Save button", lambda: find_named(application, "Save", "push button"))
     press(save)
