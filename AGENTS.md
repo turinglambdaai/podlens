@@ -20,13 +20,18 @@ GUI 与 CLI 共用同一份 Racket 核心：无参数启动 GUI；CLI 走源码�
 ## 快速命令
 
 ```bash
-# 每次开发前：先把本地 rivet checkout 更新到 origin/main（Rivet 迭代很快）
-git -C /path/to/rivet fetch origin && git -C /path/to/rivet reset --hard origin/main
+# 每次开发前：检查工作树，再以 fast-forward-only 更新当前仓库和 Rivet
+git status --short --branch
+git pull --ff-only
+git -C /path/to/rivet pull --ff-only
 # link（首次或 link 断了）：link rivet 与 rivet-cli 两个子包
 raco pkg install --auto --no-docs --link /path/to/rivet/rivet /path/to/rivet/rivet-cli
 
 # 后端测试（假 OpenAI 服务器，无需真实 key）
 raco test tests/
+
+# 三平台完整完成定义（在各原生 runner 上执行）
+raco rivet acceptance --json
 
 # 构建并启动当前平台宿主（自动重新生成类型化客户端）
 raco rivet dev
@@ -40,6 +45,11 @@ PODLENS_DATA_DIR=$(mktemp -d) racket app/cli.rkt doctor
 # 更新签名密钥（仅首次；私钥永不入库）
 scripts/update-keys.sh
 ```
+
+工作树非干净、分支已分叉或远端不可达时，保留现场并报告，不得 stash、reset
+或清理来掩盖状态。`rivet-acceptance.rktd` 是可执行完成定义；不得删除 requirement、
+放宽断言、以 CLI 代替 GUI 操作或复用旧证据来让结果变绿。required suite 未执行、
+超时、失败或没有生成本次运行的新证据时，功能不能称为完成。
 
 ## 契约（改任何行为前必读）
 

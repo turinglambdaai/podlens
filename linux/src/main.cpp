@@ -2655,6 +2655,9 @@ void on_settings_activated(GSimpleAction*, GVariant*, gpointer) {
                                                "pl-title");
                       auto* entry =
                           GTK_ENTRY(gtk_entry_new());
+                      gtk_accessible_update_property(
+                          GTK_ACCESSIBLE(entry), GTK_ACCESSIBLE_PROPERTY_LABEL,
+                          row[0].c_str(), -1);
                       gtk_editable_set_text(GTK_EDITABLE(entry),
                                             row[1].c_str());
                       gtk_box_append(GTK_BOX(panel),
@@ -3198,6 +3201,9 @@ GtkWidget* build_primary_menu() {
   g_object_unref(help);
 
   auto* menubutton = gtk_menu_button_new();
+  gtk_accessible_update_property(
+      GTK_ACCESSIBLE(menubutton), GTK_ACCESSIBLE_PROPERTY_LABEL,
+      "Main Menu", -1);
   gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(menubutton),
                                 "open-menu-symbolic");
   gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(menubutton),
