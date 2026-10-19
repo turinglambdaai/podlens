@@ -163,18 +163,29 @@ do {
     }
 
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
+    // AppKit defers application termination while a SwiftUI modal sheet is
+    // presented. Dismiss the settings sheet through its native button before
+    // exercising the application menu's Quit command.
+    let closeSettings: AXUIElement = try waitFor("settings cancel button") {
+        findButton(application, titles: ["Cancel", "取消"])
+    }
+    try press(closeSettings, "settings cancel")
+    _ = try waitFor("settings sheet dismissal") {
+        findField(application, label: "chat-model") == nil ? true : nil
+    }
     let quitMenuItem: AXUIElement = try waitFor("Quit PodLens menu item") {
         findMenuItem(application, titles: ["Quit PodLens", "退出 PodLens"])
     }
     try press(quitMenuItem, "Quit PodLens menu item")
     try writeJSON([
         "platform": "macos",
-        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved", "press:Quit PodLens"],
+        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved", "press:Cancel", "press:Quit PodLens"],
         "assertions": [
             "packaged SwiftUI window activated",
             "settings field exposed a stable accessibility label",
             "save mutation crossed RVT1 into the embedded backend",
             "isolated config.json contains acceptance-model",
+            "settings sheet dismissed before native application termination",
             "native application accepted termination",
         ],
     ], to: output.appendingPathComponent("interaction-trace.json"))
