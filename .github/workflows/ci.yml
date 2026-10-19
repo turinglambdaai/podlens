@@ -12,7 +12,7 @@ concurrency:
 # Single source of truth for the rivet pin; every install step below
 # references this so a bump is one edit, not a grep-replace across jobs.
 env:
-  RIVET_PIN: c7f9881d25acea50babd51a2a48672ce0cf99b1f
+  RIVET_PIN: b1d05950537f8679b2cfb48aded383c5162c288f
 
 jobs:
   backend:
@@ -96,7 +96,7 @@ jobs:
       # RIVET_RACKET_* (rivet's own composite action) — the Linux host links
       # a static libracketcs, which the distro Racket does not ship.
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.11.0
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@b1d05950537f8679b2cfb48aded383c5162c288f
       # Installed after the embeddable runtime so the catalog dependency
       # closure (cext-lib, crypto-lib, keel) resolves against the minimal
       # build — it ships no packages of its own. crypto backs the updater.

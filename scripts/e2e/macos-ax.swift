@@ -116,8 +116,8 @@ do {
     }
     _ = AXUIElementSetAttributeValue(application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-    _ = try waitFor("embedded backend readiness") {
-        containsText(window, ["Ready", "就绪"]) ? true : nil
+    _ = try waitFor("native PodLens content") {
+        containsText(window, ["Discover", "发现", "Choose an episode to begin", "选择一集开始"]) ? true : nil
     }
 
     try sendCommandComma()

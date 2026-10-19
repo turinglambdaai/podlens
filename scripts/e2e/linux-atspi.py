@@ -79,9 +79,30 @@ def contains(root, expected):
 
 
 def press(node):
-    actions = node.queryAction()
-    if actions.nActions < 1 or not actions.doAction(0):
-        raise AssertionError(f"AT-SPI action failed for {node.name!r}")
+    try:
+        actions = node.queryAction()
+        for index in range(actions.nActions):
+            if actions.doAction(index):
+                return
+    except Exception:
+        pass
+
+    # GtkMenuButton is exposed as a push button but some GTK/AT-SPI builds
+    # reject its action interface. A native pointer click through AT-SPI is
+    # the accessibility-equivalent fallback and still exercises the packaged UI.
+    try:
+        extents = node.queryComponent().getExtents(pyatspi.DESKTOP_COORDS)
+        if extents.width > 0 and extents.height > 0:
+            pyatspi.Registry.generateMouseEvent(
+                extents.x + extents.width // 2,
+                extents.y + extents.height // 2,
+                "b1c",
+            )
+            return
+    except Exception:
+        pass
+
+    raise AssertionError(f"AT-SPI action failed for {node.name!r}")
 
 
 def snapshot(node, depth=0):
