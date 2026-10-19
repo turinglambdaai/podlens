@@ -56,23 +56,18 @@ func findButton(_ root: AXUIElement, titles: Set<String>) -> AXUIElement? {
     }
 }
 
+func findMenuItem(_ root: AXUIElement, titles: Set<String>) -> AXUIElement? {
+    walk(root).first { element in
+        stringAttribute(element, kAXRoleAttribute) == (kAXMenuItemRole as String) &&
+            titles.contains(stringAttribute(element, kAXTitleAttribute))
+    }
+}
+
 func press(_ element: AXUIElement, _ description: String) throws {
     let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
     guard result == .success else {
         throw DriverError.failure("AXPress failed for \(description): \(result.rawValue)")
     }
-}
-
-func sendCommandComma() throws {
-    guard let source = CGEventSource(stateID: .hidSystemState),
-          let down = CGEvent(keyboardEventSource: source, virtualKey: 43, keyDown: true),
-          let up = CGEvent(keyboardEventSource: source, virtualKey: 43, keyDown: false) else {
-        throw DriverError.failure("could not create Command-comma events")
-    }
-    down.flags = .maskCommand
-    up.flags = .maskCommand
-    down.post(tap: .cghidEventTap)
-    up.post(tap: .cghidEventTap)
 }
 
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] {
@@ -120,7 +115,10 @@ do {
         containsText(window, ["Discover", "发现", "Choose an episode to begin", "选择一集开始"]) ? true : nil
     }
 
-    try sendCommandComma()
+    let settingsMenuItem: AXUIElement = try waitFor("Settings menu item") {
+        findMenuItem(application, titles: ["Settings…", "设置…"])
+    }
+    try press(settingsMenuItem, "Settings menu item")
     let field: AXUIElement = try waitFor("chat-model settings field") {
         findField(application, label: "chat-model")
     }
@@ -144,7 +142,7 @@ do {
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
     try writeJSON([
         "platform": "macos",
-        "actions": ["shortcut:Command-comma", "set:chat-model", "press:Saved"],
+        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved"],
         "assertions": [
             "packaged SwiftUI window activated",
             "settings field exposed a stable accessibility label",

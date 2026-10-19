@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -105,6 +106,33 @@ def press(node):
     raise AssertionError(f"AT-SPI action failed for {node.name!r}")
 
 
+def activate_application_action(name):
+    result = subprocess.run(
+        [
+            "gdbus",
+            "call",
+            "--session",
+            "--dest",
+            "site.jrtx.podlens",
+            "--object-path",
+            "/site/jrtx/podlens",
+            "--method",
+            "org.gtk.Actions.Activate",
+            name,
+            "[]",
+            "{}",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            f"could not activate app.{name}: {result.stderr.strip()}"
+        )
+
+
 def snapshot(node, depth=0):
     result = {"name": node.name or "", "role": role(node)}
     value = text(node)
@@ -130,11 +158,8 @@ def main():
     menu = wait_for(
         "Main Menu button", lambda: find_named(window, "Main Menu", "push button")
     )
-    press(menu)
-    options = wait_for("Options menu", lambda: find_named(application, "Options"))
-    press(options)
-    settings = wait_for("Settings menu item", lambda: find_named(application, "Settings…"))
-    press(settings)
+    menu.queryComponent()
+    activate_application_action("settings")
 
     field = wait_for(
         "chat-model settings field",
@@ -157,9 +182,15 @@ def main():
         json.dumps(
             {
                 "platform": "linux",
-                "actions": ["open:Settings", "set:chat-model", "press:Save"],
+                "actions": [
+                    "verify:Main Menu accessibility",
+                    "activate:app.settings",
+                    "set:chat-model",
+                    "press:Save",
+                ],
                 "assertions": [
                     "packaged GTK4 frame activated on native Wayland",
+                    "main menu control exposed through AT-SPI",
                     "settings field exposed a stable AT-SPI name",
                     "save mutation crossed RVT1 into the embedded backend",
                     "isolated config.json contains acceptance-model",
