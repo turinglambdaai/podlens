@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RIVET_PIN: b1d05950537f8679b2cfb48aded383c5162c288f
+  RIVET_PIN: v0.12.0
   KEEL_PIN: 0740fdfbdab7bf5dab32232c82f07dd98aa6a196
 
 jobs:
@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@b1d05950537f8679b2cfb48aded383c5162c288f
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.12.0
       - name: Install native and pinned Racket dependencies
         shell: bash
         run: |
