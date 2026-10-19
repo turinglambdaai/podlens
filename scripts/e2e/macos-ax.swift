@@ -52,7 +52,8 @@ func findField(_ root: AXUIElement, label: String) -> AXUIElement? {
 func findButton(_ root: AXUIElement, titles: Set<String>) -> AXUIElement? {
     walk(root).first { element in
         stringAttribute(element, kAXRoleAttribute) == (kAXButtonRole as String) &&
-            titles.contains(stringAttribute(element, kAXTitleAttribute))
+            [kAXTitleAttribute, kAXDescriptionAttribute, kAXIdentifierAttribute]
+                .contains { titles.contains(stringAttribute(element, $0)) }
     }
 }
 
@@ -128,7 +129,7 @@ do {
         throw DriverError.failure("could not set chat-model")
     }
     let save: AXUIElement = try waitFor("settings save button") {
-        findButton(application, titles: ["Saved", "已保存"])
+        findButton(application, titles: ["SettingsSaveButton", "Saved", "已保存"])
     }
     try press(save, "settings save")
 

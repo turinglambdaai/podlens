@@ -1342,6 +1342,7 @@ struct SettingsSheet: View {
                 Button(L("cancel")) { dismiss() }
                 Button(L("settingsSaved")) { save() }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("SettingsSaveButton")
             }
         }
         .padding(24)
