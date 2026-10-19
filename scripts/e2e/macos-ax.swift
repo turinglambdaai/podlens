@@ -78,10 +78,10 @@ func replaceText(_ element: AXUIElement, with value: String, pid: pid_t) throws 
         throw DriverError.failure("could not focus chat-model")
     }
     guard let source = CGEventSource(stateID: .hidSystemState),
-          let selectDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: true),
-          let selectUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: false),
-          let textDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: true),
-          let textUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: false) else {
+          let selectDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+          let selectUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false),
+          let textDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+          let textUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
         throw DriverError.failure("could not create keyboard events")
     }
     selectDown.flags = .maskCommand
