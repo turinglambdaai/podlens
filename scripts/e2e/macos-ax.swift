@@ -90,7 +90,6 @@ func replaceText(_ element: AXUIElement, with value: String, pid: pid_t) throws 
     selectUp.postToPid(pid)
     let utf16 = Array(value.utf16)
     textDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-    textUp.keyboardSetUnicodeString(stringLength: 0, unicodeString: [])
     textDown.postToPid(pid)
     textUp.postToPid(pid)
 }
