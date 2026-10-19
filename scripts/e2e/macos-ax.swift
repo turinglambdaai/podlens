@@ -71,6 +71,30 @@ func press(_ element: AXUIElement, _ description: String) throws {
     }
 }
 
+func replaceText(_ element: AXUIElement, with value: String, pid: pid_t) throws {
+    guard AXUIElementSetAttributeValue(
+        element, kAXFocusedAttribute as CFString, kCFBooleanTrue
+    ) == .success else {
+        throw DriverError.failure("could not focus chat-model")
+    }
+    guard let source = CGEventSource(stateID: .hidSystemState),
+          let selectDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: true),
+          let selectUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: false),
+          let textDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: true),
+          let textUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyboardDown: false) else {
+        throw DriverError.failure("could not create keyboard events")
+    }
+    selectDown.flags = .maskCommand
+    selectUp.flags = .maskCommand
+    selectDown.postToPid(pid)
+    selectUp.postToPid(pid)
+    let utf16 = Array(value.utf16)
+    textDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+    textUp.keyboardSetUnicodeString(stringLength: 0, unicodeString: [])
+    textDown.postToPid(pid)
+    textUp.postToPid(pid)
+}
+
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] {
     var result: [String: Any] = [
         "role": stringAttribute(element, kAXRoleAttribute),
@@ -123,10 +147,9 @@ do {
     let field: AXUIElement = try waitFor("chat-model settings field") {
         findField(application, label: "chat-model")
     }
-    guard AXUIElementSetAttributeValue(
-        field, kAXValueAttribute as CFString, "acceptance-model" as CFString
-    ) == .success else {
-        throw DriverError.failure("could not set chat-model")
+    try replaceText(field, with: "acceptance-model", pid: pid)
+    _ = try waitFor("chat-model edit committed to the native field") {
+        stringAttribute(field, kAXValueAttribute) == "acceptance-model" ? true : nil
     }
     let save: AXUIElement = try waitFor("settings save button") {
         findButton(application, titles: ["SettingsSaveButton", "Saved", "已保存"])

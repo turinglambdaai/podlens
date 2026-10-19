@@ -1299,6 +1299,7 @@ struct SettingsSheet: View {
     @State private var rows: [(String, String, String)] = []
     @State private var lang = currentLanguage()
     @State private var saved = false
+    @State private var saveError: String?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1339,6 +1340,9 @@ struct SettingsSheet: View {
 
             HStack {
                 if saved { Text(L("settingsSaved")).foregroundStyle(.green) }
+                if let saveError {
+                    Text(saveError).foregroundStyle(.red).lineLimit(2)
+                }
                 Button(L("cancel")) { dismiss() }
                 Button(L("settingsSaved")) { save() }
                     .buttonStyle(.borderedProminent)
@@ -1384,10 +1388,16 @@ struct SettingsSheet: View {
     private func save() {
         Task {
             guard let api = store.apiForSettings else { return }
-            for row in rows {
-                _ = try? await api.settings_set(key: row.0, value: row.1)
+            do {
+                for row in rows {
+                    _ = try await api.settings_set(key: row.0, value: row.1)
+                }
+                saveError = nil
+                saved = true
+            } catch {
+                saved = false
+                saveError = error.localizedDescription
             }
-            saved = true
         }
     }
 }
