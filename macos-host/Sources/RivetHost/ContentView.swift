@@ -14,14 +14,17 @@ struct ContentView: View {
             .environmentObject(model.store)
             .sheet(isPresented: $showAddFeed) {
                 AddFeedSheet()
+                    .environmentObject(model.store)
             }
             .sheet(isPresented: model.showSettingsBinding) {
                 SettingsSheet()
+                    .environmentObject(model.store)
             }
             .sheet(isPresented: Binding(
                 get: { model.store.updateOutcome != nil },
                 set: { if !$0 { model.store.updateOutcome = nil } })) {
                 UpdateSheet()
+                    .environmentObject(model.store)
             }
     }
 
