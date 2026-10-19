@@ -163,9 +163,13 @@ do {
     }
 
     try writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility.json"))
+    let quitMenuItem: AXUIElement = try waitFor("Quit PodLens menu item") {
+        findMenuItem(application, titles: ["Quit PodLens", "退出 PodLens"])
+    }
+    try press(quitMenuItem, "Quit PodLens menu item")
     try writeJSON([
         "platform": "macos",
-        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved"],
+        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved", "press:Quit PodLens"],
         "assertions": [
             "packaged SwiftUI window activated",
             "settings field exposed a stable accessibility label",
@@ -175,9 +179,6 @@ do {
         ],
     ], to: output.appendingPathComponent("interaction-trace.json"))
 
-    guard let running = NSRunningApplication(processIdentifier: pid), running.terminate() else {
-        throw DriverError.failure("native application rejected termination")
-    }
 } catch {
     if let application = diagnosticApplication, let output = diagnosticOutput {
         try? writeJSON(snapshot(application), to: output.appendingPathComponent("accessibility-failure.json"))
