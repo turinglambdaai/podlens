@@ -21,6 +21,7 @@
 
 (provide cfg-snapshot
          ensure-audio!
+         ensure-preview-audio!
          run-transcribe!
          run-translate!
          run-summarize!
@@ -68,6 +69,24 @@
           (error 'ensure-audio! "download failed (~a): ~a" code url))
         (episode-set-download! id (path->string dest) written)
         (path->string dest))))
+
+;; Try-before-subscribe playback: fetch an arbitrary enclosure into the
+;; audio cache under a stable preview id and return the local path.
+;; Idempotent — a cached preview never re-downloads. Nothing is written to
+;; the library; the file is only reachable through the audio/ directory.
+(define (ensure-preview-audio! enclosure-url)
+  (define url (string-trim enclosure-url))
+  (unless (non-empty-string? url)
+    (error 'ensure-preview-audio! "empty enclosure url"))
+  (define dest (audio-path (string-append "preview-" (stable-id url)) (ext-of url)))
+  (ensure-audio-dir!)
+  (unless (file-exists? dest)
+    (define-values (code written)
+      (http-download-file url dest))
+    (unless (= code 200)
+      (with-handlers ([exn:fail? void]) (delete-file dest))
+      (error 'ensure-preview-audio! "download failed (~a): ~a" code url)))
+  (path->string dest))
 
 ;; Split audio into chunks with ffmpeg when it exceeds the ASR limit.
 ;; Returns (list of paths) — a single-element list when no split was needed.

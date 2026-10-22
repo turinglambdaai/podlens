@@ -281,5 +281,34 @@
   (check-equal? (hash-ref (wait-terminal jobs id) 'status) "done")
   (check-false (jobs-active? jobs)))
 
+;; ---- preview audio ----------------------------------------------------------
+;; Try-before-subscribe: peek rows come from the fake feed, and the preview
+;; download lands in the audio cache without touching the library.
+
+(define feed-url (format "http://127.0.0.1:~a/feed.xml" port))
+
+(test-case "peek rows over real http"
+  (define rows (peek-rows (fetch-feed feed-url)))
+  (check-equal? (length rows) 2)
+  (check-equal? (list-ref (car rows) 0) "Fixture Feed")
+  (check-equal? (list-ref (car rows) 4) "Episode One")
+  (check-true (string-contains? (list-ref (car rows) 3) "/audio.mp3")))
+
+(test-case "preview audio downloads once then serves from cache"
+  (define enclosure (list-ref (car (peek-rows (fetch-feed feed-url))) 3))
+  (define feeds-before (length (feed-all)))
+  (define path (ensure-preview-audio! enclosure))
+  (check-true (file-exists? path))
+  (check-true (string-prefix? (last (string-split path "/")) "preview-"))
+  (check-equal? (length (feed-all)) feeds-before)
+  ;; second call hits the cache: mutate the file, the path must survive
+  (define mtime (file-or-directory-modify-seconds path))
+  (sleep 0.05)
+  (check-equal? (ensure-preview-audio! enclosure) path)
+  (check-equal? (file-or-directory-modify-seconds path) mtime))
+
+(test-case "empty enclosure url is rejected"
+  (check-exn exn:fail? (lambda () (ensure-preview-audio! "  "))))
+
 ;; raco test waits for all threads; the fake server must not outlive the test
 (kill-thread server-thread)

@@ -159,6 +159,23 @@
           (if (set-member? subscribed-urls (hash-ref r 'feed-url)) "1" "0")
           (hash-ref r 'artwork ""))))
 
+;; Try before you subscribe: fetch a feed WITHOUT adding it to the library
+;; and return its newest episodes for one-click preview playback. Row shape
+;; comes from app/core/feed.rkt peek-rows:
+;;   (feed-title author artwork-url enclosure-url episode-title
+;;    pub-display duration-sec)
+;; Newest first, capped at peek-limit rows; enclosure-url is what
+;; preview-audio downloads.
+(define-rpc (feed-peek [url String] : (List (List String)))
+  (peek-rows (fetch-feed (string-trim url))))
+
+;; Download one preview enclosure into the audio cache (id preview-<sha>)
+;; and return the absolute local path — the playback source for feed-peek
+;; previews. Blocks until the transfer finishes; hosts call it on a worker
+;; and show a busy state. Repeated calls hit the cache.
+(define-rpc (preview-audio [enclosure-url String] : String)
+  (ensure-preview-audio! enclosure-url))
+
 ;; ---- episodes -------------------------------------------------------------------
 
 ;; The shared episode-list projection; episode-recent prepends feed context.

@@ -63,3 +63,29 @@
   (check-equal? (hash-ref (car items) 'duration-sec) 2941)
   (check-equal? (hash-ref (car items) 'pub-date-epoch) 1687762800)
   (check-equal? (hash-ref (car items) 'description) "Some HTML blurb."))
+
+(test-case "peek rows"
+  (define rows (peek-rows (parse-feed fixture)))
+  ;; newest first regardless of document order
+  (check-equal? (length rows) 2)
+  (check-equal? (list-ref (car rows) 4) "EP 100: How to Slow Down")
+  (check-equal? (list-ref (cadr rows) 4) "EP 99: Azimuth")
+  ;; row shape: feed-title author artwork-url enclosure-url episode-title pub-display duration-sec
+  (check-equal? (list-ref (car rows) 0) "Darknet Diaries")
+  (check-equal? (list-ref (car rows) 1) "Jack Rhysider")
+  (check-equal? (list-ref (car rows) 2) "https://example.com/podcast.jpg")
+  (check-equal? (list-ref (car rows) 3) "https://feeds.example.com/dd/ep100.mp3")
+  (check-equal? (list-ref (car rows) 6) "2941")
+  ;; a feed with more items than the cap keeps only the newest
+  (define many
+    (parse-feed
+     (string->bytes/utf-8
+      (string-append
+       "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>M</title>"
+       (apply string-append
+              (for/list ([i (in-range 8)])
+                (format "<item><title>E~a</title><pubDate>Mon, 0~a Jan 2023 00:00:00 +0000</pubDate></item>"
+                        i (add1 i))))
+       "</channel></rss>"))))
+  (check-equal? (length (peek-rows many)) 5)
+  (check-equal? (list-ref (car (peek-rows many)) 4) "E7"))
