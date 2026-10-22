@@ -74,10 +74,11 @@ extension PodLensStore {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
-    /// Fetch the subscribed show's artwork once per episode so the Control
-    /// Center widget carries the cover. Failure just means no artwork.
-    func loadNowPlayingArtwork() {
-        guard let urlString = selectedFeed?.artworkURL,
+    /// Fetch a show's artwork once per episode so the Control Center widget
+    /// carries the cover; defaults to the subscribed show, previews pass
+    /// their peeked feed URL. Failure just means no artwork.
+    func loadNowPlayingArtwork(_ urlString: String? = nil) {
+        guard let urlString = urlString ?? selectedFeed?.artworkURL,
               let url = URL(string: urlString), url.scheme?.hasPrefix("http") == true
         else { return }
         Task {

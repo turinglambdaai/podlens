@@ -2,11 +2,11 @@
 //
 // Interaction contract mirrors the Windows host (windows/MainWindow.xaml.cpp)
 // element for element: subscriptions in the sidebar, episode cards with
-// status chips, one-click Understand with a cost estimate, read-only
-// transcript/summary panels, and resume-on-launch. UI text is English on
-// this host by design (no i18n layer here) — a deliberate split from the
-// Windows and macOS hosts, which both default to Chinese (each carries a
-// zh/en table without a runtime switch yet).
+// status chips, one-click Understand with a cost estimate, a
+// follow-along bilingual transcript, sleep timer, MPRIS media keys,
+// continuous playback, and resume-on-launch. UI strings run through the
+// zh/en table (tr(), zh default, PODLENS_LANG=en to opt out) — the same
+// split as the Windows and macOS hosts, which both default to Chinese.
 //
 // Threading: boot the runtime off the UI thread; every completion/event is
 // dispatched back to the main loop (g_idle_add) before touching widgets.
@@ -189,6 +189,143 @@ std::string estimate_line(std::string const& json) {
 }
 
 // ---------------------------------------------------------------------------
+// Host strings — zh default, en fallback (the same split as the Windows and
+// macOS hosts; no runtime switch yet, PODLENS_LANG=en opts out).
+// ---------------------------------------------------------------------------
+
+char const* tr(char const* key) {
+  struct Pair {
+    char const* key;
+    char const* zh;
+    char const* en;
+  };
+  static constexpr Pair kTable[] = {
+      {"nav.home", "主页", "Home"},
+      {"nav.discover", "发现", "Discover"},
+      {"nav.library", "资料库", "Library"},
+      {"nav.recent", "最近更新", "Recently Updated"},
+      {"nav.shows", "节目", "Shows"},
+      {"nav.downloaded", "已下载", "Downloaded"},
+      {"nav.subscriptions", "我的订阅", "Subscriptions"},
+      {"page.upnext", "待播清单", "Up Next"},
+      {"page.myshows", "我的节目", "My Shows"},
+      {"page.latestepisodes", "最新单集", "Latest Episodes"},
+      {"page.home", "主页", "Home"},
+      {"page.discover", "发现", "Discover"},
+      {"episode.count", " 集", " eps"},
+      {"episode.new", " 新单集", " new"},
+      {"action.add_feed", "添加订阅", "Add Feed"},
+      {"action.understand", "一键听懂", "Understand"},
+      {"action.download", "下载", "Download"},
+      {"action.transcribe", "转写", "Transcribe"},
+      {"action.translate", "翻译", "Translate"},
+      {"action.summarize", "总结", "Summarize"},
+      {"action.mark_played", "标记已听", "Mark played"},
+      {"action.mark_unplayed", "标记未听", "Mark unplayed"},
+      {"action.delete_audio", "删除音频", "Delete Audio"},
+      {"action.add", "添加", "Add"},
+      {"action.added", "已订阅", "Added"},
+      {"action.preview", "试听", "Preview"},
+      {"mode.bilingual", "双语", "Bilingual"},
+      {"mode.translation", "只看译文", "Translation only"},
+      {"mode.original", "只看原文", "Original only"},
+      {"player.transcript", "逐句稿", "Transcript"},
+      {"player.back15", "后退 15 秒", "Back 15 seconds"},
+      {"player.forward30", "前进 30 秒", "Forward 30 seconds"},
+      {"player.chapter_prev", "上一章", "Previous chapter"},
+      {"player.chapter_next", "下一章", "Next chapter"},
+      {"player.rate", "倍速", "Speed"},
+      {"sleep.title", "定时停止", "Sleep Timer"},
+      {"sleep.off", "关闭", "Off"},
+      {"sleep.minutes", "%d 分钟", "%d minutes"},
+      {"sleep.fired", "定时已到，暂停播放", "Sleep timer: paused"},
+      {"transcript.none_selected", "还没有选择单集。", "No episode selected."},
+      {"transcript.none",
+       "还没有逐句稿，点「一键听懂」开始（需先在设置里配置 API key）。",
+       "No transcript yet — press Understand (needs an API key in Settings)."},
+      {"status.starting", "正在启动嵌入式 Racket CS…",
+       "Starting embedded Racket CS…"},
+      {"status.ready", "就绪", "Ready"},
+      {"status.playing", "播放中", "Playing"},
+      {"status.finished", "播放结束，进度已保存",
+       "Playback finished — position saved"},
+      {"status.autoplay_next", "本集播完，自动播放下一集",
+       "Episode finished — playing the next one"},
+      {"status.need_download", "本地还没有音频，已开始下载",
+       "No local audio yet — download started"},
+      {"status.preview_fetch", "正在获取单集信息…", "Fetching episode info…"},
+      {"status.preview_download", "正在下载试听音频…",
+       "Downloading preview audio…"},
+      {"status.preview_marker", "试听", "Preview"},
+      {"status.preview_playing", "试听中：", "Previewing: "},
+      {"status.preview_ended", "试听结束——添加订阅即可收听完整节目",
+       "Preview ended — subscribe for the full show"},
+      {"status.preview_failed", "试听失败：", "Preview failed: "},
+      {"status.preview_no_enclosure", "最新一集没有音频附件",
+       "The latest episode has no audio"},
+      {"discover.search_placeholder", "搜索全部播客，回车搜索…",
+       "Search all podcasts, press return…"},
+      {"discover.search_failed", "搜索失败：", "Search failed: "},
+      {"empty.no_feeds", "还没有订阅\n去发现页添加几档节目吧",
+       "No subscriptions yet\nAdd a few shows from Discover"},
+      {"empty.pick_episode", "选择一集开始", "Pick an episode to begin"},
+      {"empty.recent", "暂无单集，点右上角刷新试试",
+       "No episodes yet — try Refresh All"},
+      {"menu.check_updates", "检查更新…", "Check for Updates…"},
+      {"menu.refresh_all", "刷新全部订阅", "Refresh All Subscriptions"},
+      {"menu.settings", "设置…", "Settings…"},
+      {"menu.about", "关于 PodLens", "About PodLens"},
+      {"menu.add_feed", "添加订阅", "Add Subscription"},
+      {"menu.feed_refresh", "刷新", "Refresh"},
+      {"menu.feed_remove", "取消订阅", "Unsubscribe"},
+      {"dialog.cancel", "取消", "Cancel"},
+      {"dialog.add", "添加", "Add"},
+      {"dialog.ok", "好", "OK"},
+      {"dialog.remove", "删除", "Remove"},
+      {"dialog.settings_title", "设置", "Settings"},
+      {"action.save", "保存", "Save"},
+      {"action.start", "开始", "Start"},
+      {"action.close", "关闭", "Close"},
+      {"dialog.understand", "一键听懂", "Understand"},
+      {"status.feed_added", "已添加订阅", "Subscription added"},
+      {"status.saved", "已保存", "Settings saved"},
+      {"status.settings_hint", "按「保存」后生效。", "Changes apply when you press Save."},
+      {"menu.help", "帮助", "Help"},
+      {"menu.options", "选项", "Options"},
+      {"menu.main", "主菜单", "Main Menu"},
+      {"menu.check_updates_done", "已是最新版本", "You're up to date"},
+      {"menu.check_updates_failed", "检查更新失败：", "Update check failed: "},
+      {"menu.feed_refresh_one", "刷新该节目", "Refresh This Feed"},
+      {"menu.feed_remove_one", "取消订阅该节目", "Remove This Feed"},
+      {"notify.new_episodes", "刷新完成，新增 %d 集", "Refreshed — %d new episode(s)"},
+      {"update.available_title", "发现新版本", "Update available"},
+      {"update.available_body", "新版本 %s 已发布，现在下载吗？",
+       "Version %s is available — download it now?"},
+      {"update.download", "下载", "Download"},
+      {"update.dev", "当前是开发构建，无法自动更新。",
+       "This is a development copy — auto-update is unavailable."},
+      {"update.package",
+       "此副本来自系统包管理器，请用包管理器升级 PodLens。",
+       "This copy came from the system package manager — use it to "
+       "upgrade PodLens."},
+      {"update.open_releases", "前往发布页", "Open Releases Page"},
+      {"update.checking", "正在检查更新…", "Checking for updates…"},
+      {"about.website", "访问官网", "Website"},
+      {"about.issues", "问题反馈", "Report an Issue"},
+      {"about.tagline",
+       "听得懂的英文播客：用你自己的 LLM API key 转写、翻译、总结英文单集。",
+       "Podcasts, in your language. Transcribes, translates and summarizes "
+       "English episodes with your own LLM API key."},
+  };
+  char const* lang = getenv("PODLENS_LANG");
+  bool const english = lang != nullptr && std::strcmp(lang, "en") == 0;
+  for (auto const& pair : kTable) {
+    if (std::strcmp(pair.key, key) == 0) return english ? pair.en : pair.zh;
+  }
+  return key;
+}
+
+// ---------------------------------------------------------------------------
 // View model + state
 // ---------------------------------------------------------------------------
 
@@ -324,6 +461,24 @@ struct AppState {
   bool user_seeking{false};
   std::vector<ChapterMark> chapters;
 
+  // Transcript reading mode: 0 bilingual, 1 translation only, 2 original.
+  int transcript_mode{0};
+  // Segment widgets parallel to the rendered transcript rows; the player
+  // tick highlights and follows the running sentence among them.
+  std::vector<GtkWidget*> segment_widgets;
+  int followed_segment{-1};
+  GtkScrolledWindow* transcript_scroll{nullptr};
+  GtkComboBoxText* mode_selector{nullptr};
+
+  // Try-before-subscribe audition owning the player (no library episode).
+  bool preview_active{false};
+  std::string preview_title;
+  std::string preview_show;
+
+  // Sleep timer (minutes; 0 = disarmed).
+  guint sleep_source_id{0};
+  int sleep_minutes{0};
+
   // Update flow state (UPDATE.md family contract).
   bool update_check_in_flight{false};
   bool update_download_in_flight{false};
@@ -365,6 +520,13 @@ void start_job(std::string const& kind, std::string const& episode_id);
 void stop_playback(bool save);
 void set_play_button_glyph(bool playing);
 void apply_seek(double seconds);
+void highlight_running_segment(double position);
+void start_preview_playback(std::string const& path, std::string const& title,
+                            std::string const& show);
+void mpris_start();
+void mpris_update();
+void mpris_update(char const* const* properties);
+void mpris_seeked(double seconds);
 
 // ---------------------------------------------------------------------------
 // Status bar
@@ -398,6 +560,7 @@ void apply_css() {
       ".pl-empty { font-size: 26px; }\n"
       ".pl-seg { padding: 6px 10px; border-radius: 6px; }\n"
       ".pl-seg:hover { background: alpha(currentColor, 0.05); }\n"
+      ".pl-seg-active { background: alpha(currentColor, 0.12); }\n"
       ".pl-seg-time { font-family: monospace; font-size: 12px; "
       "opacity: 0.65; }\n"
       ".pl-section { font-size: 13px; font-weight: 700; opacity: 0.85; "
@@ -572,9 +735,10 @@ GtkWidget* make_feed_row(FeedRow const& feed) {
   gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
   gtk_widget_add_css_class(title, "pl-title");
   gtk_box_append(GTK_BOX(lines), title);
-  std::string meta = feed.count + " eps";
+  std::string meta = feed.count + tr("episode.count");
   if (feed.unplayed > 0) {
-    auto* chip = gtk_label_new((std::to_string(feed.unplayed) + " new").c_str());
+    auto* chip = gtk_label_new(
+        (std::to_string(feed.unplayed) + tr("episode.new")).c_str());
     gtk_widget_add_css_class(chip, "pl-chip");
     gtk_label_set_xalign(GTK_LABEL(chip), 0.0f);
     gtk_box_append(GTK_BOX(lines), GTK_WIDGET(chip));
@@ -603,18 +767,21 @@ void render_feeds(std::vector<std::vector<std::string>> const& rows) {
   while (GtkWidget* child = gtk_widget_get_first_child(GTK_WIDGET(list))) {
     gtk_list_box_remove(list, child);
   }
-  gtk_list_box_append(list, make_nav_row("user-home-symbolic", "Home", "home"));
   gtk_list_box_append(list,
-                      make_nav_row("application-rss+xml-symbolic", "Discover",
-                                   "discover"));
-  gtk_list_box_append(list, make_header_row("Library"));
-  gtk_list_box_append(list, make_nav_row("document-open-recent-symbolic",
-                                         "Recently Updated", "recent"));
+                      make_nav_row("user-home-symbolic", tr("nav.home"), "home"));
+  gtk_list_box_append(
+      list, make_nav_row("application-rss+xml-symbolic", tr("nav.discover"),
+                         "discover"));
+  gtk_list_box_append(list, make_header_row(tr("nav.library")));
   gtk_list_box_append(list,
-                      make_nav_row("view-grid-symbolic", "Shows", "shows"));
-  gtk_list_box_append(list, make_nav_row("folder-download-symbolic",
-                                         "Downloaded", "downloaded"));
-  gtk_list_box_append(list, make_header_row("Subscriptions"));
+                      make_nav_row("document-open-recent-symbolic",
+                                   tr("nav.recent"), "recent"));
+  gtk_list_box_append(
+      list, make_nav_row("view-grid-symbolic", tr("nav.shows"), "shows"));
+  gtk_list_box_append(
+      list, make_nav_row("folder-download-symbolic", tr("nav.downloaded"),
+                         "downloaded"));
+  gtk_list_box_append(list, make_header_row(tr("nav.subscriptions")));
 
   for (auto const& row : rows) {
     if (row.size() < 5) continue;
@@ -739,10 +906,10 @@ void on_feed_row_pressed(GtkGestureClick* gesture, int, double x, double y,
   auto const* id = carried_data<std::string>(G_OBJECT(row), "feed-id");
   if (id == nullptr) return;
 
-  auto* refresh = g_menu_item_new("Refresh This Feed", nullptr);
+  auto* refresh = g_menu_item_new(tr("menu.feed_refresh_one"), nullptr);
   g_menu_item_set_action_and_target_value(
       refresh, "win.feed-refresh", g_variant_new_string(id->c_str()));
-  auto* remove = g_menu_item_new("Remove This Feed", nullptr);
+  auto* remove = g_menu_item_new(tr("menu.feed_remove_one"), nullptr);
   g_menu_item_set_action_and_target_value(
       remove, "win.feed-remove", g_variant_new_string(id->c_str()));
   auto* menu = g_menu_new();
@@ -1104,7 +1271,8 @@ void render_home() {
 
   auto const lane = up_next();
   if (!lane.empty()) {
-    gtk_box_append(g_state.home_list, make_section_caption("Up Next"));
+    gtk_box_append(g_state.home_list,
+                   make_section_caption(tr("page.upnext")));
     auto* lane_scroll = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(lane_scroll),
                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
@@ -1117,7 +1285,8 @@ void render_home() {
   }
 
   if (!g_state.feeds.empty()) {
-    gtk_box_append(g_state.home_list, make_section_caption("My Shows"));
+    gtk_box_append(g_state.home_list,
+                   make_section_caption(tr("page.myshows")));
     auto* shows_flow = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(shows_flow),
                                     GTK_SELECTION_NONE);
@@ -1176,7 +1345,8 @@ void render_home() {
   }
 
   if (!g_state.recents.empty()) {
-    gtk_box_append(g_state.home_list, make_section_caption("Latest Episodes"));
+    gtk_box_append(g_state.home_list,
+                   make_section_caption(tr("page.latestepisodes")));
     int shown = 0;
     for (auto const& item : g_state.recents) {
       gtk_box_append(g_state.home_list, make_episode_card(item, true));
@@ -1191,7 +1361,7 @@ void render_recent_page() {
     gtk_box_remove(g_state.recent_list, child);
   }
   if (g_state.recents.empty()) {
-    auto* empty = gtk_label_new("No episodes yet — try Refresh All Feeds.");
+    auto* empty = gtk_label_new(tr("empty.recent"));
     gtk_widget_add_css_class(empty, "pl-meta");
     gtk_widget_set_margin_top(empty, 24);
     gtk_box_append(g_state.recent_list, empty);
@@ -1337,7 +1507,55 @@ GtkWidget* make_discover_card(std::vector<std::string> const& row) {
   gtk_box_append(GTK_BOX(card), lines);
 
   bool const added = row[6] == "1";
-  auto* action = gtk_button_new_with_label(added ? "Added" : "Add");
+  auto* actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  if (!added) {
+    // try before you subscribe: peek the feed without subscribing, cache
+    // the newest episode's audio, and play it outside the library
+    auto* preview = gtk_button_new_with_label(tr("action.preview"));
+    carry_data<std::string>(G_OBJECT(preview), "feed-url", row[4]);
+    g_signal_connect(
+        preview, "clicked",
+        G_CALLBACK(+[](GtkButton* button, gpointer) {
+          auto const* url =
+              carried_data<std::string>(G_OBJECT(button), "feed-url");
+          if (url == nullptr || g_state.api == nullptr) return;
+          std::string const feed_url = *url;
+          set_status(tr("status.preview_fetch"));
+          (void)g_state.api->feed_peek_async(
+              feed_url,
+              [](rivet_app::Result<std::vector<std::vector<std::string>>>
+                     result) {
+                on_result(
+                    std::move(result),
+                    [](std::vector<std::vector<std::string>> const& rows) {
+                      if (rows.empty() || rows[0].size() < 7 ||
+                          rows[0][3].find_first_not_of(" \t\r\n") ==
+                              std::string::npos) {
+                        set_status_error(
+                            std::string(tr("status.preview_no_enclosure")));
+                        return;
+                      }
+                      std::string const enclosure = rows[0][3];
+                      std::string const title = rows[0][4];
+                      std::string const show = rows[0][0];
+                      set_status(tr("status.preview_download"));
+                      (void)g_state.api->preview_audio_async(
+                          enclosure,
+                          [title, show](rivet_app::Result<std::string> result) {
+                            on_result(
+                                std::move(result),
+                                [title, show](std::string const& path) {
+                                  start_preview_playback(path, title, show);
+                                });
+                          });
+                    });
+              });
+        }),
+        nullptr);
+    gtk_box_append(GTK_BOX(actions), preview);
+  }
+  auto* action = gtk_button_new_with_label(added ? tr("action.added")
+                                                 : tr("action.add"));
   gtk_widget_set_sensitive(action, !added);
   if (!added) {
     gtk_widget_add_css_class(action, "suggested-action");
@@ -1361,8 +1579,9 @@ GtkWidget* make_discover_card(std::vector<std::string> const& row) {
         }),
         nullptr);
   }
-  gtk_widget_set_valign(action, GTK_ALIGN_CENTER);
-  gtk_box_append(GTK_BOX(card), action);
+  gtk_box_append(GTK_BOX(actions), action);
+  gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
+  gtk_box_append(GTK_BOX(card), actions);
   return card;
 }
 
@@ -1373,7 +1592,8 @@ void render_discover_results(std::vector<std::vector<std::string>> const& rows,
     gtk_box_remove(g_state.discover_results, child);
   }
   if (!error.empty()) {
-    auto* note = gtk_label_new(("Search failed: " + error).c_str());
+    auto* note = gtk_label_new(
+        (std::string(tr("discover.search_failed")) + error).c_str());
     gtk_widget_add_css_class(note, "pl-meta");
     gtk_box_append(g_state.discover_results, note);
     return;
@@ -1469,6 +1689,7 @@ void show_episode_details(EpisodeRow const* episode) {
   load_estimate();
   load_chapters();
   update_action_buttons();
+  mpris_update();
 }
 
 void on_episode_row_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
@@ -1496,10 +1717,10 @@ void on_episode_row_pressed(GtkGestureClick* gesture, int, double x, double y,
   auto const* id = carried_data<std::string>(G_OBJECT(row), "episode-id");
   if (id == nullptr) return;
 
-  auto* played = g_menu_item_new("Mark played", nullptr);
+  auto* played = g_menu_item_new(tr("action.mark_played"), nullptr);
   g_menu_item_set_action_and_target_value(
       played, "win.episode-done", g_variant_new("(ss)", id->c_str(), "1"));
-  auto* unplayed = g_menu_item_new("Mark unplayed", nullptr);
+  auto* unplayed = g_menu_item_new(tr("action.mark_unplayed"), nullptr);
   g_menu_item_set_action_and_target_value(
       unplayed, "win.episode-done", g_variant_new("(ss)", id->c_str(), "0"));
   auto* menu = g_menu_new();
@@ -1551,7 +1772,8 @@ void update_action_buttons() {
           episode->summary_status != "done");
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.mark_button), TRUE);
   gtk_button_set_label(g_state.mark_button,
-                       episode->done ? "Mark unplayed" : "Mark played");
+                       episode->done ? tr("action.mark_unplayed")
+                                     : tr("action.mark_played"));
   gtk_widget_set_visible(GTK_WIDGET(g_state.remove_audio_button),
                          episode->downloaded);
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove_audio_button), TRUE);
@@ -1565,6 +1787,7 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   auto* grid = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   auto const start = std::atof(seg[0].c_str());
   carry_data<double>(G_OBJECT(grid), "seg-start", start);
+  carry_data<double>(G_OBJECT(grid), "seg-end", std::atof(seg[1].c_str()));
   auto* time_text =
       gtk_label_new(format_seconds(std::atof(seg[0].c_str())).c_str());
   gtk_widget_add_css_class(time_text, "pl-seg-time");
@@ -1573,14 +1796,15 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   gtk_box_append(GTK_BOX(grid), time_text);
 
   auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
-  if (!seg[2].empty()) {
+  // Reading mode: 0 bilingual, 1 translation only, 2 original only.
+  if (!seg[2].empty() && g_state.transcript_mode != 1) {
     auto* original = GTK_LABEL(gtk_label_new(seg[2].c_str()));
     gtk_label_set_wrap(original, TRUE);
     gtk_label_set_xalign(original, 0.0f);
     gtk_label_set_selectable(original, TRUE);
     gtk_box_append(GTK_BOX(lines), GTK_WIDGET(original));
   }
-  if (!seg[3].empty()) {
+  if (!seg[3].empty() && g_state.transcript_mode != 2) {
     auto* translation = GTK_LABEL(gtk_label_new(seg[3].c_str()));
     gtk_label_set_wrap(translation, TRUE);
     gtk_label_set_xalign(translation, 0.0f);
@@ -1618,19 +1842,24 @@ void render_transcript_public() {
   if (g_state.transcript.empty()) {
     auto* hint = GTK_LABEL(gtk_label_new(
         g_state.selected_episode_id.empty()
-            ? "No episode selected."
-            : "No transcript yet — press Understand (needs an API key in "
-              "Settings)."));
+            ? tr("transcript.none_selected")
+            : tr("transcript.none")));
     gtk_label_set_wrap(hint, TRUE);
     gtk_label_set_xalign(hint, 0.0f);
     gtk_widget_add_css_class(GTK_WIDGET(hint), "pl-meta");
     gtk_box_append(g_state.transcript_box, GTK_WIDGET(hint));
     return;
   }
+  g_state.segment_widgets.clear();
+  g_state.followed_segment = -1;
   for (auto const& seg : g_state.transcript) {
     if (seg.size() < 4) continue;
     if (seg[2].empty() && seg[3].empty()) continue;
-    gtk_box_append(g_state.transcript_box, make_transcript_segment(seg));
+    // mode filtering can empty a row (translation-only with no translation
+    // yet); make_transcript_segment still renders the timestamp, so keep it
+    auto* widget = make_transcript_segment(seg);
+    g_state.segment_widgets.push_back(widget);
+    gtk_box_append(g_state.transcript_box, widget);
   }
 }
 
@@ -1789,8 +2018,8 @@ void render_summary_public() {
   }
   if (g_state.summary_json.empty()) {
     auto* hint = GTK_LABEL(gtk_label_new(
-        g_state.selected_episode_id.empty() ? "No episode selected."
-                                            : "No summary yet — press Understand."));
+        g_state.selected_episode_id.empty() ? tr("transcript.none_selected")
+                                            : tr("transcript.none")));
     gtk_label_set_wrap(hint, TRUE);
     gtk_label_set_xalign(hint, 0.0f);
     gtk_widget_add_css_class(GTK_WIDGET(hint), "pl-meta");
@@ -1868,6 +2097,9 @@ bool playbin_playing() {
 }
 
 void set_play_button_glyph(bool playing) {
+  // media keys and the desktop player widget track the transport state
+  static char const* const kStatus[] = {"PlaybackStatus", nullptr};
+  mpris_update(kStatus);
   gtk_button_set_icon_name(
       g_state.play_button,
       playing ? "media-playback-pause-symbolic"
@@ -1910,6 +2142,7 @@ void apply_seek(double seconds) {
     set_status_error("seek failed");
   }
   gtk_label_set_text(g_state.position_text, format_seconds(seconds).c_str());
+  mpris_seeked(seconds);
 }
 
 // Rate changes on a playbin are a flushing seek carrying the new rate.
@@ -1924,18 +2157,21 @@ void apply_playback_rate(double rate) {
                                              GST_SEEK_FLAG_ACCURATE),
                    GST_SEEK_TYPE_SET, position, GST_SEEK_TYPE_NONE,
                    GST_CLOCK_TIME_NONE);
+  static char const* const kRate[] = {"Rate", nullptr};
+  mpris_update(kRate);
 }
 
 void start_playback() {
   auto const episode_id = g_state.selected_episode_id;
   if (episode_id.empty()) return;
+  g_state.preview_active = false;  // any library playback ends an audition
   if (g_state.playbin == nullptr) {
     set_status_error("GStreamer playbin is unavailable on this system");
     return;
   }
   auto const audio = find_local_audio(episode_id);
   if (audio.empty()) {
-    set_status("No local audio yet — download started");
+    set_status(tr("status.need_download"));
     start_job("download", episode_id);
     return;
   }
@@ -1958,12 +2194,13 @@ void start_playback() {
   }
   gst_element_set_state(g_state.playbin, GST_STATE_PLAYING);
   set_play_button_glyph(true);
-  set_status("Playing");
+  set_status(tr("status.playing"));
 }
 
 void toggle_play_pause() {
-  if (g_state.playbin == nullptr ||
-      g_state.selected_episode_id.empty()) {
+  // the episode-id check lives in start_playback: an audition owns the
+  // player without one, and the uri check below covers both cases
+  if (g_state.playbin == nullptr) {
     return;
   }
   gchar* uri = nullptr;
@@ -2026,12 +2263,101 @@ void skip_chapter(int direction) {
                  : current_start);
 }
 
+// Audition playback outside the library: the audio is already local
+// (preview-audio), there is no episode id, so position saving and the
+// autoplay chain all stand down until a library episode plays again.
+void start_preview_playback(std::string const& path, std::string const& title,
+                            std::string const& show) {
+  if (g_state.playbin == nullptr) return;
+  stop_playback(false);
+  g_state.preview_active = true;
+  g_state.selected_episode_id.clear();
+  g_state.transcript.clear();
+  render_transcript_public();
+  g_state.media_duration = 0;
+  g_state.pending_seek = -1.0;
+  g_state.ticks_since_save = 0;
+
+  GFile* file = g_file_new_for_path(path.c_str());
+  gchar* uri = g_file_get_uri(file);
+  g_object_set(g_state.playbin, "uri", uri, nullptr);
+  g_free(uri);
+  g_object_unref(file);
+
+  gst_element_set_state(g_state.playbin, GST_STATE_PLAYING);
+  set_play_button_glyph(true);
+  gtk_label_set_text(GTK_LABEL(g_state.player_title), title.c_str());
+  gtk_label_set_text(GTK_LABEL(g_state.player_show),
+                     (show + " · " + tr("status.preview_marker")).c_str());
+  gtk_widget_set_visible(GTK_WIDGET(g_state.player_bar), TRUE);
+  set_status((std::string(tr("status.preview_playing")) + title).c_str());
+  mpris_update();
+}
+
 void on_playback_finished() {
+  if (g_state.preview_active) {
+    // a preview has no library state to close out — just stop
+    g_state.preview_active = false;
+    gst_element_set_state(g_state.playbin, GST_STATE_NULL);
+    set_play_button_glyph(false);
+    set_status(tr("status.preview_ended"));
+    mpris_update();
+    return;
+  }
   save_position(true);
   gst_element_set_state(g_state.playbin, GST_STATE_NULL);
   set_play_button_glyph(false);
-  set_status("Playback finished — position saved");
+  set_status(tr("status.finished"));
   reload_episodes();
+  // continuous playback: roll into the next (older) episode of the same
+  // feed, like Apple Podcasts without an Up Next queue
+  for (size_t i = 0; i + 1 < g_state.episodes.size(); ++i) {
+    if (g_state.episodes[i].id == g_state.selected_episode_id) {
+      set_status(tr("status.autoplay_next"));
+      g_state.selected_episode_id = g_state.episodes[i + 1].id;
+      show_episode_details(&g_state.episodes[i + 1]);
+      start_playback();
+      break;
+    }
+  }
+}
+
+// Transcript follow-along: highlight the sentence the player is in and
+// keep it comfortably in view. The scroll fires only when the active
+// sentence changes, so 1 s ticks never yank the list mid-read.
+void highlight_running_segment(double position) {
+  int active = -1;
+  for (size_t i = 0; i < g_state.segment_widgets.size(); ++i) {
+    auto const* start =
+        carried_data<double>(G_OBJECT(g_state.segment_widgets[i]), "seg-start");
+    auto const* end =
+        carried_data<double>(G_OBJECT(g_state.segment_widgets[i]), "seg-end");
+    if (start != nullptr && end != nullptr && position >= *start &&
+        position < *end) {
+      active = static_cast<int>(i);
+      break;
+    }
+  }
+  if (active == g_state.followed_segment) return;
+  if (g_state.followed_segment >= 0 && g_state.followed_segment <
+          static_cast<int>(g_state.segment_widgets.size())) {
+    gtk_widget_remove_css_class(
+        g_state.segment_widgets[g_state.followed_segment], "pl-seg-active");
+  }
+  g_state.followed_segment = active;
+  if (active < 0) return;
+  GtkWidget* widget = g_state.segment_widgets[active];
+  gtk_widget_add_css_class(widget, "pl-seg-active");
+  if (g_state.transcript_scroll != nullptr) {
+    graphene_point_t point = GRAPHENE_POINT_INIT(0, 0);
+    if (gtk_widget_compute_point(widget, GTK_WIDGET(g_state.transcript_box),
+                                 &point, &point)) {
+      double target = point.y - 80;
+      gtk_adjustment_set_value(
+          gtk_scrolled_window_get_vadjustment(g_state.transcript_scroll),
+          target > 0 ? target : 0);
+    }
+  }
 }
 
 gboolean on_bus_message(GstBus*, GstMessage* message, gpointer) {
@@ -2099,6 +2425,7 @@ int on_player_tick(gpointer) {
   gtk_label_set_text(g_state.position_text, format_seconds(position).c_str());
   gtk_label_set_text(g_state.duration_text,
                      format_seconds(duration_sec).c_str());
+  highlight_running_segment(position);
 
   if (duration_sec > 0 && position >= duration_sec - 0.75) {
     // The EOS message owns the end-of-stream handoff; this guard keeps a
@@ -2140,6 +2467,297 @@ void player_shutdown() {
     gst_object_unref(g_state.playbin);
     g_state.playbin = nullptr;
   }
+}
+
+// ---------------------------------------------------------------------------
+// MPRIS — media keys and the desktop player widget over D-Bus (the Linux
+// counterpart of macOS MPRemoteCommandCenter and Windows SMTC). A minimal
+// Root + Player pair: transport, position, rate and metadata. Pure
+// host-side — nothing here touches the RVT1 contract.
+// ---------------------------------------------------------------------------
+
+guint mpris_owner_id{0};
+GDBusConnection* mpris_connection{nullptr};
+GDBusNodeInfo* mpris_introspection{nullptr};
+std::string mpris_track_id = "org.mpris.MediaPlayer2.PodLens/track-0";
+
+char const kMprisXml[] =
+    "<node>\n"
+    "  <interface name=\"org.mpris.MediaPlayer2\">\n"
+    "    <method name=\"Raise\"/>\n"
+    "    <method name=\"Quit\"/>\n"
+    "    <property name=\"DesktopEntry\" type=\"s\" access=\"read\"/>\n"
+    "    <property name=\"Identity\" type=\"s\" access=\"read\"/>\n"
+    "    <property name=\"CanQuit\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"CanRaise\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"HasTrackList\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"SupportedUriSchemes\" type=\"as\" access=\"read\"/>\n"
+    "  </interface>\n"
+    "  <interface name=\"org.mpris.MediaPlayer2.Player\">\n"
+    "    <method name=\"Play\"/>\n"
+    "    <method name=\"Pause\"/>\n"
+    "    <method name=\"PlayPause\"/>\n"
+    "    <method name=\"Stop\"/>\n"
+    "    <method name=\"Next\"/>\n"
+    "    <method name=\"Previous\"/>\n"
+    "    <method name=\"Seek\">\n"
+    "      <arg name=\"Offset\" type=\"x\" direction=\"in\"/>\n"
+    "    </method>\n"
+    "    <method name=\"SetPosition\">\n"
+    "      <arg name=\"TrackId\" type=\"o\" direction=\"in\"/>\n"
+    "      <arg name=\"Position\" type=\"x\" direction=\"in\"/>\n"
+    "    </method>\n"
+    "    <property name=\"PlaybackStatus\" type=\"s\" access=\"read\"/>\n"
+    "    <property name=\"LoopStatus\" type=\"s\" access=\"read\"/>\n"
+    "    <property name=\"Rate\" type=\"d\" access=\"readwrite\"/>\n"
+    "    <property name=\"Volume\" type=\"d\" access=\"read\"/>\n"
+    "    <property name=\"Position\" type=\"x\" access=\"read\"/>\n"
+    "    <property name=\"MinimumRate\" type=\"d\" access=\"read\"/>\n"
+    "    <property name=\"MaximumRate\" type=\"d\" access=\"read\"/>\n"
+    "    <property name=\"CanPlay\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"CanPause\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"CanSeek\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"CanControl\" type=\"b\" access=\"read\"/>\n"
+    "    <property name=\"Metadata\" type=\"a{sv}\" access=\"read\"/>\n"
+    "  </interface>\n"
+    "</node>\n";
+
+std::string mpris_title() {
+  if (g_state.preview_active) return g_state.preview_title;
+  if (auto const* episode = selected_episode()) return episode->title;
+  return {};
+}
+
+std::string mpris_show() {
+  if (g_state.preview_active) return g_state.preview_show;
+  for (auto const& item : g_state.recents) {
+    if (item.episode.id == g_state.selected_episode_id) return item.feed_title;
+  }
+  for (auto const& feed : g_state.feeds) {
+    if (feed.id == g_state.selected_feed_id) return feed.title;
+  }
+  return {};
+}
+
+GVariant* mpris_metadata() {
+  GVariantBuilder builder;
+  g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(&builder, "{sv}", "mpris:trackid",
+                        g_variant_new_object_path(mpris_track_id.c_str()));
+  if (g_state.media_duration > 0) {
+    g_variant_builder_add(
+        &builder, "{sv}", "mpris:length",
+        g_variant_new_int64(static_cast<gint64>(
+            static_cast<double>(g_state.media_duration) / GST_SECOND * 1e6)));
+  }
+  std::string const title = mpris_title();
+  if (!title.empty()) {
+    g_variant_builder_add(&builder, "{sv}", "xesam:title",
+                          g_variant_new_string(title.c_str()));
+  }
+  std::string const show = mpris_show();
+  if (!show.empty()) {
+    GVariantBuilder artists;
+    g_variant_builder_init(&artists, G_VARIANT_TYPE("as"));
+    g_variant_builder_add(&artists, "s", show.c_str());
+    g_variant_builder_add(&builder, "{sv}", "xesam:artist",
+                          g_variant_builder_end(&artists));
+  }
+  return g_variant_builder_end(&builder);
+}
+
+GVariant* mpris_player_property(char const* property) {
+  if (std::strcmp(property, "PlaybackStatus") == 0) {
+    return g_variant_new_string(playbin_playing() ? "Playing" : "Paused");
+  }
+  if (std::strcmp(property, "LoopStatus") == 0) {
+    return g_variant_new_string("None");
+  }
+  if (std::strcmp(property, "Rate") == 0) {
+    return g_variant_new_double(g_state.playback_rate);
+  }
+  if (std::strcmp(property, "Volume") == 0) {
+    return g_variant_new_double(1.0);
+  }
+  if (std::strcmp(property, "Position") == 0) {
+    return g_variant_new_int64(
+        static_cast<gint64>(playbin_position() * 1e6));
+  }
+  if (std::strcmp(property, "MinimumRate") == 0) {
+    return g_variant_new_double(1.0);
+  }
+  if (std::strcmp(property, "MaximumRate") == 0) {
+    return g_variant_new_double(3.0);
+  }
+  if (std::strcmp(property, "CanPlay") == 0 ||
+      std::strcmp(property, "CanPause") == 0 ||
+      std::strcmp(property, "CanSeek") == 0 ||
+      std::strcmp(property, "CanControl") == 0) {
+    return g_variant_new_boolean(TRUE);
+  }
+  if (std::strcmp(property, "Metadata") == 0) {
+    return mpris_metadata();
+  }
+  return nullptr;
+}
+
+GVariant* mpris_root_property(char const* property) {
+  if (std::strcmp(property, "DesktopEntry") == 0) {
+    return g_variant_new_string("podlens");
+  }
+  if (std::strcmp(property, "Identity") == 0) {
+    return g_variant_new_string("PodLens");
+  }
+  if (std::strcmp(property, "CanQuit") == 0 ||
+      std::strcmp(property, "CanRaise") == 0 ||
+      std::strcmp(property, "HasTrackList") == 0) {
+    return g_variant_new_boolean(FALSE);
+  }
+  if (std::strcmp(property, "SupportedUriSchemes") == 0) {
+    GVariantBuilder schemes;
+    g_variant_builder_init(&schemes, G_VARIANT_TYPE("as"));
+    return g_variant_builder_end(&schemes);
+  }
+  return nullptr;
+}
+
+// Tell watching players which Player properties changed.
+void mpris_update(char const* const* properties) {
+  if (mpris_connection == nullptr || properties == nullptr) return;
+  GVariantBuilder changed;
+  g_variant_builder_init(&changed, G_VARIANT_TYPE("a{sv}"));
+  for (char const* const* prop = properties; *prop != nullptr; ++prop) {
+    if (GVariant* value = mpris_player_property(*prop)) {
+      g_variant_builder_add(&changed, "{sv}", *prop, value);
+    }
+  }
+  GVariantBuilder invalidated;
+  g_variant_builder_init(&invalidated, G_VARIANT_TYPE("as"));
+  g_dbus_connection_emit_signal(
+      mpris_connection, nullptr, "/org/mpris/MediaPlayer2",
+      "org.freedesktop.DBus.Properties", "PropertiesChanged",
+      g_variant_new("(sa{sv}as)", "org.mpris.MediaPlayer2.Player", &changed,
+                    &invalidated),
+      nullptr);
+}
+
+// Convenience wrappers for the common change sets.
+void mpris_update() {
+  static char const* const kStatusAndMetadata[] = {
+      "PlaybackStatus", "Metadata", nullptr};
+  mpris_update(kStatusAndMetadata);
+}
+
+void mpris_seeked(double seconds) {
+  if (mpris_connection == nullptr) return;
+  g_dbus_connection_emit_signal(
+      mpris_connection, nullptr, "/org/mpris/MediaPlayer2",
+      "org.mpris.MediaPlayer2.Player", "Seeked",
+      g_variant_new("(x)", static_cast<gint64>(seconds * 1e6)), nullptr);
+}
+
+void mpris_method_call(GDBusConnection*, gchar const*, gchar const*,
+                       gchar const*, gchar const* method_name,
+                       GVariant* parameters, GDBusMethodInvocation* invocation,
+                       gpointer) {
+  if (std::strcmp(method_name, "Play") == 0 ||
+      std::strcmp(method_name, "Pause") == 0 ||
+      std::strcmp(method_name, "PlayPause") == 0) {
+    dispatch_ui([] {
+      // MPRIS has no notion of the host's arm-the-source flow: play with
+      // nothing loaded starts the selected episode, like the play button.
+      toggle_play_pause();
+    });
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    return;
+  }
+  if (std::strcmp(method_name, "Stop") == 0) {
+    dispatch_ui([] {
+      stop_playback(true);
+      mpris_update();
+    });
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    return;
+  }
+  if (std::strcmp(method_name, "Seek") == 0) {
+    gint64 offset = 0;
+    g_variant_get(parameters, "(x)", &offset);
+    dispatch_ui([offset] { skip_by(static_cast<double>(offset) / 1e6); });
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    return;
+  }
+  if (std::strcmp(method_name, "SetPosition") == 0) {
+    gint64 position = 0;
+    g_variant_get(parameters, "(ox)", nullptr, &position);
+    dispatch_ui([position] {
+      apply_seek(static_cast<double>(position) / 1e6);
+      mpris_seeked(static_cast<double>(position) / 1e6);
+    });
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    return;
+  }
+  // Next/Previous/Raise/Quit: unsupported on purpose — no queue, no
+  // window-raising contract; reply with an error so callers move on.
+  g_dbus_method_invocation_return_error(
+      invocation, G_DBUS_ERROR, G_DBUS_ERROR_NOT_SUPPORTED,
+      "PodLens does not support %s", method_name);
+}
+
+GVariant* mpris_get_property(GDBusConnection*, gchar const*, gchar const*,
+                             gchar const* interface_name,
+                             gchar const* property_name, GError** error,
+                             gpointer) {
+  GVariant* value = std::strcmp(interface_name, "org.mpris.MediaPlayer2.Player") == 0
+                        ? mpris_player_property(property_name)
+                        : mpris_root_property(property_name);
+  if (value == nullptr) {
+    g_set_error(error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_PROPERTY,
+                "no such property: %s", property_name);
+  }
+  return value;
+}
+
+gboolean mpris_set_property(GDBusConnection*, gchar const*, gchar const*,
+                            gchar const*, gchar const*, GVariant* value,
+                            GError** error, gpointer) {
+  if (std::strcmp(g_variant_get_type_string(value), "d") == 0) {
+    double rate = g_variant_get_double(value);
+    dispatch_ui([rate] {
+      if (rate > 0) apply_playback_rate(rate);
+    });
+    return TRUE;
+  }
+  g_set_error(error, G_DBUS_ERROR, G_DBUS_ERROR_NOT_SUPPORTED,
+              "property is read-only");
+  return FALSE;
+}
+
+void mpris_start() {
+  mpris_introspection = g_dbus_node_info_new_for_xml(kMprisXml, nullptr);
+  if (mpris_introspection == nullptr) return;
+  static GDBusInterfaceVTable const root_vtable = {
+      mpris_method_call, mpris_get_property, nullptr};
+  static GDBusInterfaceVTable const player_vtable = {
+      mpris_method_call, mpris_get_property, mpris_set_property};
+  mpris_owner_id = g_bus_own_name(
+      G_BUS_TYPE_SESSION, "org.mpris.MediaPlayer2.PodLens",
+      G_BUS_NAME_OWNER_FLAGS_NONE,
+      +[](GDBusConnection* connection, gchar const*, gpointer) {
+        mpris_connection = connection;
+        GError* error = nullptr;
+        g_dbus_connection_register_object(
+            connection, "/org/mpris/MediaPlayer2",
+            mpris_introspection->interfaces[0], &root_vtable, nullptr, nullptr,
+            &error);
+        if (error != nullptr) g_error_free(error);
+        error = nullptr;
+        g_dbus_connection_register_object(
+            connection, "/org/mpris/MediaPlayer2",
+            mpris_introspection->interfaces[1], &player_vtable, nullptr,
+            nullptr, &error);
+        if (error != nullptr) g_error_free(error);
+      },
+      nullptr, nullptr, nullptr, nullptr);
 }
 
 void load_chapters() {
@@ -2208,10 +2826,11 @@ void confirm_pipeline(std::string const& episode_id,
     body += "\n\n" + estimate;
   }
   auto* dialog = gtk_dialog_new_with_buttons(
-      "Understand", g_state.window,
+      tr("dialog.understand"), g_state.window,
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
-      "Cancel", GTK_RESPONSE_CANCEL, "Start", GTK_RESPONSE_ACCEPT, nullptr);
+      tr("dialog.cancel"), GTK_RESPONSE_CANCEL, tr("action.start"),
+      GTK_RESPONSE_ACCEPT, nullptr);
   auto* area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   auto* text = GTK_LABEL(gtk_label_new(body.c_str()));
   gtk_label_set_wrap(text, TRUE);
@@ -2356,6 +2975,37 @@ void on_remove_audio_clicked(GtkButton*, gpointer) {
 
 void on_play_clicked(GtkButton*, gpointer) { toggle_play_pause(); }
 
+// Sleep timer: pause playback when the deadline lands. GTK timeouts run on
+// the main loop, so the callback can touch widgets directly.
+void on_sleep_activated(GSimpleAction*, GVariant* value, gpointer) {
+  int const minutes = g_variant_get_int32(value);
+  if (g_state.sleep_source_id != 0) {
+    g_source_remove(g_state.sleep_source_id);
+    g_state.sleep_source_id = 0;
+  }
+  g_state.sleep_minutes = minutes;
+  if (minutes <= 0) {
+    set_status(tr("sleep.off"));
+    return;
+  }
+  g_state.sleep_source_id = g_timeout_add_seconds(
+      minutes * 60,
+      +[](gpointer) -> int {
+        g_state.sleep_source_id = 0;
+        g_state.sleep_minutes = 0;
+        if (g_state.playbin != nullptr && playbin_playing()) {
+          gst_element_set_state(g_state.playbin, GST_STATE_PAUSED);
+          set_play_button_glyph(false);
+        }
+        set_status(tr("sleep.fired"));
+        return G_SOURCE_REMOVE;
+      },
+      nullptr);
+  char label[64];
+  std::snprintf(label, sizeof(label), tr("sleep.minutes"), minutes);
+  set_status(label);
+}
+
 void on_skip_back_clicked(GtkButton*, gpointer) { skip_by(-15.0); }
 
 void on_skip_forward_clicked(GtkButton*, gpointer) { skip_by(30.0); }
@@ -2399,7 +3049,7 @@ void add_feed_with_url(std::string const& url) {
   (void)g_state.api->feed_add_async(
       url, [](rivet_app::Result<std::string> result) {
         on_result(std::move(result), [](std::string const&) {
-          set_status("Subscription added");
+          set_status(tr("status.feed_added"));
           reload_feeds();
         });
       });
@@ -2408,10 +3058,11 @@ void add_feed_with_url(std::string const& url) {
 void on_add_feed_activated(GSimpleAction*, GVariant*, gpointer) {
   if (g_state.api == nullptr) return;
   auto* dialog = gtk_dialog_new_with_buttons(
-      "Add Feed", g_state.window,
+      tr("menu.add_feed"), g_state.window,
       static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL |
                                   GTK_DIALOG_DESTROY_WITH_PARENT),
-      "Cancel", GTK_RESPONSE_CANCEL, "Add", GTK_RESPONSE_ACCEPT, nullptr);
+      tr("dialog.cancel"), GTK_RESPONSE_CANCEL, tr("action.add"),
+      GTK_RESPONSE_ACCEPT, nullptr);
   auto* entry = gtk_entry_new();
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
                                  "https://example.com/feed.xml");
@@ -2562,19 +3213,18 @@ void on_about_activated(GSimpleAction*, GVariant*, gpointer) {
   gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dialog), "PodLens");
   gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dialog),
                                rivet_app::kVersion);
-  gtk_about_dialog_set_comments(
-      GTK_ABOUT_DIALOG(dialog),
-      "Podcasts, in your language. Transcribes, translates and summarizes "
-      "English episodes with your own LLM API key.");
+  gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dialog),
+                                tr("about.tagline"));
   gtk_about_dialog_set_license_type(GTK_ABOUT_DIALOG(dialog),
                                     GTK_LICENSE_AGPL_3_0);
   gtk_about_dialog_set_website(GTK_ABOUT_DIALOG(dialog),
                                "https://podlens.jrtx.site");
-  gtk_about_dialog_set_website_label(GTK_ABOUT_DIALOG(dialog), "Website");
+  gtk_about_dialog_set_website_label(GTK_ABOUT_DIALOG(dialog),
+                                     tr("about.website"));
   static char const* kIssueLinks[] = {
       "github.com/turinglambdaai/podlens/issues", nullptr};
-  gtk_about_dialog_add_credit_section(
-      GTK_ABOUT_DIALOG(dialog), "Report an Issue", kIssueLinks);
+  gtk_about_dialog_add_credit_section(GTK_ABOUT_DIALOG(dialog),
+                                      tr("about.issues"), kIssueLinks);
   gtk_window_set_transient_for(GTK_WINDOW(dialog), g_state.window);
   gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
   gtk_window_present(GTK_WINDOW(dialog));
@@ -2594,7 +3244,7 @@ using StringPairs = std::vector<std::pair<std::string, std::string>>;
 void save_settings_pairs(std::shared_ptr<StringPairs> pairs, size_t index) {
   if (pairs == nullptr || g_state.api == nullptr) return;
   if (index >= pairs->size()) {
-    set_status("Settings saved");
+    set_status(tr("status.saved"));
     return;
   }
   auto const& [key, value] = (*pairs)[index];
@@ -2629,12 +3279,12 @@ void on_settings_activated(GSimpleAction*, GVariant*, gpointer) {
         on_result(std::move(result),
                   [](std::vector<std::vector<std::string>> const& rows) {
                     auto* dialog = gtk_dialog_new_with_buttons(
-                        "Settings", g_state.window,
+                        tr("dialog.settings_title"), g_state.window,
                         static_cast<GtkDialogFlags>(
                             GTK_DIALOG_MODAL |
                             GTK_DIALOG_DESTROY_WITH_PARENT),
-                        "Cancel", GTK_RESPONSE_CANCEL, "Save",
-                        GTK_RESPONSE_ACCEPT, nullptr);
+                        tr("dialog.cancel"), GTK_RESPONSE_CANCEL,
+                        tr("action.save"), GTK_RESPONSE_ACCEPT, nullptr);
                     auto* area = gtk_dialog_get_content_area(
                         GTK_DIALOG(dialog));
                     auto* panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -2677,8 +3327,8 @@ void on_settings_activated(GSimpleAction*, GVariant*, gpointer) {
                       fields->emplace_back(row[0], entry);
                     }
 
-                    auto* hint = GTK_LABEL(gtk_label_new(
-                        "Changes apply when you press Save."));
+                    auto* hint = GTK_LABEL(
+                        gtk_label_new(tr("status.settings_hint")));
                     gtk_label_set_wrap(hint, TRUE);
                     gtk_label_set_xalign(hint, 0.0f);
                     gtk_widget_add_css_class(GTK_WIDGET(hint), "pl-meta");
@@ -2814,7 +3464,8 @@ void show_update_dialog(std::string const& title, std::string const& body,
 }
 
 void show_update_error(std::string const& message) {
-  show_update_dialog("PodLens", "Update check failed: " + message,
+  show_update_dialog("PodLens",
+                     std::string(tr("menu.check_updates_failed")) + message,
                      "", "Close", nullptr);
 }
 
@@ -3035,27 +3686,23 @@ void check_for_updates(bool silent) {
   }
   if (is_dev_copy()) {
     if (!silent) {
-      show_update_dialog(
-          "PodLens",
-          "This is a development copy — auto-update is unavailable.",
-          "Open Releases Page", "Cancel", open_releases_page);
+      show_update_dialog("PodLens", tr("update.dev"), tr("update.open_releases"),
+                         tr("dialog.cancel"), open_releases_page);
     }
     return;
   }
   if (install_shape() == "package") {
     if (!silent) {
       // deb/rpm upgrade through the package manager; never download or exec.
-      show_update_dialog(
-          "PodLens",
-          "This copy came from the system package manager — use it to "
-          "upgrade PodLens.",
-          "Open Releases Page", "Cancel", open_releases_page);
+      show_update_dialog("PodLens", tr("update.package"),
+                         tr("update.open_releases"), tr("dialog.cancel"),
+                         open_releases_page);
     }
     return;
   }
   g_state.update_check_in_flight = true;
   if (!silent) {
-    set_status("Checking for updates…");
+    set_status(tr("update.checking"));
   }
   (void)g_state.api->update_check_async(
       [silent](rivet_app::Result<rivet_app::UpdateCheck> result) {
@@ -3081,11 +3728,12 @@ void check_for_updates(bool silent) {
           if (check.status == "available") {
             std::string const version =
                 check.available_version.value_or(check.current_version);
-            show_update_dialog(
-                "Update available",
-                "Version " + version +
-                    " is available — download it now?",
-                "Download", "Cancel", start_update_download);
+            char body[160];
+            std::snprintf(body, sizeof(body), tr("update.available_body"),
+                          version.c_str());
+            show_update_dialog(tr("update.available_title"), body,
+                               tr("update.download"), tr("dialog.cancel"),
+                               start_update_download);
             return;
           }
           if (silent) return;  // auto-check only speaks when there is news
@@ -3093,7 +3741,8 @@ void check_for_updates(bool silent) {
             show_update_error(check.error.value_or("unknown failure"));
             return;
           }
-          show_update_dialog("PodLens", "You're up to date", "", "Close",
+          show_update_dialog("PodLens", tr("menu.check_updates_done"), "",
+                             tr("action.close"),
                              nullptr);
         });
       });
@@ -3186,24 +3835,24 @@ void add_window_action(GtkApplicationWindow* window, char const* name,
 
 GtkWidget* build_primary_menu() {
   auto* menu = g_menu_new();
-  g_menu_append(menu, "Add Feed…", "app.add-feed");
-  g_menu_append(menu, "Refresh All Feeds", "app.refresh-all");
+  g_menu_append(menu, tr("menu.add_feed"), "app.add-feed");
+  g_menu_append(menu, tr("menu.refresh_all"), "app.refresh-all");
   auto* settings_menu = g_menu_new();
-  g_menu_append(settings_menu, "Settings…", "app.settings");
-  g_menu_append_submenu(menu, "Options", G_MENU_MODEL(settings_menu));
+  g_menu_append(settings_menu, tr("menu.settings"), "app.settings");
+  g_menu_append_submenu(menu, tr("menu.options"), G_MENU_MODEL(settings_menu));
   g_object_unref(settings_menu);
   // Family menu convention: Check for Updates… and About are a pair in the
   // Help menu.
   auto* help = g_menu_new();
-  g_menu_append(help, "Check for Updates…", "app.check-updates");
-  g_menu_append(help, "About", "app.about");
-  g_menu_append_submenu(menu, "Help", G_MENU_MODEL(help));
+  g_menu_append(help, tr("menu.check_updates"), "app.check-updates");
+  g_menu_append(help, tr("menu.about"), "app.about");
+  g_menu_append_submenu(menu, tr("menu.help"), G_MENU_MODEL(help));
   g_object_unref(help);
 
   auto* menubutton = gtk_menu_button_new();
   gtk_accessible_update_property(
       GTK_ACCESSIBLE(menubutton), GTK_ACCESSIBLE_PROPERTY_LABEL,
-      "Main Menu", -1);
+      tr("menu.main"), -1);
   gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(menubutton),
                                 "open-menu-symbolic");
   gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(menubutton),
@@ -3377,7 +4026,7 @@ int on_backend_finished(gpointer) {
                stderr);
   }
 
-  set_status("Ready");
+  set_status(tr("status.ready"));
   reload_feeds();
   start_auto_update_check();
   (void)g_state.api->resume_last_async(
@@ -3494,7 +4143,8 @@ void on_activate(GtkApplication* app, gpointer) {
   // Header bar: Add Feed + Refresh All on the left, the primary menu on the
   // right.
   auto* header = gtk_header_bar_new();
-  auto* add_feed = make_button_with_icon("list-add-symbolic", "Add Feed");
+  auto* add_feed =
+      make_button_with_icon("list-add-symbolic", tr("action.add_feed"));
   gtk_actionable_set_action_name(GTK_ACTIONABLE(add_feed), "app.add-feed");
   gtk_header_bar_pack_start(GTK_HEADER_BAR(header), add_feed);
   auto* refresh_all =
@@ -3590,7 +4240,7 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_widget_set_margin_top(recent_box, 6);
     gtk_widget_set_margin_start(recent_box, 14);
     gtk_widget_set_margin_end(recent_box, 14);
-    auto* recent_caption = gtk_label_new("Recently Updated");
+    auto* recent_caption = gtk_label_new(tr("nav.recent"));
     gtk_label_set_xalign(GTK_LABEL(recent_caption), 0.0f);
     gtk_widget_add_css_class(recent_caption, "pl-page-title");
     gtk_box_append(GTK_BOX(recent_box), recent_caption);
@@ -3606,7 +4256,7 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_widget_set_margin_top(shows_box, 6);
     gtk_widget_set_margin_start(shows_box, 14);
     gtk_widget_set_margin_end(shows_box, 14);
-    auto* shows_caption = gtk_label_new("Shows");
+    auto* shows_caption = gtk_label_new(tr("nav.shows"));
     gtk_label_set_xalign(GTK_LABEL(shows_caption), 0.0f);
     gtk_widget_add_css_class(shows_caption, "pl-page-title");
     gtk_box_append(GTK_BOX(shows_box), shows_caption);
@@ -3649,7 +4299,7 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_widget_set_margin_top(downloaded_box, 6);
     gtk_widget_set_margin_start(downloaded_box, 14);
     gtk_widget_set_margin_end(downloaded_box, 14);
-    auto* downloaded_caption = gtk_label_new("Downloaded");
+    auto* downloaded_caption = gtk_label_new(tr("nav.downloaded"));
     gtk_label_set_xalign(GTK_LABEL(downloaded_caption), 0.0f);
     gtk_widget_add_css_class(downloaded_caption, "pl-page-title");
     gtk_box_append(GTK_BOX(downloaded_box), downloaded_caption);
@@ -3667,7 +4317,7 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_widget_set_margin_top(discover_page_box, 6);
     gtk_widget_set_margin_start(discover_page_box, 14);
     gtk_widget_set_margin_end(discover_page_box, 14);
-    auto* discover_caption = gtk_label_new("Discover");
+    auto* discover_caption = gtk_label_new(tr("nav.discover"));
     gtk_label_set_xalign(GTK_LABEL(discover_caption), 0.0f);
     gtk_widget_add_css_class(discover_caption, "pl-page-title");
     gtk_box_append(GTK_BOX(discover_page_box), discover_caption);
@@ -3675,7 +4325,7 @@ void on_activate(GtkApplication* app, gpointer) {
     auto* search_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     auto* entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
-                                   "Search all podcasts, press return…");
+                                   tr("discover.search_placeholder"));
     gtk_widget_set_hexpand(entry, TRUE);
     gtk_box_append(GTK_BOX(search_row), entry);
     auto* search_button =
@@ -3733,27 +4383,28 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(detail), GTK_WIDGET(detail_notes));
 
   auto* actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  auto* pipeline = make_button_with_icon("starred-symbolic", "Understand");
+  auto* pipeline =
+      make_button_with_icon("starred-symbolic", tr("action.understand"));
   gtk_widget_add_css_class(pipeline, "suggested-action");
   gtk_widget_set_sensitive(pipeline, FALSE);
   gtk_box_append(GTK_BOX(actions), pipeline);
   auto* download = make_button_with_icon("folder-download-symbolic",
-                                         "Download");
+                                         tr("action.download"));
   gtk_widget_set_sensitive(download, FALSE);
   gtk_box_append(GTK_BOX(actions), download);
-  auto* transcribe = gtk_button_new_with_label("Transcribe");
+  auto* transcribe = gtk_button_new_with_label(tr("action.transcribe"));
   gtk_widget_set_sensitive(transcribe, FALSE);
   gtk_box_append(GTK_BOX(actions), transcribe);
-  auto* translate = gtk_button_new_with_label("Translate");
+  auto* translate = gtk_button_new_with_label(tr("action.translate"));
   gtk_widget_set_sensitive(translate, FALSE);
   gtk_box_append(GTK_BOX(actions), translate);
-  auto* summarize = gtk_button_new_with_label("Summarize");
+  auto* summarize = gtk_button_new_with_label(tr("action.summarize"));
   gtk_widget_set_sensitive(summarize, FALSE);
   gtk_box_append(GTK_BOX(actions), summarize);
-  auto* mark = gtk_button_new_with_label("Mark played");
+  auto* mark = gtk_button_new_with_label(tr("action.mark_played"));
   gtk_widget_set_sensitive(mark, FALSE);
   gtk_box_append(GTK_BOX(actions), mark);
-  auto* remove_audio = gtk_button_new_with_label("Delete Audio");
+  auto* remove_audio = gtk_button_new_with_label(tr("action.delete_audio"));
   gtk_widget_set_sensitive(remove_audio, FALSE);
   gtk_widget_set_visible(remove_audio, FALSE);
   gtk_box_append(GTK_BOX(actions), remove_audio);
@@ -3782,6 +4433,15 @@ void on_activate(GtkApplication* app, gpointer) {
   {
     auto* switcher_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_box_append(GTK_BOX(switcher_row), switcher);
+    // reading mode: bilingual / translation only / original only
+    auto* mode_selector = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
+    for (char const* key : {"mode.bilingual", "mode.translation",
+                            "mode.original"}) {
+      gtk_combo_box_text_append_text(mode_selector, tr(key));
+    }
+    gtk_combo_box_set_active(GTK_COMBO_BOX(mode_selector), 0);
+    gtk_box_append(GTK_BOX(switcher_row), GTK_WIDGET(mode_selector));
+    g_state.mode_selector = mode_selector;
     gtk_box_append(GTK_BOX(reading), switcher_row);
   }
 
@@ -3837,29 +4497,50 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(player_bar), now_playing);
   auto* player_transcript =
       gtk_button_new_from_icon_name("text-x-generic-symbolic");
-  gtk_widget_set_tooltip_text(player_transcript, "Transcript");
+  gtk_widget_set_tooltip_text(player_transcript, tr("player.transcript"));
   gtk_box_append(GTK_BOX(player_bar), player_transcript);
   auto* play_button = gtk_button_new_from_icon_name(
       "media-playback-start-symbolic");
   gtk_box_append(GTK_BOX(player_bar), play_button);
   auto* skip_back =
       gtk_button_new_from_icon_name("media-skip-backward-symbolic");
-  gtk_widget_set_tooltip_text(skip_back, "Back 15 seconds");
+  gtk_widget_set_tooltip_text(skip_back, tr("player.back15"));
   gtk_box_append(GTK_BOX(player_bar), skip_back);
   auto* skip_forward =
       gtk_button_new_from_icon_name("media-skip-forward-symbolic");
-  gtk_widget_set_tooltip_text(skip_forward, "Forward 30 seconds");
+  gtk_widget_set_tooltip_text(skip_forward, tr("player.forward30"));
   gtk_box_append(GTK_BOX(player_bar), skip_forward);
   auto* chapter_back =
       gtk_button_new_from_icon_name("go-previous-symbolic");
-  gtk_widget_set_tooltip_text(chapter_back, "Previous chapter");
+  gtk_widget_set_tooltip_text(chapter_back, tr("player.chapter_prev"));
   gtk_widget_set_visible(chapter_back, FALSE);
   gtk_box_append(GTK_BOX(player_bar), chapter_back);
   auto* chapter_forward =
       gtk_button_new_from_icon_name("go-next-symbolic");
-  gtk_widget_set_tooltip_text(chapter_forward, "Next chapter");
+  gtk_widget_set_tooltip_text(chapter_forward, tr("player.chapter_next"));
   gtk_widget_set_visible(chapter_forward, FALSE);
   gtk_box_append(GTK_BOX(player_bar), chapter_forward);
+  auto* sleep_button = gtk_menu_button_new();
+  gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(sleep_button),
+                                "weather-clear-night-symbolic");
+  gtk_widget_set_tooltip_text(sleep_button, tr("sleep.title"));
+  {
+    auto* sleep_menu = g_menu_new();
+    g_menu_append(sleep_menu, tr("sleep.off"), "win.sleep::0");
+    for (int minutes : {5, 10, 15, 30, 45, 60, 90}) {
+      char label[64];
+      std::snprintf(label, sizeof(label), tr("sleep.minutes"), minutes);
+      auto* item = g_menu_item_new(label, nullptr);
+      g_menu_item_set_action_and_target_value(item, "win.sleep",
+                                              g_variant_new_int32(minutes));
+      g_menu_append_item(sleep_menu, item);
+      g_object_unref(item);
+    }
+    gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(sleep_button),
+                                   G_MENU_MODEL(sleep_menu));
+    g_object_unref(sleep_menu);
+  }
+  gtk_box_append(GTK_BOX(player_bar), sleep_button);
   auto* position_text = GTK_LABEL(gtk_label_new("00:00"));
   gtk_box_append(GTK_BOX(player_bar), GTK_WIDGET(position_text));
   auto* seek_scale = GTK_SCALE(
@@ -3881,7 +4562,7 @@ void on_activate(GtkApplication* app, gpointer) {
   // Status bar at the bottom carries progress chatter quietly.
   auto* statusbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_add_css_class(statusbar, "pl-statusbar");
-  auto* status_text = gtk_label_new("Starting embedded Racket CS…");
+  auto* status_text = gtk_label_new(tr("status.starting"));
   gtk_label_set_ellipsize(GTK_LABEL(status_text), PANGO_ELLIPSIZE_END);
   gtk_label_set_xalign(GTK_LABEL(status_text), 0.0f);
   gtk_widget_add_css_class(status_text, "pl-meta");
@@ -3928,6 +4609,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.job_label = GTK_LABEL(job_label);
   g_state.estimate_label = GTK_LABEL(estimate_label);
   g_state.reading_stack = GTK_STACK(reading_stack);
+  g_state.transcript_scroll = GTK_SCROLLED_WINDOW(transcript_scroll);
   g_state.transcript_box = GTK_BOX(transcript_box);
   g_state.summary_box = GTK_BOX(summary_box);
   g_state.status_text = GTK_LABEL(status_text);
@@ -3943,6 +4625,8 @@ void on_activate(GtkApplication* app, gpointer) {
                     G_VARIANT_TYPE_STRING, on_feed_refresh_activated);
   add_window_action(GTK_APPLICATION_WINDOW(window), "episode-done",
                     G_VARIANT_TYPE("(ss)"), on_episode_done_activated);
+  add_window_action(GTK_APPLICATION_WINDOW(window), "sleep",
+                    G_VARIANT_TYPE_INT32, on_sleep_activated);
 
   g_signal_connect(feed_list, "row-selected",
                    G_CALLBACK(on_nav_row_selected), nullptr);
@@ -4008,6 +4692,13 @@ void on_activate(GtkApplication* app, gpointer) {
   }
   g_signal_connect(rate_selector, "changed", G_CALLBACK(on_rate_changed),
                    nullptr);
+  g_signal_connect(
+      g_state.mode_selector, "changed",
+      G_CALLBACK(+[](GtkComboBox* combo, gpointer) {
+        g_state.transcript_mode = gtk_combo_box_get_active(combo);
+        render_transcript_public();
+      }),
+      nullptr);
 
   // Show the player bar as soon as an episode exists to play.
   g_signal_connect(episode_list, "row-selected",
@@ -4019,6 +4710,7 @@ void on_activate(GtkApplication* app, gpointer) {
                    nullptr);
 
   player_init();
+  mpris_start();
   gtk_window_present(GTK_WINDOW(window));
   start_backend();
 }

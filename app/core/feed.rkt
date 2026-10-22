@@ -16,6 +16,7 @@
 
 (provide fetch-feed
          parse-feed
+         peek-rows
          rfc822->epoch
          itunes-duration->seconds)
 
@@ -210,3 +211,25 @@
   (with-handlers ([exn:fail? (lambda (e)
                                (error 'fetch-feed "not a valid RSS feed: ~a" url))])
     (parse-feed body)))
+
+;; ---- peek ---------------------------------------------------------------------
+;;
+;; Try before you subscribe: the newest items of a parsed feed, capped —
+;; the shared source of the feed-peek RPC and the CLI peek/preview commands.
+;; One row = (feed-title author artwork-url enclosure-url episode-title
+;; pub-display duration-sec); peeking writes nothing to the library.
+
+(define peek-limit 5)
+
+(define (peek-rows parsed)
+  (define items
+    (sort (hash-ref parsed 'items '())
+          > #:key (lambda (e) (hash-ref e 'pub-date-epoch 0))))
+  (for/list ([e (in-list items)] [i (in-naturals)] #:break (>= i peek-limit))
+    (list (hash-ref parsed 'title "")
+          (hash-ref parsed 'author "")
+          (hash-ref parsed 'artwork-url "")
+          (hash-ref e 'enclosure-url "")
+          (hash-ref e 'title "")
+          (hash-ref e 'pub-date-display "")
+          (format "~a" (or (hash-ref e 'duration-sec #f) "")))))

@@ -339,6 +339,8 @@ MainWindow::MainWindow() {
   MenuSummarize().Text(std::wstring(podlens::Tr("action.summarize")));
   MenuRemoveAudio().Text(std::wstring(podlens::Tr("action.remove_audio")));
   ModeLabel().Text(std::wstring(podlens::Tr("mode.label")));
+  DiscoverSearchBox().PlaceholderText(
+      winrt::hstring(std::wstring(podlens::Tr("discover.search_placeholder"))));
   TranscriptTab().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("tab.transcript")))));
   SummaryTab().Content(box_value(winrt::hstring(
@@ -962,6 +964,7 @@ void MainWindow::RenderTranscript() {
   TranscriptList().Items().Clear();
   segment_borders_.clear();
   translation_blocks_.clear();
+  original_blocks_.clear();
   highlighted_segment_ = -1;
 
   if (transcript_.empty() && !selected_episode_id_.empty()) {
@@ -1004,6 +1007,7 @@ void MainWindow::RenderTranscript() {
                                .Lookup(box_value(winrt::hstring(L"AppInkSoftBrush")))
                                .as<Microsoft::UI::Xaml::Media::Brush>());
     translation.Visibility(mode_ == 2 ? Visibility::Collapsed : Visibility::Visible);
+    original.Visibility(mode_ == 1 ? Visibility::Collapsed : Visibility::Visible);
 
     muxc::StackPanel lines;
     lines.Spacing(3);
@@ -1011,6 +1015,7 @@ void MainWindow::RenderTranscript() {
     if (!seg[3].empty()) lines.Children().Append(translation);
     if (lines.Children().Size() == 0) continue;
 
+    if (!seg[2].empty()) original_blocks_.push_back(original);
     if (!seg[3].empty()) translation_blocks_.push_back(translation);
 
     muxc::Grid grid;
@@ -1053,6 +1058,9 @@ void MainWindow::RenderTranscript() {
 void MainWindow::ApplyMode() {
   for (auto const& block : translation_blocks_) {
     block.Visibility(mode_ == 2 ? Visibility::Collapsed : Visibility::Visible);
+  }
+  for (auto const& block : original_blocks_) {
+    block.Visibility(mode_ == 1 ? Visibility::Collapsed : Visibility::Visible);
   }
 }
 
@@ -1781,6 +1789,7 @@ void MainWindow::UpdatePlayerInfo() {
 void MainWindow::StartPlayback() {
   auto const episode_id = selected_episode_id_;
   if (episode_id.empty()) return;
+  preview_active_ = false;
   auto const audio = FindLocalAudio(episode_id);
   if (audio.empty()) {
     SetStatus(true, std::wstring(podlens::Tr("status.need_download")));
@@ -1873,6 +1882,15 @@ void MainWindow::TickPlayer() {
   UpdateSmtcTimeline(position);
 
   if (duration_ > 0 && position >= duration_ - 0.75) {
+    if (preview_active_) {
+      // a preview has no library row: stop and point at Subscribe
+      preview_active_ = false;
+      player_.Pause();
+      PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
+      SetSmtcStatus(false);
+      SetStatus(true, std::wstring(podlens::Tr("status.preview_ended")));
+      return;
+    }
     SavePosition(true);
     player_.Pause();
     PlayPauseGlyph().Glyph(winrt::hstring(L"\xE768"));
@@ -2465,88 +2483,257 @@ void MainWindow::LoadDiscover() {
           window->SetStatus(false, to_wide(error));
           return;
         }
-        window->DiscoverList().Children().Clear();
-        std::wstring current_category;
-        for (auto const& row : rows) {
-          if (row.size() < 7) continue;
-          std::wstring const category = to_wide(row[1]);
-          if (category != current_category) {
-            current_category = category;
-            auto label = SectionLabel(std::wstring(podlens::Tr(
-                ("cat." + row[1]).c_str())));
-            if (label.Text().size() == 0) label.Text(winrt::hstring(category));
-            label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 12, 0, 2});
-            window->DiscoverList().Children().Append(label);
-          }
-
-          muxc::TextBlock title;
-          title.Text(winrt::hstring(to_wide(row[2])));
-          title.FontSize(15);
-          title.FontWeight(Microsoft::UI::Text::FontWeights::SemiBold());
-          muxc::TextBlock description;
-          description.Text(winrt::hstring(to_wide(row[3])));
-          description.FontSize(13);
-          description.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
-          description.Opacity(0.8);
-          muxc::TextBlock homepage;
-          homepage.Text(winrt::hstring(to_wide(row[4])));
-          homepage.FontSize(12);
-          homepage.Opacity(0.6);
-          muxc::Border artwork_host =
-              window->MakeArtwork(to_wide(row.size() > 7 ? row[7] : ""), 56);
-          artwork_host.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Top);
-
-          bool const added = row[6] == "1";
-          muxc::Button action;
-          action.Content(box_value(winrt::hstring(std::wstring(podlens::Tr(
-              added ? "discover.added" : "discover.add")))));
-          action.IsEnabled(!added);
-          auto const feed_url = to_utf8(to_wide(row[5]));
-          action.Click([weak, feed_url](auto&&, auto&&) {
-            if (auto window = weak.get()) window->AddFromCatalog(feed_url);
-          });
-
-          muxc::Grid lines;
-          lines.ColumnSpacing(12);
-          lines.ColumnDefinitions().Append(muxc::ColumnDefinition());
-          lines.ColumnDefinitions().Append(muxc::ColumnDefinition());
-          lines.ColumnDefinitions().GetAt(1).Width(
-              {0, Microsoft::UI::Xaml::GridUnitType::Auto});
-          muxc::StackPanel text;
-          text.Spacing(2);
-          text.Children().Append(title);
-          text.Children().Append(description);
-          text.Children().Append(homepage);
-          muxc::Grid::SetColumn(text, 0);
-          muxc::Grid::SetColumn(action, 1);
-          lines.Children().Append(text);
-          lines.Children().Append(action);
-
-          muxc::Border card;
-          card.Child(lines);
-          card.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{8});
-          card.Padding(winrt::Microsoft::UI::Xaml::Thickness{14, 10, 14, 10});
-          card.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 8});
-          card.Background(Microsoft::UI::Xaml::Application::Current()
-                              .Resources()
-                              .Lookup(box_value(winrt::hstring(L"AppCardBrush")))
-                              .as<Microsoft::UI::Xaml::Media::Brush>());
-          window->DiscoverList().Children().Append(card);
-        }
-
-        muxc::TextBlock note;
-        note.Text(winrt::hstring(std::wstring(podlens::Tr("discover.note"))));
-        note.FontSize(12);
-        note.Opacity(0.6);
-        note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
-        note.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 8, 0, 0});
-        window->DiscoverList().Children().Append(note);
-
+        window->RenderCatalog(rows, /*grouped=*/true);
         window->SetStatus(true, std::wstring(podlens::Tr("discover.title")));
         window->ShowPage(Page::Discover);
       }
     });
   }).detach();
+}
+
+// One card renderer for both discover surfaces: the curated catalog
+// (grouped by category, with the standing note) and full-directory search
+// results (flat list plus a back button). Cards carry an audition button
+// next to Add — try the newest episode before subscribing.
+void MainWindow::RenderCatalog(std::vector<std::vector<std::string>> const& rows,
+                               bool grouped) {
+  DiscoverList().Children().Clear();
+
+  if (!grouped) {
+    muxc::Button back;
+    back.Content(box_value(winrt::hstring(std::wstring(podlens::Tr("discover.back")))));
+    back.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 8});
+    back.Click([weak = get_weak()](auto&&, auto&&) {
+      if (auto window = weak.get()) window->LoadDiscover();
+    });
+    DiscoverList().Children().Append(back);
+  }
+
+  std::wstring current_category;
+  for (auto const& row : rows) {
+    if (row.size() < 7) continue;
+    std::wstring const category = to_wide(row[1]);
+    if (grouped && category != current_category) {
+      current_category = category;
+      auto label = SectionLabel(std::wstring(podlens::Tr(
+          ("cat." + row[1]).c_str())));
+      if (label.Text().size() == 0) label.Text(winrt::hstring(category));
+      label.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 12, 0, 2});
+      DiscoverList().Children().Append(label);
+    }
+
+    muxc::TextBlock title;
+    title.Text(winrt::hstring(to_wide(row[2])));
+    title.FontSize(15);
+    title.FontWeight(Microsoft::UI::Text::FontWeights::SemiBold());
+    muxc::TextBlock description;
+    description.Text(winrt::hstring(to_wide(row[3])));
+    description.FontSize(13);
+    description.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+    description.Opacity(0.8);
+    muxc::TextBlock homepage;
+    homepage.Text(winrt::hstring(to_wide(row[4])));
+    homepage.FontSize(12);
+    homepage.Opacity(0.6);
+    muxc::Border artwork_host = MakeArtwork(to_wide(row.size() > 7 ? row[7] : ""), 56);
+    artwork_host.VerticalAlignment(Microsoft::UI::Xaml::VerticalAlignment::Top);
+
+    // column 4 is the feed URL (column 5 is the show's homepage — the two
+    // were swapped here once, subscribing people to web pages)
+    auto const feed_url = to_utf8(to_wide(row[4]));
+    bool const added = row[6] == "1";
+
+    muxc::StackPanel actions;
+    actions.Orientation(Microsoft::UI::Xaml::Controls::Orientation::Horizontal);
+    actions.Spacing(8);
+    if (!added) {
+      muxc::Button preview;
+      preview.Content(box_value(winrt::hstring(std::wstring(podlens::Tr("discover.preview")))));
+      preview.Click([weak = get_weak(), feed_url](auto&&, auto&&) {
+        if (auto window = weak.get()) window->PreviewFromCatalog(feed_url);
+      });
+      actions.Children().Append(preview);
+    }
+    muxc::Button action;
+    action.Content(box_value(winrt::hstring(std::wstring(podlens::Tr(
+        added ? "discover.added" : "discover.add")))));
+    action.IsEnabled(!added);
+    action.Click([weak = get_weak(), feed_url](auto&&, auto&&) {
+      if (auto window = weak.get()) window->AddFromCatalog(feed_url);
+    });
+    actions.Children().Append(action);
+
+    muxc::Grid lines;
+    lines.ColumnSpacing(12);
+    lines.ColumnDefinitions().Append(muxc::ColumnDefinition());
+    lines.ColumnDefinitions().Append(muxc::ColumnDefinition());
+    lines.ColumnDefinitions().GetAt(1).Width(
+        {0, Microsoft::UI::Xaml::GridUnitType::Auto});
+    muxc::StackPanel text;
+    text.Spacing(2);
+    text.Children().Append(title);
+    text.Children().Append(description);
+    text.Children().Append(homepage);
+    muxc::Grid::SetColumn(text, 0);
+    muxc::Grid::SetColumn(actions, 1);
+    lines.Children().Append(text);
+    lines.Children().Append(actions);
+
+    muxc::Border card;
+    card.Child(lines);
+    card.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{8});
+    card.Padding(winrt::Microsoft::UI::Xaml::Thickness{14, 10, 14, 10});
+    card.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 8});
+    card.Background(Microsoft::UI::Xaml::Application::Current()
+                        .Resources()
+                        .Lookup(box_value(winrt::hstring(L"AppCardBrush")))
+                        .as<Microsoft::UI::Xaml::Media::Brush>());
+    DiscoverList().Children().Append(card);
+  }
+
+  if (grouped) {
+    muxc::TextBlock note;
+    note.Text(winrt::hstring(std::wstring(podlens::Tr("discover.note"))));
+    note.FontSize(12);
+    note.Opacity(0.6);
+    note.TextWrapping(Microsoft::UI::Xaml::TextWrapping::Wrap);
+    note.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 8, 0, 0});
+    DiscoverList().Children().Append(note);
+  }
+}
+
+void MainWindow::DiscoverSearch_Click(winrt::Windows::Foundation::IInspectable const&,
+                                      Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  auto const query = std::wstring(DiscoverSearchBox().Text());
+  if (!query.empty()) RunDiscoverSearch(query);
+}
+
+void MainWindow::DiscoverSearch_KeyDown(winrt::Windows::Foundation::IInspectable const&,
+                                        winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
+  if (args.Key() == winrt::Windows::System::VirtualKey::Enter) {
+    auto const query = std::wstring(DiscoverSearchBox().Text());
+    if (!query.empty()) RunDiscoverSearch(query);
+  }
+}
+
+void MainWindow::RunDiscoverSearch(std::wstring const& query) {
+  if (!api_) return;
+  SetStatus(true, std::wstring(podlens::Tr("discover.searching")));
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  std::thread([weak, dispatcher, query = to_utf8(query)]() mutable {
+    std::string error;
+    std::vector<std::vector<std::string>> rows;
+    if (weak.get()) {
+      try {
+        rows = weak.get()->api_->catalog_search(query).get();
+      } catch (std::exception const& e) {
+        error = e.what();
+      }
+    }
+    dispatcher.TryEnqueue([weak, rows = std::move(rows), error]() mutable {
+      if (auto window = weak.get()) {
+        if (!error.empty()) {
+          window->SetStatus(false,
+                            std::wstring(podlens::Tr("discover.search_failed")) + to_wide(error));
+          return;
+        }
+        window->RenderCatalog(rows, /*grouped=*/false);
+      }
+    });
+  }).detach();
+}
+
+// Try before you subscribe: peek the feed (no library write), download the
+// newest episode's audio into the preview cache, then play the local file
+// outside the library context.
+void MainWindow::PreviewFromCatalog(std::string const& url) {
+  if (!api_ || url.empty()) return;
+  SetStatus(true, std::wstring(podlens::Tr("status.preview_fetch")));
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  std::thread([weak, dispatcher, url]() mutable {
+    std::string error;
+    std::vector<std::vector<std::string>> rows;
+    std::string audio_path;
+    if (weak.get()) {
+      try {
+        rows = weak.get()->api_->feed_peek(url).get();
+        if (rows.empty() || rows[0].size() < 7 ||
+            rows[0][3].find_first_not_of(" \t\r\n") == std::string::npos) {
+          error =
+              to_utf8(std::wstring(podlens::Tr("status.preview_no_enclosure")));
+        } else {
+          dispatcher.TryEnqueue([weak] {
+            if (auto window = weak.get()) {
+              window->SetStatus(true, std::wstring(podlens::Tr("status.preview_download")));
+            }
+          });
+          audio_path = weak.get()->api_->preview_audio(rows[0][3]).get();
+        }
+      } catch (std::exception const& e) {
+        error = e.what();
+      }
+    }
+    dispatcher.TryEnqueue([weak, rows = std::move(rows),
+                           audio_path = std::move(audio_path), error]() mutable {
+      if (auto window = weak.get()) {
+        if (!error.empty()) {
+          window->SetStatus(false,
+                            std::wstring(podlens::Tr("status.preview_failed")) + to_wide(error));
+          return;
+        }
+        auto const& row = rows[0];
+        window->StartPreviewPlayback(to_wide(audio_path), to_wide(row[4]),
+                                     to_wide(row[0]), to_wide(row[2]));
+      }
+    });
+  }).detach();
+}
+
+void MainWindow::StartPreviewPlayback(std::wstring const& path, std::wstring const& title,
+                                      std::wstring const& show, std::wstring const& artwork) {
+  try {
+    // No library row: no position restore, no saves, no autoplay chain —
+    // the player bar carries the peeked show identity with a 试听 marker.
+    preview_active_ = true;
+    selected_episode_id_.clear();
+    transcript_.clear();
+    RenderTranscript();
+    UpdateDetailVisibility();
+
+    auto file =
+        winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(path).get();
+    player_.Source(
+        winrt::Windows::Media::Core::MediaSource::CreateFromStorageFile(file));
+    duration_ = 0;
+    ticks_since_save_ = 0;
+    double rate = 1.0;
+    if (auto const entry = RateSelector().SelectedItem().try_as<winrt::hstring>()) {
+      rate = std::wcstod(entry->c_str(), nullptr);
+      if (rate <= 0) rate = 1.0;
+    }
+    player_.PlaybackRate(static_cast<double>(rate));
+    player_.Play();
+    PlayPauseGlyph().Glyph(winrt::hstring(L"\xE769"));
+    position_timer_.Start();
+
+    PlayerTitle().Text(title);
+    PlayerShow().Text(show + L" · " + std::wstring(podlens::Tr("discover.preview")));
+    try {
+      PlayerArtwork().Source(
+          winrt::Microsoft::UI::Xaml::Media::Imaging::BitmapImage(
+              winrt::Windows::Foundation::Uri(artwork)));
+    } catch (...) {
+    }
+    SetSmtcStatus(true);
+    UpdateSmtcMetadata();
+    SetStatus(true, std::wstring(podlens::Tr("status.preview_playing")) + title);
+  } catch (winrt::hresult_error const& e) {
+    SetStatus(false, e.message().c_str());
+  } catch (std::exception const& e) {
+    SetStatus(false, to_wide(e.what()));
+  }
 }
 
 void MainWindow::RefreshFeed_Click(winrt::Windows::Foundation::IInspectable const&,

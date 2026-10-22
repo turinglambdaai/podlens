@@ -495,6 +495,54 @@
                (displayln (format "    ~a" (hash-ref r 'feed-url))))
              0)))]))
 
+(define (cmd-peek args)
+  ;; try before you subscribe: newest episodes of a feed, library untouched
+  (cond
+    [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
+    [else
+     (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
+       (define rows (peek-rows (fetch-feed (string-trim (car args)))))
+       (if (stdout-json?)
+           (emit-ok
+            (hasheq 'feed
+                    (if (null? rows)
+                        (hasheq 'title "" 'author "" 'artwork "")
+                        (hasheq 'title (list-ref (car rows) 0)
+                                'author (list-ref (car rows) 1)
+                                'artwork (list-ref (car rows) 2)))
+                    'episodes
+                    (for/list ([r (in-list rows)])
+                      (hasheq 'enclosureUrl (list-ref r 3)
+                              'title (list-ref r 4)
+                              'pubDate (list-ref r 5)
+                              'durationSec (list-ref r 6)))))
+           (begin
+             (when (null? rows) (displayln (tr (lang) 'no-results)))
+             (unless (null? rows)
+               (displayln (tr (lang) 'peeked (list-ref (car rows) 0) (length rows)))
+               (for ([r (in-list rows)])
+                 (displayln (format "  ~a  ~a" (list-ref r 5) (list-ref r 4)))
+                 (displayln (format "    ~a" (list-ref r 3)))))
+             0)))]))
+
+(define (cmd-preview args)
+  ;; one-click audition: peek the feed, cache the newest episode's audio,
+  ;; print the local path a player can open — no subscription created
+  (cond
+    [(not (= 1 (length args))) (usage! (tr (lang) 'usage))]
+    [else
+     (with-handlers ([exn:fail? (lambda (e) (fail! 1 (exn-message e)))])
+       (define rows (peek-rows (fetch-feed (string-trim (car args)))))
+       (when (null? rows) (error 'preview (tr (lang) 'no-results)))
+       (define enclosure (list-ref (car rows) 3))
+       (when (blank-string? enclosure)
+         (error 'preview (tr (lang) 'preview-no-enclosure)))
+       (define path (ensure-preview-audio! enclosure))
+       (if (stdout-json?)
+           (emit-ok (hasheq 'title (list-ref (car rows) 4) 'path path))
+           (displayln (tr (lang) 'preview-ready path)))
+       0)]))
+
 (define (cmd-find args)
   ;; full-text search across every subscription's transcripts; answers
   ;; "what did they say about X, at which minute" with sentence timestamps
@@ -627,6 +675,8 @@
    "  refresh [feed-id]…         refresh feeds for new episodes\n"
    "  catalog [category]         list the curated catalog\n"
    "  search <terms>             search the full podcast directory\n"
+   "  peek <rss-url>             newest episodes of a feed, no subscribe\n"
+   "  preview <rss-url>          cache the newest episode for one audition\n"
    "  download <episode-id>      cache the episode audio\n"
    "  pipeline <episode-id>      download+transcribe+translate+summarize\n"
    "  estimate <episode-id>      what a pipeline run would cost\n"
@@ -663,6 +713,8 @@
           'refresh cmd-refresh
           'catalog cmd-catalog
           'search cmd-search
+          'peek cmd-peek
+          'preview cmd-preview
           'download cmd-download
           'pipeline cmd-pipeline
           'estimate cmd-estimate

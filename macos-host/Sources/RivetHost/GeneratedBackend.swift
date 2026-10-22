@@ -7,8 +7,8 @@ public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
     public static let displayName = "PodLens"
-    public static let version = "0.3.0"
-    public static let build: Int64 = 2
+    public static let version = "0.4.0"
+    public static let build: Int64 = 3
     public static let identifier = "site.jrtx.podlens"
     public static let releaseChannel = "stable"
 }
@@ -165,6 +165,10 @@ public struct RivetAPI: Sendable {
         let rivetResult = try await client.call("feed-list", arguments: [])
         return try decode__List_List_String_(rivetResult)
     }
+    public func feed_peek(url: String) async throws -> [[String]] {
+        let rivetResult = try await client.call("feed-peek", arguments: [encode_String(url)])
+        return try decode__List_List_String_(rivetResult)
+    }
     public func feed_refresh(id: String) async throws -> Int64 {
         let rivetResult = try await client.call("feed-refresh", arguments: [encode_String(id)])
         return try decode_Int64(rivetResult)
@@ -192,6 +196,10 @@ public struct RivetAPI: Sendable {
     public func position_save(id: String, seconds: String, done: String) async throws -> Bool {
         let rivetResult = try await client.call("position-save", arguments: [encode_String(id), encode_String(seconds), encode_String(done)])
         return try decode_Bool(rivetResult)
+    }
+    public func preview_audio(enclosure_url: String) async throws -> String {
+        let rivetResult = try await client.call("preview-audio", arguments: [encode_String(enclosure_url)])
+        return try decode_String(rivetResult)
     }
     public func resume_last() async throws -> [String] {
         let rivetResult = try await client.call("resume-last", arguments: [])

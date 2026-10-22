@@ -79,12 +79,27 @@
                                     Margin="16,4,16,16" />
                     </ScrollViewer>
 
-                    <!-- discover -->
-                    <ScrollViewer x:Name="DiscoverView" Visibility="Collapsed">
-                        <StackPanel x:Name="DiscoverList" MaxWidth="620"
-                                    HorizontalAlignment="Left" Spacing="4"
-                                    Margin="16,8,16,16" />
-                    </ScrollViewer>
+                    <!-- discover: directory search above the curated list -->
+                    <Grid x:Name="DiscoverView" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal"
+                                    Spacing="8" Margin="16,12,16,4">
+                            <TextBox x:Name="DiscoverSearchBox" Width="360"
+                                     KeyDown="DiscoverSearch_KeyDown" />
+                            <Button x:Name="DiscoverSearchButton"
+                                    Click="DiscoverSearch_Click">
+                                <FontIcon Glyph="&#xE721;" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                        <ScrollViewer Grid.Row="1">
+                            <StackPanel x:Name="DiscoverList" MaxWidth="620"
+                                        HorizontalAlignment="Left" Spacing="4"
+                                        Margin="16,8,16,16" />
+                        </ScrollViewer>
+                    </Grid>
 
                     <!-- recently updated -->
                     <ScrollViewer x:Name="RecentPage" Visibility="Collapsed">

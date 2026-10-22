@@ -83,14 +83,20 @@ scripts/update-keys.sh
 
 ## 诚实缺口（不要在文档里夸口）
 
-- Windows 播放尚无波形/无缝衔接/章节标记（播放/seek/倍速 1.0–2.0 已有，M1 已追平 macOS）
-- Linux 宿主已追平 Windows 的播放/管线/设置/更新面；尚无连续播放（播完自动接下一集）、睡眠定时与发现页 UI（catalog RPC 已可用，UI 待跟进）
-- 发现页全目录搜索（`catalog-search` RPC）目前只在 macOS 宿主与 CLI 落地；Windows 发现面板还是纯精选目录，搜索 UI 待跟进
-- Podcasts 式外壳（主页待播/节目网格/资料库页、`episode-recent` RPC 消费、封面图加载、窗口级播放条、逐句稿 chips）已三端对齐；差异点：Linux 无 i18n（英文 UI）且封面走系统 curl（失败静默占位），Windows 每步管线操作收进 More 菜单
-- 「最近更新/已下载」页基于 `episode-recent`（跨源、上限 200 条按更新时间排序）；极端老库中超出上限的已下载单集不会出现在该页
-- Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
-- macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
-- 翻译按句计费，成本由用户的 API key 承担
+- 0.4.0 起三端功能面对齐：发现页全目录搜索、逐句稿跟随高亮与
+  双语/译文/原文切换、连续播放、睡眠定时、发现页一键试听、系统媒体
+  集成（macOS 控制中心 / Windows SMTC / Linux MPRIS）、zh 界面，每端都有。
+- Linux 界面语言无运行时开关：`tr()` 读 `PODLENS_LANG`（zh 默认、en
+  回退），与 mac/win 的表一样没有 in-app 切换。
+- Linux 封面走系统 curl 且无磁盘缓存（同图重复下载，失败静默占位）。
+- 「最近更新/已下载」页基于 `episode-recent`（跨源、上限 200 条按更新
+  时间排序）；极端老库中超出上限的已下载单集不会出现在该页。
+- Windows 便携 zip 支持应用内下载并安装更新；MSI 安装的「检查更新」
+  只报告结果，升级走 MSI 覆盖安装。
+- macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开。
+- 翻译按句计费，成本由用户的 API key 承担。
+- M4 移动伴随端（iOS/iPadOS/Android/watchOS）未开工：等 Rivet 的
+  网络设备通道就绪（见 docs/DESIGN-ROADMAP.md §6-M4）。
 
 ## 组合定位（Portfolio placement）
 
