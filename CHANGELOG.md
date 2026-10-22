@@ -5,6 +5,42 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+## 0.4.0 - 2026-10-22
+
+### Added
+- **One-click audition from Discover — try before you subscribe.**
+  Catalog and search cards on every platform gain a 试听 button: the
+  backend peeks the feed without subscribing (`feed-peek` RPC — the
+  newest episodes of any feed, library untouched), caches the newest
+  episode's audio (`preview-audio` RPC, idempotent `preview-<sha>` files
+  under `audio/`) and plays it outside the library. The player bar
+  carries the peeked show title with a 试听 marker; position saving and
+  the autoplay chain stand down; the end of a preview points at
+  Subscribe. Picking any library episode cancels the preview. The CLI
+  gets the same door: `peek <rss-url>` lists a feed's newest episodes,
+  `preview <rss-url>` caches the newest one's audio and prints the path.
+- **The Linux host catches up on every axis it trailed.** The
+  transcript reader highlights the running sentence and follows it
+  (scroll fires only when the sentence changes), with the bilingual /
+  translation-only / original-only selector beside the reading tabs.
+  Playback rolls continuously into the next older episode of the same
+  feed, and a sleep-timer menu (5–90 minutes) pauses at the deadline.
+  Media keys and the desktop player widget work over MPRIS (transport,
+  position, rate, metadata — the Linux counterpart of Control Center
+  and SMTC). The UI speaks the product language through a zh/en string
+  table, zh default, `PODLENS_LANG=en` to opt out — hardcoded English
+  is gone.
+- **Windows Discover joins full-directory search** (`catalog-search`
+  over the iTunes Search API; results render as cards with a back
+  button), matching macOS and Linux.
+
+### Fixed
+- The Windows curated catalog's Add button subscribed to the
+  *homepage* column instead of the feed URL — every curated add was
+  pointing a feed reader at a web page.
+- The Windows transcript's 只看译文 mode rendered identically to
+  bilingual; translation-only now actually hides the original lines.
+
 ## 0.3.0 - 2026-10-17
 
 ### Added

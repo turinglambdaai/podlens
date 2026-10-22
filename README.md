@@ -66,15 +66,16 @@ PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared
 
 - **One-click Understand**: download → transcribe → translate → summarize as a single job — finished stages are skipped on re-run, and a cost estimate (sentences/characters) shows before you start
 - Subscribe to RSS podcast feeds (RSS 2.0 + iTunes tags), refresh with new-episode detection, auto-refresh every 30 minutes with new-episode notifications (macOS)
-- Playback: 1.0–3.0× speed, ±15/30 s skip, sleep timer, chapter jumps (Podcasting 2.0 `podcast:chapters`), continuous playback into the next episode, resume-on-launch, media keys + Control Center (macOS) / SMTC (Windows)
+- Playback: 1.0–3.0× speed, ±15/30 s skip, sleep timer, chapter jumps (Podcasting 2.0 `podcast:chapters`), continuous playback into the next episode, resume-on-launch, media keys + Control Center (macOS) / SMTC (Windows) / MPRIS (Linux)
 - Sentence-level transcript with follow-along highlighting (tap a line to seek); sentence-aligned translation in bilingual / translation-only / original-only views
 - Structured summaries (TL;DR, key points, quotes, topics) plus show notes from the feed
 - Library basics: mark played/unplayed, unplayed badges per show, per-episode job progress
 - Discover panel: curated catalog of classic English shows plus full-directory search (iTunes Search API, no key needed, results carry Apple's authoritative feed URLs) — nothing is ever auto-subscribed
+- Try before you subscribe: a one-click audition on every Discover card peeks the feed, caches the newest episode's audio and plays it outside your library (`feed-peek` / `preview-audio`; CLI: `peek`, `preview`)
 - Bring-your-own-key: OpenAI, DeepSeek, Groq, SiliconFlow, Ollama, any OpenAI-compatible endpoint
 - Agent-friendly CLI over the same core (`add`, `episodes`, `pipeline`,
   `estimate`, `transcribe`, `translate`, `summarize`, `show`, `export`,
-  `find`, `done`, `search`, `--json`, exit codes 0/1/2)
+  `find`, `done`, `search`, `peek`, `preview`, `--json`, exit codes 0/1/2)
 - Signed in-app updates (Ed25519 manifest + SHA-256, see [docs/UPDATE.md](docs/UPDATE.md))
 
 ## Quick Start

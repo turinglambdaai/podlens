@@ -136,7 +136,9 @@ macOS：`DesignTokens.swift` 常量。新增颜色/字号必须先进这张表�
 
 - [x] 首启引导：无订阅时默认进入发现页（macOS；2026-10-01）——发现页已支持
       全目录搜索（iTunes Search API，权威 feedUrl，`catalog-search` RPC）
-- [ ] 预置推荐单集可一键试听（低优先级，未做）
+- [x] 预置推荐单集可一键试听（v0.4.0：`feed-peek` + `preview-audio`
+      两个 RPC，三端发现页卡片试听按钮，CLI `peek`/`preview`；不订阅
+      不入库）
 - [x] 「听懂这集」一键流水线：`episode-pipeline` RPC（下载→转写→翻译→
       总结串联，完成阶段自动跳过），`job-progress` 驱动单集行内进度——
       **契约变更随 v1.3.0 三端同发**
