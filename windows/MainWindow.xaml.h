@@ -85,6 +85,10 @@ struct MainWindow : MainWindowT<MainWindow> {
                                     Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
   void Mode_SelectionChanged(winrt::Windows::Foundation::IInspectable const&,
                              Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
+  void DiscoverSearch_Click(winrt::Windows::Foundation::IInspectable const&,
+                            Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void DiscoverSearch_KeyDown(winrt::Windows::Foundation::IInspectable const&,
+                              winrt::Windows::UI::Xaml::Input::KeyRoutedEventArgs const&);
 
  private:
   struct FeedRow {
@@ -192,6 +196,16 @@ struct MainWindow : MainWindowT<MainWindow> {
   // flows shared by nav items and dialogs (winrt reference params cannot be
   // null, so nav dispatch calls these instead of the event handlers)
   void LoadDiscover();
+  // one card renderer for the curated catalog (grouped by category) and
+  // full-directory search results (flat, with a back-to-catalog button)
+  void RenderCatalog(std::vector<std::vector<std::string>> const& rows,
+                     bool grouped);
+  void RunDiscoverSearch(std::wstring const& query);
+  // try-before-subscribe: feed-peek + preview-audio, then local playback
+  // outside the library (no position saves, no autoplay chain)
+  void PreviewFromCatalog(std::string const& url);
+  void StartPreviewPlayback(std::wstring const& path, std::wstring const& title,
+                            std::wstring const& show, std::wstring const& artwork);
   void AddFromCatalog(std::string const& url);
   void RunSettingsDialog();
   void ShowSettingsDialog(std::vector<std::vector<std::string>> rows,
@@ -247,7 +261,10 @@ struct MainWindow : MainWindowT<MainWindow> {
   // segment borders for playback highlight; index == transcript_ index
   std::vector<Microsoft::UI::Xaml::Controls::Border> segment_borders_;
   std::vector<Microsoft::UI::Xaml::Controls::TextBlock> translation_blocks_;
+  std::vector<Microsoft::UI::Xaml::Controls::TextBlock> original_blocks_;
   int highlighted_segment_ = -1;
+  // true while a feed-peek audition owns the player (no library episode)
+  bool preview_active_ = false;
   // XAML fires SelectionChanged while the constructor is still wiring items
   // up; guards keep those early callbacks from touching half-built state.
   bool initialized_ = false;
