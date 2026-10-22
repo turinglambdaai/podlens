@@ -2661,7 +2661,8 @@ void MainWindow::PreviewFromCatalog(std::string const& url) {
         rows = weak.get()->api_->feed_peek(url).get();
         if (rows.empty() || rows[0].size() < 7 ||
             rows[0][3].find_first_not_of(" \t\r\n") == std::string::npos) {
-          error = std::string(podlens::Tr("status.preview_no_enclosure"));
+          error =
+              to_utf8(std::wstring(podlens::Tr("status.preview_no_enclosure")));
         } else {
           dispatcher.TryEnqueue([weak] {
             if (auto window = weak.get()) {
