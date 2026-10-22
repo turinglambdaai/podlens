@@ -154,9 +154,9 @@ def main():
     window = wait_for(
         "PodLens frame", lambda: next((n for n in walk(application) if role(n) == "frame"), None)
     )
-    wait_for("embedded backend readiness", lambda: contains(window, "Ready"))
+    wait_for("embedded backend readiness", lambda: contains(window, "就绪"))
     menu = wait_for(
-        "Main Menu button", lambda: find_named(window, "Main Menu", "push button")
+        "Main Menu button", lambda: find_named(window, "主菜单", "push button")
     )
     menu.queryComponent()
     activate_application_action("settings")
@@ -166,7 +166,7 @@ def main():
         lambda: find_editable_named(application, "chat-model"),
     )
     field.queryEditableText().setTextContents("acceptance-model")
-    save = wait_for("Save button", lambda: find_named(application, "Save", "push button"))
+    save = wait_for("Save button", lambda: find_named(application, "保存", "push button"))
     press(save)
     wait_for(
         "settings persisted by the embedded backend",

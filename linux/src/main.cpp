@@ -245,6 +245,7 @@ char const* tr(char const* key) {
        "No transcript yet — press Understand (needs an API key in Settings)."},
       {"status.starting", "正在启动嵌入式 Racket CS…",
        "Starting embedded Racket CS…"},
+      {"status.ready", "就绪", "Ready"},
       {"status.playing", "播放中", "Playing"},
       {"status.finished", "播放结束，进度已保存",
        "Playback finished — position saved"},
@@ -4025,7 +4026,7 @@ int on_backend_finished(gpointer) {
                stderr);
   }
 
-  set_status("Ready");
+  set_status(tr("status.ready"));
   reload_feeds();
   start_auto_update_check();
   (void)g_state.api->resume_last_async(

@@ -88,7 +88,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void DiscoverSearch_Click(winrt::Windows::Foundation::IInspectable const&,
                             Microsoft::UI::Xaml::RoutedEventArgs const&);
   void DiscoverSearch_KeyDown(winrt::Windows::Foundation::IInspectable const&,
-                              winrt::Windows::UI::Xaml::Input::KeyRoutedEventArgs const&);
+                              winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const&);
 
  private:
   struct FeedRow {

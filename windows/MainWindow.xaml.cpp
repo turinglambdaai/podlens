@@ -2604,14 +2604,14 @@ void MainWindow::RenderCatalog(std::vector<std::vector<std::string>> const& rows
 
 void MainWindow::DiscoverSearch_Click(winrt::Windows::Foundation::IInspectable const&,
                                       Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  auto const query = DiscoverSearchBox().Text();
+  auto const query = std::wstring(DiscoverSearchBox().Text());
   if (!query.empty()) RunDiscoverSearch(query);
 }
 
 void MainWindow::DiscoverSearch_KeyDown(winrt::Windows::Foundation::IInspectable const&,
-                                        winrt::Windows::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
+                                        winrt::Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
   if (args.Key() == winrt::Windows::System::VirtualKey::Enter) {
-    auto const query = DiscoverSearchBox().Text();
+    auto const query = std::wstring(DiscoverSearchBox().Text());
     if (!query.empty()) RunDiscoverSearch(query);
   }
 }

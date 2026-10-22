@@ -8,6 +8,7 @@
          rackunit
          racket/file
          racket/list
+         racket/path
          racket/port
          racket/string
          racket/tcp
@@ -299,7 +300,8 @@
   (define feeds-before (length (feed-all)))
   (define path (ensure-preview-audio! enclosure))
   (check-true (file-exists? path))
-  (check-true (string-prefix? (last (string-split path "/")) "preview-"))
+  (check-true (string-prefix?
+               (path->string (file-name-from-path path)) "preview-"))
   (check-equal? (length (feed-all)) feeds-before)
   ;; second call hits the cache: mutate the file, the path must survive
   (define mtime (file-or-directory-modify-seconds path))
