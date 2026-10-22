@@ -91,3 +91,9 @@ scripts/update-keys.sh
 - Windows「检查更新」只报告结果，不自动安装；升级走 MSI 覆盖安装
 - macOS 构建 ad-hoc 签名（公证证书未配置），首次启动需右键打开
 - 翻译按句计费，成本由用户的 API key 承担
+
+## 组合定位（Portfolio placement）
+
+- 轨道与授权：轨道 2 消费买断（BYO-key，无托管成本）；授权形态：AGPL-3.0；商业归属：适合收费（收费节奏第二棒；买断 + 更新窗 + 试用）。
+- 组合归属唯一权威：[PORTFOLIO.md](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)（turinglambdaai.github.io 仓库）。改归属/授权先改权威档，再同步本节。
+- 纪律：价格只进本仓 `PRICING.md`，且收费开始时才发布；README 与产品站不做价格预告。
