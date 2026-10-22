@@ -115,6 +115,20 @@ final class PodLensStore: ObservableObject {
         let artworkURL: String
     }
 
+    /// A feed episode playable without subscribing — the Discover page's
+    /// one-click audition (feed-peek row; the enclosure URL is the id).
+    struct PreviewEpisode: Identifiable, Hashable {
+        let enclosureURL: String
+        let feedTitle: String
+        let author: String
+        let artworkURL: String
+        let title: String
+        let pubDisplay: String
+        let durationSec: String
+
+        var id: String { enclosureURL }
+    }
+
     @Published var feeds: [Feed] = []
     @Published var episodes: [Episode] = []
     @Published var catalog: [CatalogEntry] = []
@@ -128,6 +142,8 @@ final class PodLensStore: ObservableObject {
     @Published var searchResults: [CatalogEntry] = []
     @Published var isSearching = false
     @Published var searchError: String?
+    @Published var previewEpisode: PreviewEpisode?
+    @Published var previewLoading = false
     @Published var selectedFeed: Feed?
     @Published var selectedEpisode: Episode?
     @Published var segments: [Segment] = []
@@ -239,6 +255,79 @@ final class PodLensStore: ObservableObject {
             searchError = "\(error)"
             isSearching = false
         }
+    }
+
+    /// One-click audition from the Discover page: peek the feed without
+    /// subscribing, cache the newest episode's audio and play it locally.
+    /// No library state changes; picking any library episode ends the
+    /// preview.
+    func previewFromCatalog(_ entry: CatalogEntry) {
+        guard let api, !previewLoading else { return }
+        previewLoading = true
+        statusLine = L("previewFetching")
+        Task {
+            do {
+                let rows = try await api.feed_peek(url: entry.url)
+                guard let row = rows.first, row.count >= 7 else {
+                    await MainActor.run { self.previewLoading = false }
+                    return
+                }
+                let enclosure = row[3]
+                guard !enclosure.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    await MainActor.run {
+                        self.previewLoading = false
+                        self.statusLine = String(format: L("previewFailed"), L("previewNoEnclosure"))
+                    }
+                    return
+                }
+                let preview = PreviewEpisode(enclosureURL: enclosure, feedTitle: row[0],
+                                             author: row[1], artworkURL: row[2],
+                                             title: row[4], pubDisplay: row[5],
+                                             durationSec: row[6])
+                await MainActor.run {
+                    self.previewEpisode = preview
+                    self.statusLine = L("previewDownloading")
+                }
+                let path = try await api.preview_audio(enclosure_url: enclosure)
+                await MainActor.run {
+                    self.previewLoading = false
+                    self.startPreviewPlayback(URL(fileURLWithPath: path), preview: preview)
+                }
+            } catch {
+                await MainActor.run {
+                    self.previewLoading = false
+                    self.statusLine = String(format: L("previewFailed"), "\(error)")
+                }
+            }
+        }
+    }
+
+    /// Preview playback: the audio file is already local (preview-audio),
+    /// there is no episode id, so transcript loading and position saving
+    /// all stand down until a library episode is picked again.
+    private func startPreviewPlayback(_ url: URL, preview: PreviewEpisode) {
+        selectedEpisode = nil
+        segments = []
+        summary = nil
+        chapters = []
+        estimate = nil
+        lastFollowedSegment = nil
+
+        let item = AVPlayerItem(url: url)
+        let player = player ?? AVPlayer()
+        installPlaybackObservers(player)
+        player.replaceCurrentItem(with: item)
+        self.player = player
+        player.playImmediately(atRate: rate)
+        playing = true
+        saveTicks = 0
+
+        npTitle = preview.title
+        npShow = preview.feedTitle + " · " + L("preview")
+        npArtwork = nil
+        updateNowPlayingInfo()
+        loadNowPlayingArtwork(preview.artworkURL)
+        statusLine = L("previewPlaying") + preview.title
     }
 
     func loadFeeds() async {
@@ -640,6 +729,7 @@ final class PodLensStore: ObservableObject {
     }
 
     func startPlayback(for episode: Episode, autoplay: Bool = true) {
+        previewEpisode = nil // any library playback ends a running preview
         if let url = localAudioURL(for: episode.id) {
             let item = AVPlayerItem(url: url)
             let player = player ?? AVPlayer()
@@ -702,7 +792,15 @@ final class PodLensStore: ObservableObject {
     }
 
     private func playedToEnd() {
-        guard player != nil, selectedEpisode != nil else { return }
+        guard player != nil else { return }
+        if previewEpisode != nil {
+            // a preview has no library state to close out — just stop
+            playing = false
+            statusLine = L("previewEnded")
+            updateNowPlayingInfo()
+            return
+        }
+        guard selectedEpisode != nil else { return }
         playing = false
         savePosition(duration > 0 ? duration : currentTime, done: true)
         updateNowPlayingInfo()

@@ -729,6 +729,14 @@ struct CatalogCard: View {
                     .background(Color.gray.opacity(0.15))
                     .clipShape(Capsule())
             } else {
+                Button {
+                    store.previewFromCatalog(entry)
+                } label: {
+                    Label(L("preview"), systemImage: "headphones")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(store.previewLoading)
                 Button(L("subscribe")) {
                     store.addFromCatalog(entry)
                 }
