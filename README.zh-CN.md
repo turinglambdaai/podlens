@@ -6,6 +6,12 @@
 
 [English](README.md) · **中文**
 
+## 开始使用
+
+免费 BYOK 应用。不提供 PodLens 托管 AI 订阅；模型用量由配置的服务商收费。 提供 macOS、Windows、Linux 桌面预览；移动与伴随端尚未交付。Linux 当前通过 PODLENS_LANG 选择语言。
+
+[安装、首次使用、隐私与备份恢复](docs/USER-GUIDE.zh-CN.md) · [English](docs/USER-GUIDE.md)
+
 ## 安装
 
 从 [Releases](https://github.com/turinglambdaai/podlens/releases/latest) 下载：
@@ -159,11 +165,3 @@ raco test tests/        # 后端测试（假服务器，不需要真实 key）
 ## 许可
 
 [AGPL-3.0](LICENSE)。
-
-## 反馈与诊断
-
-问题和建议请使用 [GitHub Issues](https://github.com/turinglambdaai/podlens/issues)，附版本、系统/架构和复现步骤。分享前先检查并脱敏诊断；不要公开 API key、授权凭据、密钥库或私有文档。安全敏感问题优先按 SECURITY.md 联系；未提供私密渠道时，先请求私下联系方式，不在公开 issue 中披露敏感细节。此入口不会自动上传数据。
-
-## 产品与收费
-
-免费 BYOK；听读用户入口。首发目标、免费边界与开卖门禁见 [PRICING.md](PRICING.zh-CN.md)；当前仍在开发，没有实际用户，不表示已开售，也不因此给开发版即时加收费墙。

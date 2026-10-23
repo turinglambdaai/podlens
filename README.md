@@ -6,6 +6,12 @@ Podcasts, in your language. A cross-platform desktop podcast player that transcr
 
 **English** · [中文](README.zh-CN.md)
 
+## Start here
+
+Free BYOK application. There is no PodLens hosted-AI subscription; your configured providers charge for their usage. Desktop previews for macOS, Windows and Linux. Mobile/companion applications are not delivered; Linux language selection currently uses PODLENS_LANG.
+
+[Installation, first use, privacy, backup and recovery](docs/USER-GUIDE.md) · [简体中文](docs/USER-GUIDE.zh-CN.md)
+
 ## Install
 
 Download from [Releases](https://github.com/turinglambdaai/podlens/releases/latest):
@@ -162,11 +168,3 @@ The full design roadmap (M1 consistency baseline → M2 transcript-as-product �
 ## License
 
 Licensed under the [AGPL-3.0 License](LICENSE).
-
-## Feedback and diagnostics
-
-Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/turinglambdaai/podlens/issues). Include the release, OS/architecture and steps; inspect and redact diagnostics before sharing. Do not post API keys, license files, vault contents or private documents. For sensitive security reports, follow SECURITY.md when present; otherwise request a private contact route without disclosing sensitive details. Nothing is uploaded automatically.
-
-## Product & pricing
-
-Free BYOK listening and reading tool. Read the complete [English pricing and product policy](PRICING.md) or [简体中文](PRICING.zh-CN.md) for target prices, free/paid boundaries and launch gates. This is a launch design, not a live offer; this documentation does not add payment restrictions to current development builds.

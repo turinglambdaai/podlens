@@ -27,6 +27,13 @@ var _hmt = _hmt || [];
   #product-support a:focus-visible { outline:2px solid currentColor; outline-offset:4px; }
   html:lang(en) #product-support .support-zh, html:lang(zh) #product-support .support-en { display:none; }
 </style>
+<style id="product-start-style">
+.product-availability{font-size:.95rem;line-height:1.65;max-width:72ch;margin:18px 0;opacity:.85} .hero .product-availability{margin-left:auto;margin-right:auto}
+.product-start{max-width:1120px;margin:64px auto;padding:32px 24px;border-top:1px solid var(--border,#aaa);font:inherit;line-height:1.65}
+.product-start h2{font-size:clamp(1.7rem,3vw,2.4rem);letter-spacing:-.025em;margin:0 0 16px}.product-start h3{font-size:1.05rem;margin:0 0 10px}.product-start p{margin:0 0 16px;max-width:74ch}.product-start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin:28px 0}.product-start a{text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere}.product-start a:focus-visible{outline:2px solid currentColor;outline-offset:5px}.product-start .start-links{display:flex;gap:16px 24px;flex-wrap:wrap}.product-start .start-status{font-weight:600}.product-start .start-limits{font-size:.95em}
+html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(max-width:700px){.product-start{margin:40px auto;padding:24px 20px}.product-start-grid{grid-template-columns:1fr;gap:18px}}
+</style>
+<style>.lang-menu li.lang-choice{padding:0}.lang-menu .lang-choice button{display:block;width:100%;padding:8px 12px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.lang-menu .lang-choice button:focus-visible{outline:2px solid currentColor;outline-offset:-2px;border-radius:4px}</style>
 </head>
 <body>
 <header class="nav">
@@ -45,8 +52,8 @@ var _hmt = _hmt || [];
           <span id="current-lang-label">English</span>
         </button>
         <ul class="lang-menu">
-          <li onclick="setLanguage('en')">English</li>
-          <li onclick="setLanguage('zh')">简体中文</li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('en')">English</button></li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('zh')">简体中文</button></li>
         </ul>
       </div>
     <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle theme">◐</button>
@@ -58,6 +65,7 @@ var _hmt = _hmt || [];
   <section class="hero">
     <p class="eyebrow" data-i18n="hero.eyebrow">开源 · 本地优先 · 原生应用 · BYOK</p>
     <h1><span data-i18n="hero.h1a">听得懂的</span><span class="accent" data-i18n="hero.h1b">英文播客</span></h1>
+<p class="reader-en product-availability" lang="en">Development preview. Free BYOK application. There is no PodLens hosted-AI subscription; your configured providers charge for their usage.</p><p class="reader-zh product-availability" lang="zh">开发预览。免费 BYOK 应用。不提供 PodLens 托管 AI 订阅；模型用量由配置的服务商收费。</p>
     <p class="sub" data-i18n="hero.sub">PodLens 把每一集英文播客变成「逐句稿 + 对照翻译 + 一页总结」。转写、翻译、总结都走你自己的大模型 API，结果缓存在本机，一次生成，永久可读。</p>
     <div class="hero-actions">
       <a class="btn btn-primary" id="hero-download" href="https://github.com/turinglambdaai/podlens/releases/latest" data-i18n="hero.download">下载最新版</a>
@@ -150,12 +158,15 @@ var _hmt = _hmt || [];
     </div>
     <p class="note"><a id="dl-all" href="https://github.com/turinglambdaai/podlens/releases/latest" data-i18n="download.all">全部版本</a> · <span data-i18n="download.note">Windows：MSI 安装器自带开始菜单/桌面快捷方式，zip 为便携版；macOS：首次启动（未公证构建）右键 → 打开。更新通过 Ed25519 签名清单自动推送。</span></p>
   </section>
+<section id="start-here" class="product-start" aria-label="Get started / 开始使用">
+<h2 class="reader-en " lang="en">Start with one useful session.</h2><h2 class="reader-zh " lang="zh">从一次有效使用开始。</h2><p class="reader-en start-status" lang="en">Free BYOK application. There is no PodLens hosted-AI subscription; your configured providers charge for their usage.</p><p class="reader-zh start-status" lang="zh">免费 BYOK 应用。不提供 PodLens 托管 AI 订阅；模型用量由配置的服务商收费。</p><p class="reader-en " lang="en">Desktop previews for macOS, Windows and Linux. Mobile/companion applications are not delivered; Linux language selection currently uses PODLENS_LANG.</p><p class="reader-zh " lang="zh">提供 macOS、Windows、Linux 桌面预览；移动与伴随端尚未交付。Linux 当前通过 PODLENS_LANG 选择语言。</p><div class="product-start-grid"><article><h3 class="reader-en " lang="en">01</h3><h3 class="reader-zh " lang="zh">01</h3><p class="reader-en " lang="en">Search Discover or add a podcast RSS URL, then play an episode without starting AI jobs.</p><p class="reader-zh " lang="zh">通过发现页搜索或添加播客 RSS，先播放一集，不启动 AI 任务。</p></article><article><h3 class="reader-en " lang="en">02</h3><h3 class="reader-zh " lang="zh">02</h3><p class="reader-en " lang="en">Choose providers appropriate for audio transcription and text translation; they may require different model capabilities.</p><p class="reader-zh " lang="zh">分别选择具备音频转写和文本翻译能力的服务商与模型；二者能力可能不同。</p></article><article><h3 class="reader-en " lang="en">03</h3><h3 class="reader-zh " lang="zh">03</h3><p class="reader-en " lang="en">Test a short episode, inspect usage, then check transcript export and playback recovery before processing a large library.</p><p class="reader-zh " lang="zh">先测试短节目并检查用量，再验证逐句稿导出和播放恢复，最后处理大型资料库。</p></article></div><p class="reader-en start-limits" lang="en">Cancellation/recovery, secure storage and three-host packaged evidence remain tracked in <a href="https://github.com/turinglambdaai/podlens/issues/13">#13</a>. Windows MSI updates use a new installer rather than silently replacing the installation.</p><p class="reader-zh start-limits" lang="zh">取消与恢复、安全存储及三宿主打包证据仍在 <a href="https://github.com/turinglambdaai/podlens/issues/13">#13</a> 跟进。Windows MSI 更新使用新版安装器，不会静默替换安装目录。</p><div class="start-links"><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.md">Installation, privacy &amp; recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.zh-CN.md">安装、隐私与恢复</a><a href="https://github.com/turinglambdaai/podlens/issues"><span class="reader-en " lang="en">Get help</span><span class="reader-zh " lang="zh">反馈与帮助</span></a></div>
+</section>
 </main>
 
 <footer class="footer">
   <p>PodLens · <a href="https://github.com/turinglambdaai/podlens">GitHub</a> · AGPL-3.0 · <span data-i18n="footer.built">基于 Rivet 构建</span></p>
 </footer>
-<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turinglambdaai/podlens/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turinglambdaai/podlens/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turinglambdaai/podlens/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a> <a class="support-zh" href="https://github.com/turinglambdaai/podlens/blob/main/PRICING.zh-CN.md">产品与收费方案</a> <a class="support-en" lang="en" href="https://github.com/turinglambdaai/podlens/blob/main/PRICING.md">Product & pricing</a></nav>
+<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turinglambdaai/podlens/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turinglambdaai/podlens/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turinglambdaai/podlens/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a> <a class="support-zh" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.zh-CN.md">使用与帮助</a> <a class="support-en" lang="en" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.md">Usage & help</a></nav>
 
 <script>
 (function () {

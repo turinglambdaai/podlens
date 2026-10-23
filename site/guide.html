@@ -51,6 +51,8 @@ var _hmt = _hmt || [];
   s.parentNode.insertBefore(hm, s);
 })();
 </script>
+<style>.lang-menu li.lang-choice{padding:0}.lang-menu .lang-choice button{display:block;width:100%;padding:8px 12px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.lang-menu .lang-choice button:focus-visible{outline:2px solid currentColor;outline-offset:-2px;border-radius:4px}</style>
+<style>.guide-status{margin:20px 0;padding:16px 20px;border:1px solid currentColor;border-radius:10px;font-size:.95rem;line-height:1.65}.guide-status p{margin:0 0 8px}.guide-status a{text-decoration:underline;text-underline-offset:4px}html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}</style>
 </head>
 <body>
 <header class="nav">
@@ -67,8 +69,8 @@ var _hmt = _hmt || [];
           <span id="current-lang-label">English</span>
         </button>
         <ul class="lang-menu">
-          <li onclick="setLanguage('en')">English</li>
-          <li onclick="setLanguage('zh')">简体中文</li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('en')">English</button></li>
+          <li class="lang-choice"><button type="button" onclick="setLanguage('zh')">简体中文</button></li>
         </ul>
       </div>
       <button class="theme-btn" id="theme-btn" type="button" aria-label="Toggle theme">◐</button>
@@ -80,6 +82,7 @@ var _hmt = _hmt || [];
   <section class="manual-hero">
     <p class="eyebrow" data-i18n="hero.eyebrow">使用手册</p>
     <h1 data-i18n="hero.title">从安装到听懂第一集</h1>
+<aside class="guide-status"><p class="reader-en " lang="en">Free BYOK application. There is no PodLens hosted-AI subscription; your configured providers charge for their usage.</p><p class="reader-zh " lang="zh">免费 BYOK 应用。不提供 PodLens 托管 AI 订阅；模型用量由配置的服务商收费。</p><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.md">Current installation, privacy and recovery</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/podlens/blob/main/docs/USER-GUIDE.zh-CN.md">当前安装、隐私与恢复</a></aside>
     <p class="sub" data-i18n="hero.sub">五分钟上手、核心功能与常见问题，一页说清。句子短，动词开头，每节独立。</p>
   </section>
 
@@ -142,7 +145,7 @@ var _hmt = _hmt || [];
       <!-- =================== BYOK =================== -->
       <section class="manual-section" id="byok">
         <h2 data-i18n="byok.title">BYOK 密钥配置</h2>
-        <p data-i18n="byok.p1">按 <code>⌘,</code>（macOS）或从菜单打开设置，逐项填写。key 只存本机 <code>~/.podlens/config.json</code>，从不上传、从不同步。</p>
+        <p data-i18n="byok.p1">打开设置，分别配置音频和文本服务。密钥当前保存在 ~/.podlens/config.json，并用于向选择的服务商鉴权；安全存储迁移待完成，不要分享配置。</p>
         <table>
           <thead>
             <tr>
@@ -251,7 +254,7 @@ var _hmt = _hmt || [];
     "pipe.l3": "系统媒体键、Control Center（macOS）与任务栏媒体控件（Windows）直接可用。",
     "pipe.l4": "全部结果缓存在本机：一集只处理一次，结果永远可读、可导出。",
     "byok.title": "BYOK 密钥配置",
-    "byok.p1": "按 <code>⌘,</code>（macOS）或从菜单打开设置，逐项填写。key 只存本机 <code>~/.podlens/config.json</code>，从不上传、从不同步。",
+    "byok.p1": "打开设置，分别配置音频和文本服务。密钥当前保存在 ~/.podlens/config.json，并用于向选择的服务商鉴权；安全存储迁移待完成，不要分享配置。",
     "byok.th1": "配置项", "byok.th2": "填什么",
     "byok.r1": "OpenAI 兼容服务的 API 地址，以 <code>/v1</code> 结尾，例如 <code>https://api.openai.com/v1</code>。DeepSeek、Groq、SiliconFlow、本地 Ollama 均可——具体地址看你的服务商文档。",
     "byok.r2": "服务商控制台里生成的密钥（<code>sk-…</code>）。粘贴进去，点保存。",
@@ -307,7 +310,7 @@ var _hmt = _hmt || [];
     "pipe.l3": "System media keys, Control Center (macOS) and taskbar media controls (Windows) work out of the box.",
     "pipe.l4": "Everything caches locally: an episode is processed once and stays readable and exportable.",
     "byok.title": "BYOK key setup",
-    "byok.p1": "Press <code>⌘,</code> (macOS) or open Settings from the menu and fill the fields one by one. Keys stay in <code>~/.podlens/config.json</code> on your machine — never uploaded, never synced.",
+    "byok.p1": "Open Settings and configure audio/text providers separately. Keys currently live in ~/.podlens/config.json and authenticate requests to your selected provider; secure-storage migration is pending. Do not share that file.",
     "byok.th1": "Setting", "byok.th2": "What to put in",
     "byok.r1": "The API base of an OpenAI-compatible service, ending in <code>/v1</code>, e.g. <code>https://api.openai.com/v1</code>. DeepSeek, Groq, SiliconFlow and local Ollama all work — check your provider's docs for the exact address.",
     "byok.r2": "The key you generated in the provider's console (<code>sk-…</code>). Paste it in and save.",
