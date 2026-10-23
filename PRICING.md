@@ -1,33 +1,31 @@
-# PodLens 产品与收费方案
+# PodLens product and pricing plan
 
-## 首发与执行边界
+**English** · [简体中文](PRICING.zh-CN.md)
 
-- 本方案版本 `2026-10-v2`。用户确认所有产品仍在开发、没有实际用户；本文件替代此前冲突的定价/早鸟/Pro 设想，不存在需要迁移的现有客户群。**价格是首发目标，不表示已经开卖或已完成相应功能。**
-- 只发布已交付平台的权益；新计划不改变已经发布源码的 LICENSE。开源源码的使用/修改/再分发权与官方商品、更新和服务分别说明。
-- 修复安全漏洞、读取/备份/导出自己的数据不以再次购买作为条件。模型 key、支付渠道密钥和签发私钥各有边界，不在宿主代码里直接收款或签发。
+## Launch status and implementation boundaries
 
-## 决策
+- Policy version: `2026-10-v2`, 2026-10-23. The owner confirmed that every product is still in development and has no actual users. This document replaces conflicting previous pricing, early-bird and Pro proposals; there is no existing customer cohort to migrate. **Prices are launch targets, not live offers or claims that the listed features are implemented.**
+- Entitlements cover delivered platforms only. New commercial plans do not change the LICENSE of released source. Source use, modification and redistribution rights are separate from official products, updates and services.
+- Security fixes and reading, backing up or exporting your own data must not require another purchase. BYOK keys, payment-provider secrets and issuer private keys have different owners. Native hosts do not collect payment or issue credentials directly.
 
-**免费 BYOK；听读用户入口**
+## Decision
 
-首发目标：**¥0 / US$0**。人民币和美元是分别设定的地区目标价格，不是实时汇率换算。
+**Free BYOK listening and reading tool**
 
-减少小产品的收费与客服复杂度，让可运行工具建立社区信任，收入投入集中到少数付费主力。
+Launch target: **¥0 / US$0**. CNY and USD are independently set regional targets, not a live exchange-rate conversion.
 
-## 免费与付费边界
+Keep billing and support complexity out of small tools. Build community trust through usable products and concentrate revenue work on a few paid products.
 
-免费 / 评估：RSS、播放、转写/翻译/摘要、缓存、CLI 与导出免费；模型和语音服务费用由用户直接支付，不售托管音频分钟，不单独建设账号/订阅服务。先验证每周重复收听与可用性，而非开发未验证的 Pro。
+## Free and paid scope
 
-付费：无付费方案；不接 Commerce，不添加 Permit 产品门禁。
+Free / evaluation: RSS, playback, transcription, translation, summaries, caches, CLI and export are free. Users pay model/speech providers directly. Do not sell hosted audio minutes or build another account/subscription service. Validate repeat weekly listening and usability before creating an unproven Pro tier.
 
-## 开卖前的下一步
+Paid: No paid tier is planned. Do not integrate Commerce or add Permit product gates.
 
-先完成本仓 #13 的交付/维护门禁；免费并不降低签名更新、数据恢复或隐私要求。
+## Next gate before sales
 
-执行入口：[本仓 #13](https://github.com/turinglambdaai/podlens/issues/13)。先交付这个切片，再扩展商业功能。
+Complete delivery/maintenance gates in #13 first. Free pricing does not reduce signed-update, recovery or privacy requirements.
 
-## English
+Execution entry: [issue #13](https://github.com/turinglambdaai/podlens/issues/13). Complete this bounded slice before expanding commercial features.
 
-Launch design, not a live offer. PodLens: ¥0 / US$0. No paid tier is planned. Existing source licenses remain in force.
-
-组合定位及通用边界：[PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)。
+Portfolio role and shared boundaries: [PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md).
