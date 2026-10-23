@@ -162,3 +162,7 @@ The full design roadmap (M1 consistency baseline â†’ M2 transcript-as-product â†
 ## License
 
 Licensed under the [AGPL-3.0 License](LICENSE).
+
+## Feedback and diagnostics
+
+Report reproducible bugs and feature requests through [GitHub Issues](https://github.com/turinglambdaai/podlens/issues). Include the release, OS/architecture and steps; inspect and redact diagnostics before sharing. Do not post API keys, license files, vault contents or private documents. For sensitive security reports, follow SECURITY.md when present; otherwise request a private contact route without disclosing sensitive details. Nothing is uploaded automatically.

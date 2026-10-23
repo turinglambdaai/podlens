@@ -22,6 +22,11 @@ var _hmt = _hmt || [];
   s.parentNode.insertBefore(hm, s);
 })();
 </script>
+<style>
+  #product-support { display:flex; flex-wrap:wrap; justify-content:center; gap:12px 24px; padding:24px; font:inherit; border-top:1px solid var(--border, #a8a29e); }
+  #product-support a:focus-visible { outline:2px solid currentColor; outline-offset:4px; }
+  html:lang(en) #product-support .support-zh, html:lang(zh) #product-support .support-en { display:none; }
+</style>
 </head>
 <body>
 <header class="nav">
@@ -150,6 +155,7 @@ var _hmt = _hmt || [];
 <footer class="footer">
   <p>PodLens · <a href="https://github.com/turinglambdaai/podlens">GitHub</a> · AGPL-3.0 · <span data-i18n="footer.built">基于 Rivet 构建</span></p>
 </footer>
+<nav id="product-support" aria-label="Support / 支持"><a href="https://github.com/turinglambdaai/podlens/issues"><span class="support-zh">反馈</span><span class="support-en" lang="en">Feedback</span></a> <a href="https://github.com/turinglambdaai/podlens/releases"><span class="support-zh">发布与更新</span><span class="support-en" lang="en">Releases</span></a> <a href="https://github.com/turinglambdaai/podlens/blob/main/LICENSE"><span class="support-zh">源码许可</span><span class="support-en" lang="en">Source license</span></a></nav>
 
 <script>
 (function () {

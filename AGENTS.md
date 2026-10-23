@@ -64,7 +64,7 @@ scripts/update-keys.sh
 
 ```
 ~/.podlens/            （测试/多实例用 PODLENS_DATA_DIR 覆盖）
-├── config.json        设置（api-base/api-key/模型/语言），带校验与默认值
+├── config.json        当前设置（含本地 API key；安全存储迁移见产品审查 issue）
 ├── library.json       订阅 + 单集 + 播放进度（原子写）
 ├── audio/<id>.<ext>   音频缓存（<id> 是 40 位 hex）
 └── transcripts/<id>.json  逐句稿 + 翻译 + 总结
@@ -103,3 +103,10 @@ scripts/update-keys.sh
 - 轨道与授权：轨道 2 消费买断（BYO-key，无托管成本）；授权形态：AGPL-3.0；商业归属：适合收费（收费节奏第二棒；买断 + 更新窗 + 试用）。
 - 组合归属唯一权威：[PORTFOLIO.md](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)（turinglambdaai.github.io 仓库）。改归属/授权先改权威档，再同步本节。
 - 纪律：价格只进本仓 `PRICING.md`，且收费开始时才发布；README 与产品站不做价格预告。
+
+## 产品交付与下一步（2026-10-23）
+
+- 家族[交付标准](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md)与[组合策略](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)是共用政策；本仓具体行为以 `docs/DESIGN-ROADMAP.md` 为准，不复制五库依赖图。
+- 当前执行入口：[产品审查 issue](https://github.com/turinglambdaai/podlens/issues/13)。v0.4.0 切片已进入 main；先完成 BYOK 安全存储迁移与三端发现/播放/转录取消恢复，桌面证据齐备后再评估移动端。
+- 开工先检查干净工作树与远端，以 fast-forward-only 更新并记录 SHA；共享文件一次一个写入者，保留其他 checkout 的未提交工作。
+- 每次只完成一个可验收切片，记录 owned files、依赖 pin、命令/平台/产物证据和回滚。已实现、已发布、实机验收分别陈述；不修改 requirements 或复用旧证据来制造通过。
