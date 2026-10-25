@@ -1059,6 +1059,12 @@ void MainWindow::RenderTranscript() {
     seek_button.Padding(winrt::Microsoft::UI::Xaml::Thickness{0});
     seek_button.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 2});
     seek_button.Tag(box_value(winrt::hstring(std::to_wstring(i))));
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+        seek_button,
+        winrt::hstring(L"TranscriptSegment-" + std::to_wstring(i)));
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+        seek_button,
+        winrt::hstring(std::wstring(podlens::Tr("transcript.seek_hint"))));
     muxc::ToolTipService::SetToolTip(
         seek_button,
         box_value(winrt::hstring(std::wstring(podlens::Tr("transcript.seek_hint")))));

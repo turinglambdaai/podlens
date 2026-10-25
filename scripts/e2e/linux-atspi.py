@@ -63,6 +63,24 @@ def find_named(root, name, expected_role=None):
     return None
 
 
+def find_named_any(root, names, expected_role=None):
+    for name in names:
+        found = find_named(root, name, expected_role)
+        if found:
+            return found
+    return None
+
+
+def find_name_prefix(root, prefixes, expected_role=None):
+    for node in walk(root):
+        name = node.name or ""
+        if any(name.startswith(prefix) for prefix in prefixes) and (
+            expected_role is None or role(node) == expected_role
+        ):
+            return node
+    return None
+
+
 def find_editable_named(root, name):
     for node in walk(root):
         if (node.name or "") != name:
@@ -104,6 +122,12 @@ def press(node):
         pass
 
     raise AssertionError(f"AT-SPI action failed for {node.name!r}")
+
+
+def press_return(node):
+    if not node.queryComponent().grabFocus():
+        raise AssertionError(f"could not focus {node.name!r}")
+    pyatspi.Registry.generateKeyboardEvent(0, "Return", pyatspi.KEY_SYM)
 
 
 def activate_application_action(name):
@@ -155,6 +179,42 @@ def main():
         "PodLens frame", lambda: next((n for n in walk(application) if role(n) == "frame"), None)
     )
     wait_for("embedded backend readiness", lambda: contains(window, "就绪"))
+    focus = wait_for(
+        "Focus Listening button",
+        lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),
+    )
+    segment = wait_for(
+        "keyboard-operable transcript sentence",
+        lambda: find_name_prefix(
+            window, ["逐句稿句子: Keyboard", "Transcript sentence: Keyboard"], "push button"
+        ),
+    )
+    play = wait_for(
+        "Play or pause button",
+        lambda: find_named_any(window, ["播放或暂停", "Play or pause"], "push button"),
+    )
+    press(focus)
+    wait_for(
+        "focused listening layout",
+        lambda: find_named_any(window, ["显示资料库", "Show Library"], "toggle button"),
+    )
+    press(play)
+    press_return(segment)
+    wait_for("four-second transcript seek", lambda: contains(window, "00:04"))
+    follow = wait_for(
+        "Follow transcript toggle",
+        lambda: find_named_any(window, ["跟随", "Follow"], "toggle button"),
+    )
+    press(follow)
+    current = wait_for(
+        "Current sentence button",
+        lambda: find_named_any(window, ["当前句", "Current"], "push button"),
+    )
+    press(current)
+    (args.output / "listening-accessibility.json").write_text(
+        json.dumps(snapshot(application), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    press(focus)
     menu = wait_for(
         "Main Menu button", lambda: find_named(window, "主菜单", "push button")
     )
@@ -183,6 +243,12 @@ def main():
             {
                 "platform": "linux",
                 "actions": [
+                    "press:Focus Listening",
+                    "press:Play or pause",
+                    "keyboard:Return:Transcript sentence 3",
+                    "press:Follow:off",
+                    "press:Current",
+                    "press:Show Library",
                     "verify:Main Menu accessibility",
                     "activate:app.settings",
                     "set:chat-model",
@@ -190,6 +256,10 @@ def main():
                 ],
                 "assertions": [
                     "packaged GTK4 frame activated on native Wayland",
+                    "synthetic bilingual transcript exposed a native AT-SPI action",
+                    "focus mode hid and restored the library without reloading the episode",
+                    "activating a transcript sentence moved playback to 00:04",
+                    "Current remained operable after the listener turned follow off",
                     "main menu control exposed through AT-SPI",
                     "settings field exposed a stable AT-SPI name",
                     "save mutation crossed RVT1 into the embedded backend",

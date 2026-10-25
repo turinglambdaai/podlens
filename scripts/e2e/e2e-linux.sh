@@ -22,6 +22,7 @@ export LANG=C.UTF-8
 unset DISPLAY
 mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
+racket "$repo/scripts/e2e/seed-listening-fixture.rkt"
 
 weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 \
   --debug --log="$output/weston.log" &
