@@ -17,6 +17,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <NavigationView Grid.Row="0"
@@ -63,7 +64,7 @@
                 </NavigationViewItem>
             </NavigationView.FooterMenuItems>
 
-            <Grid>
+            <Grid x:Name="ContentLayout">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" MinWidth="430" />
                     <ColumnDefinition Width="Auto" />
@@ -71,7 +72,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- page column: exactly one child is visible at a time -->
-                <Grid Grid.Column="0">
+                <Grid Grid.Column="0" x:Name="PageColumn">
                     <!-- home -->
                     <ScrollViewer x:Name="HomePage" Visibility="Visible">
                         <StackPanel x:Name="HomeList" MaxWidth="620"
@@ -158,11 +159,11 @@
                     </Grid>
                 </Grid>
 
-                <Border Grid.Column="1" Width="1" Margin="0,8"
+                <Border Grid.Column="1" x:Name="ContentDivider" Width="1" Margin="0,8"
                         Background="{ThemeResource AppLineBrush}" />
 
                 <!-- detail -->
-                <Grid Grid.Column="2" Padding="20,12,20,12">
+                <Grid Grid.Column="2" x:Name="DetailColumn" Padding="20,12,20,12">
                     <!-- nothing selected -->
                     <StackPanel x:Name="DetailEmpty" VerticalAlignment="Center"
                                 HorizontalAlignment="Center" Spacing="10" MaxWidth="360">
@@ -218,6 +219,8 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
+                            <ToggleButton x:Name="FocusModeButton" Padding="10,4"
+                                          Click="FocusMode_Click" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4"
@@ -227,7 +230,11 @@
                             <TextBlock x:Name="ModeLabel" Margin="18,0,6,0" VerticalAlignment="Center"
                                        FontSize="12" Opacity="0.7" />
                             <ComboBox x:Name="ModeSelector" MinWidth="110"
-                                      SelectionChanged="Mode_SelectionChanged" />
+                                       SelectionChanged="Mode_SelectionChanged" />
+                            <ToggleButton x:Name="FollowTranscriptButton" Margin="12,0,0,0"
+                                          IsChecked="True" Click="FollowTranscript_Click" />
+                            <Button x:Name="ReturnToCurrentButton"
+                                    Click="ReturnToCurrent_Click" />
                         </StackPanel>
 
                         <ListView Grid.Row="3" x:Name="TranscriptList"

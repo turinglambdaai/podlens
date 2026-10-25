@@ -5,6 +5,19 @@ All notable changes to PodLens are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Focus Listening across macOS, Windows and Linux.** An episode can now
+  collapse the library/navigation columns without interrupting playback or
+  losing transcript position, leaving the sentence reader and persistent
+  player as the primary workspace. The same control restores the full
+  library in place.
+- **Keyboard-operable transcript seeking and explicit follow control.** Every
+  rendered sentence is focusable and activates with Return/Space as well as a
+  pointer. Listeners can pause automatic transcript following while reading
+  older text, then use Current to return to the playing sentence and resume
+  follow mode. The controls and seek actions expose native accessibility
+  semantics on all three desktop hosts.
+
 ## 0.4.0 - 2026-10-22
 
 ### Added

@@ -229,6 +229,18 @@ char const* tr(char const* key) {
       {"mode.bilingual", "双语", "Bilingual"},
       {"mode.translation", "只看译文", "Translation only"},
       {"mode.original", "只看原文", "Original only"},
+      {"focus.enter", "专注聆听", "Focus Listening"},
+      {"focus.exit", "显示资料库", "Show Library"},
+      {"focus.enter_hint", "收起导航与单集列表，专注逐句稿和播放器",
+       "Hide navigation and episode lists to focus on the transcript and player"},
+      {"transcript.follow", "跟随", "Follow"},
+      {"transcript.follow_hint", "播放时自动将当前句保持在视野中",
+       "Keep the current sentence in view during playback"},
+      {"transcript.current", "当前句", "Current"},
+      {"transcript.current_hint", "返回正在播放的句子并恢复跟随",
+       "Return to the playing sentence and resume following"},
+      {"transcript.seek_hint", "按回车或空格跳播到这句话",
+       "Press Enter or Space to seek to this sentence"},
       {"player.transcript", "逐句稿", "Transcript"},
       {"player.back15", "后退 15 秒", "Back 15 seconds"},
       {"player.forward30", "前进 30 秒", "Forward 30 seconds"},
@@ -375,6 +387,7 @@ struct AppState {
   GtkButton* mark_button{nullptr};
   GtkButton* remove_audio_button{nullptr};
   GtkListBox* feed_list{nullptr};  // the navigation sidebar
+  GtkWidget* sidebar{nullptr};
   GtkLabel* episodes_caption{nullptr};
   GtkListBox* episode_list{nullptr};
   GtkStack* list_stack{nullptr};
@@ -398,6 +411,7 @@ struct AppState {
 
   // Detail pane
   GtkBox* detail_box{nullptr};
+  GtkToggleButton* focus_button{nullptr};
   GtkLabel* detail_title{nullptr};
   GtkLabel* detail_meta{nullptr};
   GtkLabel* detail_notes{nullptr};
@@ -467,6 +481,8 @@ struct AppState {
   // tick highlights and follows the running sentence among them.
   std::vector<GtkWidget*> segment_widgets;
   int followed_segment{-1};
+  bool transcript_follow{true};
+  GtkToggleButton* follow_button{nullptr};
   GtkScrolledWindow* transcript_scroll{nullptr};
   GtkComboBoxText* mode_selector{nullptr};
 
@@ -1786,8 +1802,6 @@ void update_action_buttons() {
 GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   auto* grid = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   auto const start = std::atof(seg[0].c_str());
-  carry_data<double>(G_OBJECT(grid), "seg-start", start);
-  carry_data<double>(G_OBJECT(grid), "seg-end", std::atof(seg[1].c_str()));
   auto* time_text =
       gtk_label_new(format_seconds(std::atof(seg[0].c_str())).c_str());
   gtk_widget_add_css_class(time_text, "pl-seg-time");
@@ -1814,24 +1828,33 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   }
   gtk_widget_set_hexpand(lines, TRUE);
   gtk_box_append(GTK_BOX(grid), lines);
-  gtk_widget_add_css_class(grid, "pl-seg");
+  auto* button = gtk_button_new();
+  gtk_button_set_child(GTK_BUTTON(button), grid);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_add_css_class(button, "pl-seg");
+  gtk_widget_set_hexpand(button, TRUE);
+  gtk_widget_set_tooltip_text(button, tr("transcript.seek_hint"));
+  carry_data<double>(G_OBJECT(button), "seg-start", start);
+  carry_data<double>(G_OBJECT(button), "seg-end", std::atof(seg[1].c_str()));
 
-  // Click a segment to jump the player to its start (Windows parity).
-  auto* gesture = gtk_gesture_click_new();
-  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture),
-                                GDK_BUTTON_PRIMARY);
+  // A real button gives every sentence native focus, Enter/Space activation,
+  // an accessibility action and the same click-to-seek behavior.
   g_signal_connect(
-      gesture, "released",
-      G_CALLBACK(+[](GtkGestureClick*, int, double, double, gpointer data) {
-        auto const* grid_widget = GTK_WIDGET(data);
+      button, "clicked",
+      G_CALLBACK(+[](GtkButton* row, gpointer) {
         if (g_state.selected_episode_id.empty()) return;
         auto const* start =
-            carried_data<double>(G_OBJECT(grid_widget), "seg-start");
-        if (start != nullptr) apply_seek(*start);
+            carried_data<double>(G_OBJECT(row), "seg-start");
+        if (start != nullptr) {
+          g_state.transcript_follow = true;
+          if (g_state.follow_button != nullptr) {
+            gtk_toggle_button_set_active(g_state.follow_button, TRUE);
+          }
+          apply_seek(*start);
+        }
       }),
-      grid);
-  gtk_widget_add_controller(grid, GTK_EVENT_CONTROLLER(gesture));
-  return grid;
+      nullptr);
+  return button;
 }
 
 void render_transcript_public() {
@@ -2348,7 +2371,7 @@ void highlight_running_segment(double position) {
   if (active < 0) return;
   GtkWidget* widget = g_state.segment_widgets[active];
   gtk_widget_add_css_class(widget, "pl-seg-active");
-  if (g_state.transcript_scroll != nullptr) {
+  if (g_state.transcript_follow && g_state.transcript_scroll != nullptr) {
     graphene_point_t point = GRAPHENE_POINT_INIT(0, 0);
     if (gtk_widget_compute_point(widget, GTK_WIDGET(g_state.transcript_box),
                                  &point, &point)) {
@@ -2358,6 +2381,23 @@ void highlight_running_segment(double position) {
           target > 0 ? target : 0);
     }
   }
+}
+
+void scroll_to_running_segment() {
+  if (g_state.followed_segment < 0 ||
+      g_state.followed_segment >= static_cast<int>(g_state.segment_widgets.size()) ||
+      g_state.transcript_scroll == nullptr) {
+    return;
+  }
+  GtkWidget* widget = g_state.segment_widgets[g_state.followed_segment];
+  graphene_point_t point = GRAPHENE_POINT_INIT(0, 0);
+  if (gtk_widget_compute_point(widget, GTK_WIDGET(g_state.transcript_box),
+                               &point, &point)) {
+    gtk_adjustment_set_value(
+        gtk_scrolled_window_get_vadjustment(g_state.transcript_scroll),
+        point.y > 80 ? point.y - 80 : 0);
+  }
+  gtk_widget_grab_focus(widget);
 }
 
 gboolean on_bus_message(GstBus*, GstMessage* message, gpointer) {
@@ -4408,6 +4448,10 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_sensitive(remove_audio, FALSE);
   gtk_widget_set_visible(remove_audio, FALSE);
   gtk_box_append(GTK_BOX(actions), remove_audio);
+  auto* focus_button = GTK_TOGGLE_BUTTON(
+      gtk_toggle_button_new_with_label(tr("focus.enter")));
+  gtk_widget_set_tooltip_text(GTK_WIDGET(focus_button), tr("focus.enter_hint"));
+  gtk_box_append(GTK_BOX(actions), GTK_WIDGET(focus_button));
   auto* job_bar = gtk_progress_bar_new();
   gtk_widget_set_hexpand(job_bar, TRUE);
   gtk_widget_set_valign(job_bar, GTK_ALIGN_CENTER);
@@ -4441,7 +4485,36 @@ void on_activate(GtkApplication* app, gpointer) {
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(mode_selector), 0);
     gtk_box_append(GTK_BOX(switcher_row), GTK_WIDGET(mode_selector));
+    auto* follow_button = GTK_TOGGLE_BUTTON(
+        gtk_toggle_button_new_with_label(tr("transcript.follow")));
+    gtk_toggle_button_set_active(follow_button, TRUE);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(follow_button),
+                                tr("transcript.follow_hint"));
+    gtk_box_append(GTK_BOX(switcher_row), GTK_WIDGET(follow_button));
+    auto* current_button =
+        gtk_button_new_with_label(tr("transcript.current"));
+    gtk_widget_set_tooltip_text(current_button,
+                                tr("transcript.current_hint"));
+    gtk_box_append(GTK_BOX(switcher_row), current_button);
     g_state.mode_selector = mode_selector;
+    g_state.follow_button = follow_button;
+    g_signal_connect(
+        follow_button, "toggled",
+        G_CALLBACK(+[](GtkToggleButton* toggle, gpointer) {
+          g_state.transcript_follow = gtk_toggle_button_get_active(toggle);
+          if (g_state.transcript_follow) scroll_to_running_segment();
+        }),
+        nullptr);
+    g_signal_connect(
+        current_button, "clicked",
+        G_CALLBACK(+[](GtkButton*, gpointer) {
+          g_state.transcript_follow = true;
+          if (g_state.follow_button != nullptr) {
+            gtk_toggle_button_set_active(g_state.follow_button, TRUE);
+          }
+          scroll_to_running_segment();
+        }),
+        nullptr);
     gtk_box_append(GTK_BOX(reading), switcher_row);
   }
 
@@ -4592,6 +4665,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.position_text = position_text;
   g_state.duration_text = duration_text;
   g_state.feed_list = GTK_LIST_BOX(feed_list);
+  g_state.sidebar = sidebar;
   g_state.page_stack = GTK_STACK(page_stack);
   g_state.player_artwork = GTK_IMAGE(player_artwork);
   g_state.player_title = GTK_LABEL(player_title);
@@ -4602,6 +4676,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.empty_icon = GTK_LABEL(empty_icon);
   g_state.empty_text = GTK_LABEL(empty_text);
   g_state.detail_box = GTK_BOX(detail);
+  g_state.focus_button = focus_button;
   g_state.detail_title = GTK_LABEL(detail_title);
   g_state.detail_meta = GTK_LABEL(detail_meta);
   g_state.detail_notes = GTK_LABEL(detail_notes);
@@ -4661,6 +4736,20 @@ void on_activate(GtkApplication* app, gpointer) {
   g_signal_connect(mark, "clicked", G_CALLBACK(on_mark_clicked), nullptr);
   g_signal_connect(remove_audio, "clicked",
                    G_CALLBACK(on_remove_audio_clicked), nullptr);
+  g_signal_connect(
+      focus_button, "toggled",
+      G_CALLBACK(+[](GtkToggleButton* toggle, gpointer) {
+        bool const focused = gtk_toggle_button_get_active(toggle);
+        if (g_state.sidebar != nullptr) {
+          gtk_widget_set_visible(g_state.sidebar, !focused);
+        }
+        if (g_state.page_stack != nullptr) {
+          gtk_widget_set_visible(GTK_WIDGET(g_state.page_stack), !focused);
+        }
+        gtk_button_set_label(GTK_BUTTON(toggle),
+                             tr(focused ? "focus.exit" : "focus.enter"));
+      }),
+      nullptr);
   g_signal_connect(player_transcript, "clicked",
                    G_CALLBACK(+[](GtkButton*, gpointer) {
                      gtk_stack_set_visible_child_name(

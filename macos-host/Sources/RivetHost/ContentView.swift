@@ -8,6 +8,7 @@ typealias Segment = PodLensStore.Segment
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showAddFeed = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         main
@@ -29,14 +30,14 @@ struct ContentView: View {
     }
 
     private var main: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(showAddFeed: $showAddFeed)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 230)
         } content: {
             ContentColumn()
                 .navigationSplitViewColumnWidth(min: 460, ideal: 540)
         } detail: {
-            DetailView()
+            DetailView(columnVisibility: $columnVisibility)
         }
         // The player rides the whole window (Apple Podcasts style), so the
         // transcript reader stays usable while browsing any page.
@@ -862,11 +863,12 @@ struct FeedEpisodeRow: View {
 
 struct DetailView: View {
     @EnvironmentObject private var store: PodLensStore
+    @Binding var columnVisibility: NavigationSplitViewVisibility
 
     var body: some View {
         VStack(spacing: 0) {
             if let episode = store.selectedEpisode {
-                EpisodeHeader(episode: episode)
+                EpisodeHeader(episode: episode, columnVisibility: $columnVisibility)
                 Picker("", selection: Binding(get: { store.detailTab },
                                               set: { store.detailTab = $0 })) {
                     Text(L("transcriptTab")).tag(0)
@@ -892,6 +894,7 @@ struct DetailView: View {
 struct EpisodeHeader: View {
     @EnvironmentObject private var store: PodLensStore
     let episode: Episode
+    @Binding var columnVisibility: NavigationSplitViewVisibility
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -942,6 +945,16 @@ struct EpisodeHeader: View {
                     } label: {
                         Label(L("more"), systemImage: "ellipsis.circle")
                     }
+
+                    Button {
+                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                    } label: {
+                        Label(columnVisibility == .detailOnly ? L("focusExit") : L("focusEnter"),
+                              systemImage: columnVisibility == .detailOnly
+                                  ? "arrow.down.right.and.arrow.up.left"
+                                  : "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help(columnVisibility == .detailOnly ? L("focusExitHint") : L("focusEnterHint"))
 
                     if let job = activeJob {
                         ProgressView(value: Double(job.pct), total: 100) {
@@ -1006,6 +1019,8 @@ struct EpisodeHeader: View {
 
 struct TranscriptView: View {
     @EnvironmentObject private var store: PodLensStore
+    @State private var followPlayback = true
+    @FocusState private var focusedSegment: Int?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -1038,15 +1053,35 @@ struct TranscriptView: View {
                     }
                     .id(seg.id)
                     .contentShape(Rectangle())
-                    .onTapGesture {
+                    .focusable()
+                    .focused($focusedSegment, equals: seg.id)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(L("transcriptSeekHint"))
+                    .accessibilityAction {
+                        followPlayback = true
                         store.seek(to: seg.start)
+                    }
+                    .onTapGesture {
+                        followPlayback = true
+                        store.seek(to: seg.start)
+                    }
+                    .onKeyPress(.return) {
+                        followPlayback = true
+                        store.seek(to: seg.start)
+                        return .handled
+                    }
+                    .onKeyPress(.space) {
+                        followPlayback = true
+                        store.seek(to: seg.start)
+                        return .handled
                     }
                 }
             }
             .onChange(of: store.currentTime) { _, _ in
                 // follow only when the active sentence changes, so the
                 // half-second ticks don't drag the list under the reader
-                if let idx = store.segmentToFollow() {
+                if followPlayback, let idx = store.segmentToFollow() {
                     proxy.scrollTo(idx, anchor: .center)
                 }
             }
@@ -1061,6 +1096,21 @@ struct TranscriptView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 260)
                     Spacer()
+                    Toggle(isOn: $followPlayback) {
+                        Label(L("followTranscript"), systemImage: "location.fill")
+                    }
+                    .toggleStyle(.button)
+                    .help(L("followTranscriptHint"))
+                    Button {
+                        followPlayback = true
+                        if let idx = store.currentSegmentIndex() {
+                            proxy.scrollTo(idx, anchor: .center)
+                            focusedSegment = idx
+                        }
+                    } label: {
+                        Label(L("returnToCurrent"), systemImage: "scope")
+                    }
+                    .help(L("returnToCurrentHint"))
                 }
                 .padding([.horizontal, .bottom], 8)
             }

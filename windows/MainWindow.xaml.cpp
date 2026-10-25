@@ -339,6 +339,12 @@ MainWindow::MainWindow() {
   MenuSummarize().Text(std::wstring(podlens::Tr("action.summarize")));
   MenuRemoveAudio().Text(std::wstring(podlens::Tr("action.remove_audio")));
   ModeLabel().Text(std::wstring(podlens::Tr("mode.label")));
+  FocusModeButton().Content(box_value(winrt::hstring(
+      std::wstring(podlens::Tr("focus.enter")))));
+  FollowTranscriptButton().Content(box_value(winrt::hstring(
+      std::wstring(podlens::Tr("transcript.follow")))));
+  ReturnToCurrentButton().Content(box_value(winrt::hstring(
+      std::wstring(podlens::Tr("transcript.current")))));
   DiscoverSearchBox().PlaceholderText(
       winrt::hstring(std::wstring(podlens::Tr("discover.search_placeholder"))));
   TranscriptTab().Content(box_value(winrt::hstring(
@@ -391,6 +397,15 @@ MainWindow::MainWindow() {
   muxc::ToolTipService::SetToolTip(
       TranscriptButton(),
       box_value(winrt::hstring(std::wstring(podlens::Tr("player.transcript")))));
+  muxc::ToolTipService::SetToolTip(
+      FocusModeButton(),
+      box_value(winrt::hstring(std::wstring(podlens::Tr("focus.enter_hint")))));
+  muxc::ToolTipService::SetToolTip(
+      FollowTranscriptButton(),
+      box_value(winrt::hstring(std::wstring(podlens::Tr("transcript.follow_hint")))));
+  muxc::ToolTipService::SetToolTip(
+      ReturnToCurrentButton(),
+      box_value(winrt::hstring(std::wstring(podlens::Tr("transcript.current_hint")))));
 
   // The player is constructed up front: every call on a null projected
   // MediaPlayer throws, so deferring construction made playback itself
@@ -963,6 +978,7 @@ void MainWindow::LoadTranscript() {
 void MainWindow::RenderTranscript() {
   TranscriptList().Items().Clear();
   segment_borders_.clear();
+  segment_buttons_.clear();
   translation_blocks_.clear();
   original_blocks_.clear();
   highlighted_segment_ = -1;
@@ -1033,25 +1049,37 @@ void MainWindow::RenderTranscript() {
     row.Child(grid);
     row.CornerRadius(winrt::Microsoft::UI::Xaml::CornerRadius{6});
     row.Padding(winrt::Microsoft::UI::Xaml::Thickness{10, 6, 10, 6});
-    row.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 2});
-    row.Tag(box_value(winrt::hstring(std::to_wstring(i))));
-    row.Tapped([weak = get_weak()](winrt::Windows::Foundation::IInspectable const& sender,
-                                   Microsoft::UI::Xaml::Input::TappedRoutedEventArgs const&) {
-      auto const border = sender.as<muxc::Border>();
+
+    muxc::Button seek_button;
+    seek_button.Content(row);
+    seek_button.HorizontalContentAlignment(Microsoft::UI::Xaml::HorizontalAlignment::Stretch);
+    seek_button.HorizontalAlignment(Microsoft::UI::Xaml::HorizontalAlignment::Stretch);
+    seek_button.Background(nullptr);
+    seek_button.BorderThickness(winrt::Microsoft::UI::Xaml::Thickness{0});
+    seek_button.Padding(winrt::Microsoft::UI::Xaml::Thickness{0});
+    seek_button.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 2});
+    seek_button.Tag(box_value(winrt::hstring(std::to_wstring(i))));
+    muxc::ToolTipService::SetToolTip(
+        seek_button,
+        box_value(winrt::hstring(std::wstring(podlens::Tr("transcript.seek_hint")))));
+    seek_button.Click([weak = get_weak()](winrt::Windows::Foundation::IInspectable const& sender,
+                                         Microsoft::UI::Xaml::RoutedEventArgs const&) {
+      auto const button = sender.as<muxc::Button>();
       auto const index = std::stoi(std::wstring(
-          winrt::unbox_value<winrt::hstring>(border.Tag())));
+          winrt::unbox_value<winrt::hstring>(button.Tag())));
       if (auto window = weak.get()) {
         if (window->player_ && index < static_cast<int>(window->transcript_.size())) {
           auto const& seg = window->transcript_[static_cast<size_t>(index)];
           double const start = std::wcstod(to_wide(seg[0]).c_str(), nullptr);
-          window->player_.Position(
-              std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
-                  std::chrono::duration<double>(start)));
+          window->follow_transcript_ = true;
+          window->FollowTranscriptButton().IsChecked(true);
+          window->SeekTo(start);
         }
       }
     });
     segment_borders_.push_back(row);
-    TranscriptList().Items().Append(row);
+    segment_buttons_.push_back(seek_button);
+    TranscriptList().Items().Append(seek_button);
   }
 }
 
@@ -1089,8 +1117,21 @@ void MainWindow::HighlightRunningSegment(double position_seconds) {
                           .Resources()
                           .Lookup(box_value(winrt::hstring(L"AppAccentSoftBrush")))
                           .as<Microsoft::UI::Xaml::Media::Brush>());
-    TranscriptList().ScrollIntoView(border);
+    if (follow_transcript_ && running < static_cast<int>(segment_buttons_.size())) {
+      TranscriptList().ScrollIntoView(segment_buttons_[static_cast<size_t>(running)]);
+    }
   }
+}
+
+void MainWindow::ScrollToCurrentTranscript() {
+  if (highlighted_segment_ < 0 ||
+      highlighted_segment_ >= static_cast<int>(segment_buttons_.size())) {
+    return;
+  }
+  TranscriptList().ScrollIntoView(
+      segment_buttons_[static_cast<size_t>(highlighted_segment_)]);
+  segment_buttons_[static_cast<size_t>(highlighted_segment_)].Focus(
+      Microsoft::UI::Xaml::FocusState::Keyboard);
 }
 
 // ---- summary -------------------------------------------------------------------
@@ -3019,6 +3060,39 @@ void MainWindow::PlayerAccel_Invoked(
     }
     args.Handled(true);
   }
+}
+
+void MainWindow::FocusMode_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  focus_listening_ = FocusModeButton().IsChecked().Value();
+  PageColumn().Visibility(focus_listening_ ? Visibility::Collapsed : Visibility::Visible);
+  ContentDivider().Visibility(focus_listening_ ? Visibility::Collapsed : Visibility::Visible);
+  muxc::Grid::SetColumn(DetailColumn(), focus_listening_ ? 0 : 2);
+  muxc::Grid::SetColumnSpan(DetailColumn(), focus_listening_ ? 3 : 1);
+  Nav().PaneDisplayMode(focus_listening_
+      ? muxc::NavigationViewPaneDisplayMode::LeftMinimal
+      : muxc::NavigationViewPaneDisplayMode::Left);
+  FocusModeButton().Content(box_value(winrt::hstring(std::wstring(
+      podlens::Tr(focus_listening_ ? "focus.exit" : "focus.enter")))));
+  muxc::ToolTipService::SetToolTip(
+      FocusModeButton(), box_value(winrt::hstring(std::wstring(
+          podlens::Tr(focus_listening_ ? "focus.exit_hint" : "focus.enter_hint")))));
+}
+
+void MainWindow::FollowTranscript_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  follow_transcript_ = FollowTranscriptButton().IsChecked().Value();
+  if (follow_transcript_) ScrollToCurrentTranscript();
+}
+
+void MainWindow::ReturnToCurrent_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  follow_transcript_ = true;
+  FollowTranscriptButton().IsChecked(true);
+  ScrollToCurrentTranscript();
 }
 
 void MainWindow::SeekSlider_ValueChanged(
