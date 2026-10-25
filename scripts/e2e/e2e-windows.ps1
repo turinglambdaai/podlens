@@ -109,13 +109,15 @@ try {
     })
 
     $focus = Wait-Until 'focus listening button' { Find-ById $window 'FocusModeButton' }
-    $segment = Wait-Until 'third transcript sentence' { Find-ById $window 'TranscriptSegment-2' }
     $play = Wait-Until 'play button' { Find-ById $window 'PlayPauseButton' }
     Activate-Control $focus
     [void](Wait-Until 'focused listening layout' {
         if ($focus.Current.Name -match 'Show Library|显示资料库') { return $true }
         return $false
     })
+    $segment = Wait-Until 'third transcript sentence in focus mode' {
+        Find-ById $window 'TranscriptSegment-2'
+    }
     Activate-Control $play
     Activate-WithEnter $segment
     [void](Wait-Until 'four-second transcript seek' {

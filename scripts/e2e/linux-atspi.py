@@ -188,12 +188,6 @@ def main():
         "Focus Listening button",
         lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),
     )
-    segment = wait_for(
-        "keyboard-operable transcript sentence",
-        lambda: find_name_prefix(
-            window, ["逐句稿句子: Keyboard", "Transcript sentence: Keyboard"], "push button"
-        ),
-    )
     play = wait_for(
         "Play or pause button",
         lambda: find_named_any(window, ["播放或暂停", "Play or pause"], "push button"),
@@ -202,6 +196,12 @@ def main():
     wait_for(
         "focused listening layout",
         lambda: find_named_any(window, ["显示资料库", "Show Library"], "toggle button"),
+    )
+    segment = wait_for(
+        "keyboard-operable transcript sentence in focus mode",
+        lambda: find_name_prefix(
+            window, ["逐句稿句子: Keyboard", "Transcript sentence: Keyboard"], "push button"
+        ),
     )
     press(play)
     press_return(segment)

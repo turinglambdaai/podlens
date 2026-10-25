@@ -168,12 +168,12 @@ do {
     let focus: AXUIElement = try waitFor("focus listening button") {
         findIdentifier(window, "FocusListeningButton")
     }
-    let segment: AXUIElement = try waitFor("third transcript sentence") {
-        findIdentifier(window, "TranscriptSegment-2")
-    }
     try press(focus, "focus listening")
     _ = try waitFor("focused listening layout") {
         elementContains(focus, "Show Library") || elementContains(focus, "显示资料库") ? true : nil
+    }
+    let segment: AXUIElement = try waitFor("third transcript sentence in focus mode") {
+        findIdentifier(window, "TranscriptSegment-2")
     }
     try pressReturn(segment, pid: pid)
     let position: AXUIElement = try waitFor("player position") {
