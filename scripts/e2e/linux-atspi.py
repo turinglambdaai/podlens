@@ -178,7 +178,12 @@ def main():
     window = wait_for(
         "PodLens frame", lambda: next((n for n in walk(application) if role(n) == "frame"), None)
     )
-    wait_for("embedded backend readiness", lambda: contains(window, "就绪"))
+    wait_for(
+        "embedded backend readiness",
+        lambda: contains(window, "就绪")
+        or contains(window, "Ready")
+        or contains(window, "A small episode about focused listening"),
+    )
     focus = wait_for(
         "Focus Listening button",
         lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),

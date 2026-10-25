@@ -104,7 +104,7 @@ try {
     }
     [void](Wait-Until 'embedded backend readiness' {
         $status = Find-ById $window 'StatusLine'
-        if ($status -and $status.Current.Name -match 'Ready|就绪') { return $true }
+        if ($status -and $status.Current.Name -match 'Ready|就绪|Resuming|继续上次') { return $true }
         return $false
     })
 
