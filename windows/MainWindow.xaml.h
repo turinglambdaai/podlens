@@ -77,6 +77,12 @@ struct MainWindow : MainWindowT<MainWindow> {
                          Microsoft::UI::Xaml::RoutedEventArgs const&);
   void PlayerAccel_Invoked(Microsoft::UI::Xaml::Input::KeyboardAccelerator const&,
                            Microsoft::UI::Xaml::Input::KeyboardAcceleratorInvokedEventArgs const&);
+  void FocusMode_Click(winrt::Windows::Foundation::IInspectable const&,
+                       Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void FollowTranscript_Click(winrt::Windows::Foundation::IInspectable const&,
+                              Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void ReturnToCurrent_Click(winrt::Windows::Foundation::IInspectable const&,
+                             Microsoft::UI::Xaml::RoutedEventArgs const&);
   void TranscriptTab_Click(winrt::Windows::Foundation::IInspectable const&,
                            Microsoft::UI::Xaml::RoutedEventArgs const&);
   void SummaryTab_Click(winrt::Windows::Foundation::IInspectable const&,
@@ -161,6 +167,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void UpdateActionButtons();
   void UpdatePlayerInfo();
   void HighlightRunningSegment(double position_seconds);
+  void ScrollToCurrentTranscript();
 
   // playback
   void StartPlayback();
@@ -257,9 +264,12 @@ struct MainWindow : MainWindowT<MainWindow> {
   bool suppress_nav_ = false;
   uint32_t mode_ = 0;  // 0 bilingual, 1 translation only, 2 original only
   bool summary_tab_active_ = false;
+  bool focus_listening_ = false;
+  bool follow_transcript_ = true;
 
   // segment borders for playback highlight; index == transcript_ index
   std::vector<Microsoft::UI::Xaml::Controls::Border> segment_borders_;
+  std::vector<Microsoft::UI::Xaml::Controls::Button> segment_buttons_;
   std::vector<Microsoft::UI::Xaml::Controls::TextBlock> translation_blocks_;
   std::vector<Microsoft::UI::Xaml::Controls::TextBlock> original_blocks_;
   int highlighted_segment_ = -1;
