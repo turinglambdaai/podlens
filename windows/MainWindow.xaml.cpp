@@ -725,6 +725,11 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
         pending_resume_feed_id_.clear();
         selected_feed_id_ = feeds_[i].id;
         ShowPage(Page::Episodes);
+        // Programmatic navigation suppresses Nav_SelectionChanged, which is
+        // normally responsible for loading the feed's episodes. Resume must
+        // therefore start that load explicitly before it can select the saved
+        // episode and reveal the detail/player controls.
+        ReloadEpisodes();
         uint32_t const nav_index = 7 + i;
         if (nav_index < Nav().MenuItems().Size()) {
           suppress_nav_ = true;

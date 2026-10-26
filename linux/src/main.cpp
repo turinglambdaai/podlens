@@ -1832,6 +1832,11 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   gtk_box_append(GTK_BOX(grid), lines);
   auto* button = gtk_button_new();
   gtk_button_set_child(GTK_BUTTON(button), grid);
+  // Keep keyboard focus explicit: the transcript journey depends on native
+  // Enter/Space activation, including under headless Wayland accessibility
+  // sessions where implicit focusability can differ between GTK releases.
+  gtk_widget_set_focusable(button, TRUE);
+  gtk_widget_set_can_target(button, TRUE);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_add_css_class(button, "pl-seg");
   gtk_widget_set_hexpand(button, TRUE);

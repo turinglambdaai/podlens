@@ -430,20 +430,22 @@ final class PodLensStore: ObservableObject {
     }
 
     func loadEpisodes(feedId: String) {
+        Task { await loadEpisodesNow(feedId: feedId) }
+    }
+
+    private func loadEpisodesNow(feedId: String) async {
         guard let api else { return }
-        Task {
-            do {
-                let rows = try await api.episode_list(feed_id: feedId)
-                episodes = rows.map {
-                    Episode(id: $0[0], title: $0[1], pubDisplay: $0[2], durationSec: $0[3],
-                            downloaded: $0[4] == "1", transcriptStatus: $0[5],
-                            summaryStatus: $0[6], positionSec: Double($0[7]) ?? 0,
-                            done: $0[8] == "1", hasTranslation: $0[9] == "1",
-                            description: $0[10])
-                }
-            } catch {
-                statusLine = L("fetchFailed") + " \(error)"
+        do {
+            let rows = try await api.episode_list(feed_id: feedId)
+            episodes = rows.map {
+                Episode(id: $0[0], title: $0[1], pubDisplay: $0[2], durationSec: $0[3],
+                        downloaded: $0[4] == "1", transcriptStatus: $0[5],
+                        summaryStatus: $0[6], positionSec: Double($0[7]) ?? 0,
+                        done: $0[8] == "1", hasTranslation: $0[9] == "1",
+                        description: $0[10])
             }
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
@@ -557,18 +559,30 @@ final class PodLensStore: ObservableObject {
     }
 
     func loadTranscript(_ episode: Episode) {
-        withEpisode(episode.id) { [weak self] api in
+        Task { await loadTranscriptNow(episode) }
+    }
+
+    private func loadTranscriptNow(_ episode: Episode) async {
+        guard let api else { return }
+        do {
             let rows = try await api.episode_transcript(id: episode.id)
             let segs = rows.enumerated().map { i, row in
                 Segment(id: i, start: Double(row[0]) ?? 0, end: Double(row[1]) ?? 0,
                         text: row[2], translation: row[3])
             }
-            await MainActor.run { self?.segments = segs }
+            segments = segs
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
     func loadSummary(_ episode: Episode) {
-        withEpisode(episode.id) { [weak self] api in
+        Task { await loadSummaryNow(episode) }
+    }
+
+    private func loadSummaryNow(_ episode: Episode) async {
+        guard let api else { return }
+        do {
             let json = try await api.episode_summary(id: episode.id)
             var parsed: Summary?
             if let data = json.data(using: .utf8),
@@ -582,22 +596,36 @@ final class PodLensStore: ObservableObject {
                     quotes: quotes,
                     topics: obj["topics"] as? [String] ?? [])
             }
-            await MainActor.run { self?.summary = parsed }
+            summary = parsed
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
     func loadChapters(_ episode: Episode) {
-        withEpisode(episode.id) { [weak self] api in
+        Task { await loadChaptersNow(episode) }
+    }
+
+    private func loadChaptersNow(_ episode: Episode) async {
+        guard let api else { return }
+        do {
             let rows = try await api.episode_chapters(id: episode.id)
             let marks = rows.enumerated().map { i, row in
                 Chapter(id: i, start: Double(row[0]) ?? 0, title: row[1])
             }
-            await MainActor.run { self?.chapters = marks }
+            chapters = marks
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
     func loadEstimate(_ episode: Episode) {
-        withEpisode(episode.id) { [weak self] api in
+        Task { await loadEstimateNow(episode) }
+    }
+
+    private func loadEstimateNow(_ episode: Episode) async {
+        guard let api else { return }
+        do {
             let json = try await api.episode_estimate(id: episode.id)
             var parsed: Estimate?
             if let data = json.data(using: .utf8),
@@ -610,7 +638,9 @@ final class PodLensStore: ObservableObject {
                     translated: (obj["translated"] as? Bool) ?? false,
                     summarized: (obj["summarized"] as? Bool) ?? false)
             }
-            await MainActor.run { self?.estimate = parsed }
+            estimate = parsed
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
@@ -644,29 +674,29 @@ final class PodLensStore: ObservableObject {
 
     /// Reopen whatever episode last saved a playback position. Selects and
     /// seeks but does not autoplay — the listener decides when to press play.
-    func resumeLast() {
+    func resumeLast() async {
         guard let api else { return }
-        Task {
-            let row = (try? await api.resume_last()) ?? []
+        do {
+            let row = try await api.resume_last()
             guard row.count >= 3 else { return }
             let feedId = row[0], episodeId = row[1]
-            let position = Double(row[2]) ?? 0
-            await MainActor.run {
-                guard let feed = self.feeds.first(where: { $0.id == feedId }) else { return }
-                self.selectFeed(feed)
-                Task {
-                    // episode_list lands asynchronously; wait once, then select
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    guard let episode = self.episodes.first(where: { $0.id == episodeId }) else { return }
-                    self.selectedEpisode = episode
-                    self.loadTranscript(episode)
-                    self.loadSummary(episode)
-                    self.loadChapters(episode)
-                    self.loadEstimate(episode)
-                    self.startPlayback(for: episode, autoplay: false)
-                    self.statusLine = L("resumed") + " " + episode.title
-                }
-            }
+            guard let feed = feeds.first(where: { $0.id == feedId }) else { return }
+
+            selectedFeed = feed
+            await loadEpisodesNow(feedId: feed.id)
+            guard let episode = episodes.first(where: { $0.id == episodeId }) else { return }
+
+            selectedEpisode = episode
+            // Keep startup client access genuinely structured instead of
+            // spawning five overlapping Tasks during runtime initialization.
+            await loadTranscriptNow(episode)
+            await loadSummaryNow(episode)
+            await loadChaptersNow(episode)
+            await loadEstimateNow(episode)
+            startPlayback(for: episode, autoplay: false)
+            statusLine = L("resumed") + " " + episode.title
+        } catch {
+            statusLine = L("fetchFailed") + " \(error)"
         }
     }
 
