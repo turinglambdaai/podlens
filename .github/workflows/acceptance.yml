@@ -16,7 +16,7 @@ concurrency:
 
 env:
   RIVET_PIN: 9d766b4acab672844093204cb4845ef4ef933d2c
-  KEEL_PIN: 0740fdfbdab7bf5dab32232c82f07dd98aa6a196
+  KEEL_PIN: 76a5b9fdd01bde284d310ff5c05ec73972f64201
 
 jobs:
   windows:
