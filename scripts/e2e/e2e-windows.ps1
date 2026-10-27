@@ -3,6 +3,21 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class PodLensNativeInput {
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int command);
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
+}
+'@
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $output = Join-Path $repo '.rivet\acceptance\windows'
@@ -82,13 +97,24 @@ function Activate-Control {
 }
 
 function Activate-WithEnter {
-    param($Element)
+    param($Element, $Process)
+    $Process.Refresh()
+    [void][PodLensNativeInput]::ShowWindowAsync($Process.MainWindowHandle, 9)
+    [void][PodLensNativeInput]::SetForegroundWindow($Process.MainWindowHandle)
     $Element.SetFocus()
-    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    [void](Wait-Until 'transcript sentence keyboard focus' {
+        if ($Element.Current.HasKeyboardFocus) { return $true }
+        return $false
+    } 5)
+    # Send a physical Return key pair to the foreground WinUI window. This is
+    # more deterministic on hosted runners than SendKeys' message-loop helper.
+    [PodLensNativeInput]::keybd_event(0x0D, 0, 0, [UIntPtr]::Zero)
+    [PodLensNativeInput]::keybd_event(0x0D, 0, 2, [UIntPtr]::Zero)
 }
 
 $oldData = $env:PODLENS_DATA_DIR
 $process = $null
+$window = $null
 try {
     $env:PODLENS_DATA_DIR = $data
     & racket (Join-Path $repo 'scripts\e2e\seed-listening-fixture.rkt')
@@ -119,7 +145,7 @@ try {
         Find-ById $window 'TranscriptSegment-2'
     }
     Activate-Control $play
-    Activate-WithEnter $segment
+    Activate-WithEnter $segment $process
     [void](Wait-Until 'four-second transcript seek' {
         $position = Find-ById $window 'PositionText'
         if ($position -and $position.Current.Name -eq '00:04') { return $true }
@@ -229,6 +255,29 @@ try {
         if ($process.HasExited) { return $true }
         return $false
     } 15)
+} catch {
+    if ($window) {
+        try {
+            $failureNodes = $window.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $failureSnapshot = for ($index = 0; $index -lt [Math]::Min($failureNodes.Count, 700); $index++) {
+                $node = $failureNodes[$index]
+                [ordered]@{
+                    name = $node.Current.Name
+                    controlType = $node.Current.ControlType.ProgrammaticName
+                    automationId = $node.Current.AutomationId
+                    hasKeyboardFocus = $node.Current.HasKeyboardFocus
+                }
+            }
+            $failureSnapshot | ConvertTo-Json -Depth 4 |
+                Set-Content -LiteralPath (Join-Path $output 'accessibility-failure.json') -Encoding utf8
+        } catch {
+            # Preserve the original acceptance failure if the diagnostic tree
+            # itself disappeared with the process.
+        }
+    }
+    throw
 } finally {
     if ($process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue

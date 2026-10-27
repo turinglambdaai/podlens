@@ -693,7 +693,12 @@ final class PodLensStore: ObservableObject {
             await loadSummaryNow(episode)
             await loadChaptersNow(episode)
             await loadEstimateNow(episode)
-            startPlayback(for: episode, autoplay: false)
+            // Match the Windows/Linux hosts: restoring the reading context
+            // must not initialize AVFoundation or Control Center during app
+            // launch. The first Play action prepares the local media lazily.
+            currentTime = episode.positionSec
+            duration = Double(episode.durationSec) ?? 0
+            playing = false
             statusLine = L("resumed") + " " + episode.title
         } catch {
             statusLine = L("fetchFailed") + " \(error)"
@@ -843,6 +848,11 @@ final class PodLensStore: ObservableObject {
     }
 
     func togglePlay() {
+        if player == nil || player?.currentItem == nil {
+            guard let episode = selectedEpisode else { return }
+            startPlayback(for: episode)
+            return
+        }
         guard let player else { return }
         if playing {
             savePosition(player.currentTime().seconds, done: false)

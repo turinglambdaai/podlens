@@ -38,6 +38,20 @@ cleanup() {
     stop_bounded "$app_pid" || true
     wait "$app_pid" 2>/dev/null || true
   fi
+  wait "$app_pid" 2>/dev/null || true
+  # Preserve Apple's crash report alongside the accessibility snapshot. The
+  # app runs with an isolated HOME, while CrashReporter may still use the
+  # runner account's real Library depending on the host architecture.
+  for diagnostics in \
+    "$home/Library/Logs/DiagnosticReports" \
+    "$HOME/Library/Logs/DiagnosticReports"; do
+    if [[ -d "$diagnostics" ]]; then
+      crash_report="$(find "$diagnostics" -type f \( -iname 'podlens*.ips' -o -iname 'podlens*.crash' \) -print -quit)"
+      if [[ -n "$crash_report" ]]; then
+        cp "$crash_report" "$output/application-crash.${crash_report##*.}"
+      fi
+    fi
+  done
   exit "$status"
 }
 trap cleanup EXIT

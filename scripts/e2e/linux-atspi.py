@@ -9,9 +9,13 @@ import pyatspi
 
 
 def children(node):
+    if node is None:
+        return
     for index in range(node.childCount):
         try:
-            yield node.getChildAtIndex(index)
+            child = node.getChildAtIndex(index)
+            if child is not None:
+                yield child
         except Exception:
             continue
 
@@ -193,6 +197,14 @@ def main():
         lambda: find_named_any(window, ["播放或暂停", "Play or pause"], "push button"),
     )
     press(focus)
+    # GTK rebuilds the visible hierarchy when focus mode collapses the
+    # library. Reacquire the application and frame instead of traversing
+    # defunct AT-SPI cache objects from the previous layout.
+    application = wait_for("PodLens application after focus layout", find_application)
+    window = wait_for(
+        "PodLens frame after focus layout",
+        lambda: next((n for n in walk(application) if role(n) == "frame"), None),
+    )
     wait_for(
         "focused listening layout",
         lambda: find_named_any(window, ["显示资料库", "Show Library"], "toggle button"),
