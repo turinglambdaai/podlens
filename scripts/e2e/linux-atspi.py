@@ -101,6 +101,13 @@ def contains(root, expected):
     return any((node.name or "") == expected or text(node) == expected for node in walk(root))
 
 
+def is_focused(node):
+    try:
+        return node.getState().contains(pyatspi.STATE_FOCUSED)
+    except Exception:
+        return False
+
+
 def press(node):
     try:
         actions = node.queryAction()
@@ -128,9 +135,26 @@ def press(node):
     raise AssertionError(f"AT-SPI action failed for {node.name!r}")
 
 
+def focus_with_tab(prefixes, expected_role, limit=80):
+    # AT-SPI's direct Component.grabFocus is rejected by GTK under headless
+    # Wayland. Traverse the real native focus chain instead: this proves the
+    # sentence is keyboard reachable and leaves it ready for Return.
+    for _ in range(limit):
+        application = find_application()
+        if application is not None:
+            window = next((n for n in walk(application) if role(n) == "frame"), None)
+            if window is not None:
+                target = find_name_prefix(window, prefixes, expected_role)
+                if target is not None and is_focused(target):
+                    return application, window, target
+        pyatspi.Registry.generateKeyboardEvent(0, "Tab", pyatspi.KEY_SYM)
+        time.sleep(0.05)
+    raise AssertionError("transcript sentence was not reachable through the Tab focus chain")
+
+
 def press_return(node):
-    if not node.queryComponent().grabFocus():
-        raise AssertionError(f"could not focus {node.name!r}")
+    if not is_focused(node):
+        raise AssertionError(f"Return target did not hold keyboard focus: {node.name!r}")
     pyatspi.Registry.generateKeyboardEvent(0, "Return", pyatspi.KEY_SYM)
 
 
@@ -192,10 +216,6 @@ def main():
         "Focus Listening button",
         lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),
     )
-    play = wait_for(
-        "Play or pause button",
-        lambda: find_named_any(window, ["播放或暂停", "Play or pause"], "push button"),
-    )
     press(focus)
     # GTK rebuilds the visible hierarchy when focus mode collapses the
     # library. Reacquire the application and frame instead of traversing
@@ -209,13 +229,20 @@ def main():
         "focused listening layout",
         lambda: find_named_any(window, ["显示资料库", "Show Library"], "toggle button"),
     )
-    segment = wait_for(
+    wait_for(
         "keyboard-operable transcript sentence in focus mode",
         lambda: find_name_prefix(
             window, ["逐句稿句子: Keyboard", "Transcript sentence: Keyboard"], "push button"
         ),
     )
+    play = wait_for(
+        "Play or pause button after focus layout",
+        lambda: find_named_any(window, ["播放或暂停", "Play or pause"], "push button"),
+    )
     press(play)
+    application, window, segment = focus_with_tab(
+        ["逐句稿句子: Keyboard", "Transcript sentence: Keyboard"], "push button"
+    )
     press_return(segment)
     wait_for("four-second transcript seek", lambda: contains(window, "00:04"))
     follow = wait_for(
