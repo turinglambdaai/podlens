@@ -110,9 +110,43 @@ def is_focused(node):
 
 
 def send_key(name):
-    result = pyatspi.Registry.generateKeyboardEvent(0, name, pyatspi.KEY_SYM)
-    if result is False:
-        raise AssertionError(f"could not send native {name}")
+    # Drive the X11 keyboard device directly.  AT-SPI still verifies the
+    # resulting focus owner below, but its legacy synth API can return success
+    # without delivering a key when the test session has no window manager.
+    x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+    xtst = ctypes.cdll.LoadLibrary("libXtst.so.6")
+    display_pointer = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = display_pointer
+    x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
+    x11.XStringToKeysym.restype = ctypes.c_ulong
+    x11.XKeysymToKeycode.argtypes = [display_pointer, ctypes.c_ulong]
+    x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+    x11.XSync.argtypes = [display_pointer, ctypes.c_int]
+    x11.XCloseDisplay.argtypes = [display_pointer]
+    xtst.XTestFakeKeyEvent.argtypes = [
+        display_pointer,
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.c_ulong,
+    ]
+    xtst.XTestFakeKeyEvent.restype = ctypes.c_int
+
+    display = x11.XOpenDisplay(None)
+    if not display:
+        raise AssertionError("could not open the isolated X11 display for keyboard input")
+    try:
+        keysym = x11.XStringToKeysym(name.encode("ascii"))
+        keycode = x11.XKeysymToKeycode(display, keysym)
+        if keysym == 0 or keycode == 0:
+            raise AssertionError(f"could not resolve native X11 key {name}")
+        pressed = xtst.XTestFakeKeyEvent(display, keycode, True, 0)
+        released = xtst.XTestFakeKeyEvent(display, keycode, False, 0)
+        x11.XSync(display, 0)
+        if not pressed or not released:
+            raise AssertionError(f"could not send native X11 key {name}")
+    finally:
+        x11.XCloseDisplay(display)
 
 
 def focus_application_window():
@@ -228,6 +262,7 @@ def focus_with_tab(prefixes, expected_role, limit=80):
     # Follow the real X11 focus chain. AT-SPI's legacy synthetic key interface
     # is not delivered under Wayland, so XTest supplies the native key event
     # while AT-SPI verifies which accessible control actually owns focus.
+    observed_focus = []
     for _ in range(limit):
         application = find_application()
         if application is not None:
@@ -236,9 +271,19 @@ def focus_with_tab(prefixes, expected_role, limit=80):
                 target = find_name_prefix(window, prefixes, expected_role)
                 if target is not None and is_focused(target):
                     return application, window, target
+                focused = " | ".join(
+                    f"{role(node)}:{node.name or ''}"
+                    for node in walk(window)
+                    if is_focused(node)
+                )
+                if focused and (not observed_focus or focused != observed_focus[-1]):
+                    observed_focus.append(focused)
         send_key("Tab")
         time.sleep(0.05)
-    raise AssertionError("transcript sentence was not reachable through the Tab focus chain")
+    raise AssertionError(
+        "transcript sentence was not reachable through the Tab focus chain; "
+        f"observed focus: {observed_focus}"
+    )
 
 
 def press_return(node):
