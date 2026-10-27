@@ -108,6 +108,21 @@ def is_focused(node):
         return False
 
 
+def send_key(name):
+    result = pyatspi.Registry.generateKeyboardEvent(0, name, pyatspi.KEY_SYM)
+    if result is False:
+        raise AssertionError(f"could not send native {name}")
+
+
+def focus_application_window(window):
+    try:
+        if window.queryComponent().grabFocus():
+            return
+    except Exception as error:
+        raise AssertionError(f"could not focus native PodLens window: {error}") from error
+    raise AssertionError("could not focus native PodLens window")
+
+
 def press(node):
     try:
         actions = node.queryAction()
@@ -136,9 +151,9 @@ def press(node):
 
 
 def focus_with_tab(prefixes, expected_role, limit=80):
-    # AT-SPI's direct Component.grabFocus is rejected by GTK under headless
-    # Wayland. Traverse the real native focus chain instead: this proves the
-    # sentence is keyboard reachable and leaves it ready for Return.
+    # Follow the real X11 focus chain. AT-SPI's legacy synthetic key interface
+    # is not delivered under Wayland, so XTest supplies the native key event
+    # while AT-SPI verifies which accessible control actually owns focus.
     for _ in range(limit):
         application = find_application()
         if application is not None:
@@ -147,7 +162,7 @@ def focus_with_tab(prefixes, expected_role, limit=80):
                 target = find_name_prefix(window, prefixes, expected_role)
                 if target is not None and is_focused(target):
                     return application, window, target
-        pyatspi.Registry.generateKeyboardEvent(0, "Tab", pyatspi.KEY_SYM)
+        send_key("Tab")
         time.sleep(0.05)
     raise AssertionError("transcript sentence was not reachable through the Tab focus chain")
 
@@ -155,7 +170,7 @@ def focus_with_tab(prefixes, expected_role, limit=80):
 def press_return(node):
     if not is_focused(node):
         raise AssertionError(f"Return target did not hold keyboard focus: {node.name!r}")
-    pyatspi.Registry.generateKeyboardEvent(0, "Return", pyatspi.KEY_SYM)
+    send_key("Return")
 
 
 def activate_application_action(name):
@@ -212,6 +227,7 @@ def main():
         or contains(window, "Ready")
         or contains(window, "A small episode about focused listening"),
     )
+    focus_application_window(window)
     focus = wait_for(
         "Focus Listening button",
         lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),
@@ -299,7 +315,7 @@ def main():
                     "press:Save",
                 ],
                 "assertions": [
-                    "packaged GTK4 frame activated on native Wayland",
+                    "packaged GTK4 frame activated in an isolated native Linux display session",
                     "synthetic bilingual transcript exposed a native AT-SPI action",
                     "focus mode hid and restored the library without reloading the episode",
                     "activating a transcript sentence moved playback to 00:04",

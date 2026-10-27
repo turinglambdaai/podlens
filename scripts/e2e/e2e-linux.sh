@@ -14,19 +14,19 @@ EOF
 export PODLENS_DATA_DIR="$data"
 export HOME="$output/home-$$"
 export XDG_RUNTIME_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/podlens-acceptance-runtime-$$"
-export WAYLAND_DISPLAY=wayland-podlens-acceptance
-export GDK_BACKEND=wayland
+export DISPLAY=:99
+export GDK_BACKEND=x11
 export GTK_A11Y=atspi
 export NO_AT_BRIDGE=0
 export LANG=C.UTF-8
-unset DISPLAY
+unset WAYLAND_DISPLAY
 mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 racket "$repo/scripts/e2e/seed-listening-fixture.rkt"
 
-weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 \
-  --debug --log="$output/weston.log" &
-weston_pid=$!
+Xvfb "$DISPLAY" -screen 0 1440x900x24 -nolisten tcp \
+  >"$output/xvfb.log" 2>&1 &
+xserver_pid=$!
 app_pid=""
 atspi_pid=""
 
@@ -45,18 +45,18 @@ cleanup() {
   trap - EXIT
   [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null && stop_bounded "$app_pid" || true
   [[ -n "$atspi_pid" ]] && kill -0 "$atspi_pid" 2>/dev/null && kill -TERM "$atspi_pid" || true
-  kill -TERM "$weston_pid" 2>/dev/null || true
-  wait "$app_pid" "$atspi_pid" "$weston_pid" 2>/dev/null || true
+  kill -TERM "$xserver_pid" 2>/dev/null || true
+  wait "$app_pid" "$atspi_pid" "$xserver_pid" 2>/dev/null || true
   exit "$status"
 }
 trap cleanup EXIT
 
 for _ in $(seq 1 100); do
-  [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]] && break
-  kill -0 "$weston_pid" 2>/dev/null
+  [[ -S /tmp/.X11-unix/X99 ]] && break
+  kill -0 "$xserver_pid" 2>/dev/null
   sleep 0.05
 done
-[[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]
+[[ -S /tmp/.X11-unix/X99 ]]
 launcher="$(command -v at-spi-bus-launcher || true)"
 [[ -n "$launcher" ]] || launcher=/usr/libexec/at-spi-bus-launcher
 "$launcher" --launch-immediately >"$output/at-spi-bus.log" 2>&1 &
@@ -80,5 +80,5 @@ stop_bounded "$app_pid" || true
 wait "$app_pid" 2>/dev/null || true
 app_pid=""
 trap - EXIT
-kill -TERM "$atspi_pid" "$weston_pid" 2>/dev/null || true
-wait "$atspi_pid" "$weston_pid" 2>/dev/null || true
+kill -TERM "$atspi_pid" "$xserver_pid" 2>/dev/null || true
+wait "$atspi_pid" "$xserver_pid" 2>/dev/null || true
