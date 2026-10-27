@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import ctypes
 import json
 import subprocess
 import time
@@ -114,13 +115,86 @@ def send_key(name):
         raise AssertionError(f"could not send native {name}")
 
 
-def focus_application_window(window):
+def focus_application_window():
+    # Gtk's top-level AT-SPI component does not implement grabFocus. Activate
+    # its real X11 window instead, just as a window manager would, then keep
+    # using AT-SPI to verify which native control receives each Tab.
+    x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+    display_pointer = ctypes.c_void_p
+    window_type = ctypes.c_ulong
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = display_pointer
+    x11.XDefaultRootWindow.argtypes = [display_pointer]
+    x11.XDefaultRootWindow.restype = window_type
+    x11.XQueryTree.argtypes = [
+        display_pointer,
+        window_type,
+        ctypes.POINTER(window_type),
+        ctypes.POINTER(window_type),
+        ctypes.POINTER(ctypes.POINTER(window_type)),
+        ctypes.POINTER(ctypes.c_uint),
+    ]
+    x11.XFetchName.argtypes = [display_pointer, window_type, ctypes.POINTER(ctypes.c_char_p)]
+    x11.XFree.argtypes = [ctypes.c_void_p]
+    x11.XSetInputFocus.argtypes = [display_pointer, window_type, ctypes.c_int, ctypes.c_ulong]
+    x11.XGetInputFocus.argtypes = [
+        display_pointer,
+        ctypes.POINTER(window_type),
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    x11.XRaiseWindow.argtypes = [display_pointer, window_type]
+    x11.XSync.argtypes = [display_pointer, ctypes.c_int]
+    x11.XCloseDisplay.argtypes = [display_pointer]
+
+    display = x11.XOpenDisplay(None)
+    if not display:
+        raise AssertionError("could not open the isolated X11 display")
+
+    def find_named_x11_window(parent):
+        root = window_type()
+        returned_parent = window_type()
+        child_array = ctypes.POINTER(window_type)()
+        count = ctypes.c_uint()
+        if not x11.XQueryTree(
+            display,
+            parent,
+            ctypes.byref(root),
+            ctypes.byref(returned_parent),
+            ctypes.byref(child_array),
+            ctypes.byref(count),
+        ):
+            return None
+        children = [child_array[index] for index in range(count.value)]
+        if child_array:
+            x11.XFree(child_array)
+        for child in children:
+            title = ctypes.c_char_p()
+            if x11.XFetchName(display, child, ctypes.byref(title)) and title.value:
+                try:
+                    if title.value.decode("utf-8", errors="replace") == "PodLens":
+                        return child
+                finally:
+                    if title.value:
+                        x11.XFree(title)
+            nested = find_named_x11_window(child)
+            if nested is not None:
+                return nested
+        return None
+
     try:
-        if window.queryComponent().grabFocus():
-            return
-    except Exception as error:
-        raise AssertionError(f"could not focus native PodLens window: {error}") from error
-    raise AssertionError("could not focus native PodLens window")
+        target = find_named_x11_window(x11.XDefaultRootWindow(display))
+        if target is None:
+            raise AssertionError("could not find native PodLens X11 window")
+        x11.XRaiseWindow(display, target)
+        x11.XSetInputFocus(display, target, 2, 0)
+        x11.XSync(display, 0)
+        focused = window_type()
+        revert_to = ctypes.c_int()
+        x11.XGetInputFocus(display, ctypes.byref(focused), ctypes.byref(revert_to))
+        if focused.value != target:
+            raise AssertionError("native PodLens X11 window did not receive input focus")
+    finally:
+        x11.XCloseDisplay(display)
 
 
 def press(node):
@@ -227,7 +301,7 @@ def main():
         or contains(window, "Ready")
         or contains(window, "A small episode about focused listening"),
     )
-    focus_application_window(window)
+    focus_application_window()
     focus = wait_for(
         "Focus Listening button",
         lambda: find_named_any(window, ["专注聆听", "Focus Listening"], "toggle button"),
