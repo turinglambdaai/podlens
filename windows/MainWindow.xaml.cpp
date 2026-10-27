@@ -2274,7 +2274,7 @@ std::wstring MainWindow::FindLocalAudio(std::string const& episode_id) {
   if (::getenv_s(&required, nullptr, 0, "PODLENS_DATA_DIR") == 0 && required > 0) {
     std::string value(required, '\0');
     size_t written = 0;
-    ::getenv_s(&required, value.data(), value.size(), "PODLENS_DATA_DIR");
+    ::getenv_s(&written, value.data(), value.size(), "PODLENS_DATA_DIR");
     value.resize(written > 0 ? written - 1 : 0); // drop the terminating null
     base = std::filesystem::path(value);
   }
