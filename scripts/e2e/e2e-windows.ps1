@@ -130,10 +130,11 @@ function Activate-WithEnter {
 function Set-AcceptanceWindowSize {
     param($Process, [int]$Width, [int]$Height)
     $Process.Refresh()
-    # Keep the current position and z-order while setting an exact outer-window
-    # size. The screenshots therefore preserve title-bar and resize-border
-    # behavior at the declared representative desktop viewport.
-    $flags = 0x0002 -bor 0x0004 -bor 0x0040
+    # Anchor the window to the virtual desktop origin as well as setting its
+    # outer size. Hosted runners initially center the app; a 1024x768 window
+    # left at that offset extends past the 1024x768 desktop and leaves
+    # transparent bands in the captured evidence.
+    $flags = 0x0004 -bor 0x0040
     if (-not [PodLensNativeInput]::SetWindowPos(
         $Process.MainWindowHandle, [IntPtr]::Zero, 0, 0, $Width, $Height, $flags)) {
         throw "could not resize PodLens to ${Width}x${Height}"
@@ -142,7 +143,8 @@ function Set-AcceptanceWindowSize {
         $rect = [PodLensWindowRect]::new()
         if (-not [PodLensNativeInput]::GetWindowRect(
             $Process.MainWindowHandle, [ref]$rect)) { return $false }
-        return (($rect.Right - $rect.Left) -eq $Width -and
+        return ($rect.Left -eq 0 -and $rect.Top -eq 0 -and
+                ($rect.Right - $rect.Left) -eq $Width -and
                 ($rect.Bottom - $rect.Top) -eq $Height)
     } 5)
 }
@@ -167,6 +169,15 @@ function Save-WindowScreenshot {
             $rect.Left, $rect.Top, 0, 0,
             [System.Drawing.Size]::new($width, $height),
             [System.Drawing.CopyPixelOperation]::SourceCopy)
+        $transparentEdges = @(
+            $bitmap.GetPixel(0, 0).A,
+            $bitmap.GetPixel($width - 1, 0).A,
+            $bitmap.GetPixel(0, $height - 1).A,
+            $bitmap.GetPixel($width - 1, $height - 1).A
+        ) | Where-Object { $_ -ne 255 }
+        if ($transparentEdges.Count -gt 0) {
+            throw 'screenshot extends outside the visible desktop'
+        }
         $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     } finally {
         $graphics.Dispose()
