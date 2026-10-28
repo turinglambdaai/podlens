@@ -46,7 +46,9 @@
              (command . ("pwsh" "-NoProfile" "-File" "scripts/e2e/e2e-windows.ps1"))
              (timeout-seconds . 600)
              (evidence . (".rivet/acceptance/windows/interaction-trace.json"
-                          ".rivet/acceptance/windows/accessibility.json")))
+                          ".rivet/acceptance/windows/accessibility.json"
+                          ".rivet/acceptance/windows/listening-focus-1024x768.png"
+                          ".rivet/acceptance/windows/listening-library-1024x768.png")))
      #hasheq((id . macos-native-ui)
              (kind . native-ui)
              (platforms . (macos))

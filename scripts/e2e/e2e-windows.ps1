@@ -3,9 +3,17 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing.Common
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+
+public struct PodLensWindowRect {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+}
 
 public static class PodLensNativeInput {
     [DllImport("user32.dll")]
@@ -16,6 +24,13 @@ public static class PodLensNativeInput {
 
     [DllImport("user32.dll")]
     public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter,
+        int x, int y, int width, int height, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetWindowRect(IntPtr hWnd, out PodLensWindowRect rect);
 }
 '@
 
@@ -112,6 +127,57 @@ function Activate-WithEnter {
     [PodLensNativeInput]::keybd_event(0x0D, 0, 2, [UIntPtr]::Zero)
 }
 
+function Set-AcceptanceWindowSize {
+    param($Process, [int]$Width, [int]$Height)
+    $Process.Refresh()
+    # Keep the current position and z-order while setting an exact outer-window
+    # size. The screenshots therefore preserve title-bar and resize-border
+    # behavior at the declared representative desktop viewport.
+    $flags = 0x0002 -bor 0x0004 -bor 0x0040
+    if (-not [PodLensNativeInput]::SetWindowPos(
+        $Process.MainWindowHandle, [IntPtr]::Zero, 0, 0, $Width, $Height, $flags)) {
+        throw "could not resize PodLens to ${Width}x${Height}"
+    }
+    [void](Wait-Until "${Width}x${Height} window size" {
+        $rect = [PodLensWindowRect]::new()
+        if (-not [PodLensNativeInput]::GetWindowRect(
+            $Process.MainWindowHandle, [ref]$rect)) { return $false }
+        return (($rect.Right - $rect.Left) -eq $Width -and
+                ($rect.Bottom - $rect.Top) -eq $Height)
+    } 5)
+}
+
+function Save-WindowScreenshot {
+    param($Process, [string]$Path)
+    $Process.Refresh()
+    [void][PodLensNativeInput]::ShowWindowAsync($Process.MainWindowHandle, 9)
+    [void][PodLensNativeInput]::SetForegroundWindow($Process.MainWindowHandle)
+    Start-Sleep -Milliseconds 250
+    $rect = [PodLensWindowRect]::new()
+    if (-not [PodLensNativeInput]::GetWindowRect(
+        $Process.MainWindowHandle, [ref]$rect)) {
+        throw 'could not read PodLens window bounds for screenshot'
+    }
+    $width = $rect.Right - $rect.Left
+    $height = $rect.Bottom - $rect.Top
+    $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen(
+            $rect.Left, $rect.Top, 0, 0,
+            [System.Drawing.Size]::new($width, $height),
+            [System.Drawing.CopyPixelOperation]::SourceCopy)
+        $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+    if (-not (Test-Path -LiteralPath $Path) -or
+        (Get-Item -LiteralPath $Path).Length -lt 4096) {
+        throw "PodLens screenshot was missing or empty: $Path"
+    }
+}
+
 $oldData = $env:PODLENS_DATA_DIR
 $process = $null
 $window = $null
@@ -133,6 +199,7 @@ try {
         if ($status -and $status.Current.Name -match 'Ready|就绪|Resuming|继续上次') { return $true }
         return $false
     })
+    Set-AcceptanceWindowSize $process 1024 768
 
     $focus = Wait-Until 'focus listening button' { Find-ById $window 'FocusModeButton' }
     $play = Wait-Until 'play button' { Find-ById $window 'PlayPauseButton' }
@@ -157,6 +224,7 @@ try {
     if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) {
         throw 'follow transcript toggle did not turn off'
     }
+    Save-WindowScreenshot $process (Join-Path $output 'listening-focus-1024x768.png')
     $current = Wait-Until 'return to current sentence button' {
         Find-ById $window 'ReturnToCurrentButton'
     }
@@ -169,6 +237,11 @@ try {
         return $false
     })
     Activate-Control $focus
+    [void](Wait-Until 'restored library layout' {
+        if ($focus.Current.Name -match 'Focus Listening|专注聆听') { return $true }
+        return $false
+    })
+    Save-WindowScreenshot $process (Join-Path $output 'listening-library-1024x768.png')
 
     $listeningNodes = $window.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
@@ -225,12 +298,15 @@ try {
         platform = 'windows'
         artifact = $executable.FullName
         actions = @(
+            'resize:1024x768',
             'toggle:FocusModeButton',
             'invoke:PlayPauseButton',
             'keyboard:Enter:TranscriptSegment-2',
             'toggle:FollowTranscriptButton:off',
+            'capture:listening-focus-1024x768.png',
             'invoke:ReturnToCurrentButton',
             'toggle:FocusModeButton:restore',
+            'capture:listening-library-1024x768.png',
             'select:SettingsNavItem',
             'set:chat-model',
             'invoke:Save'
@@ -241,6 +317,7 @@ try {
             'focus mode hid and restored the library without reloading the episode',
             'activating a transcript sentence moved playback to 00:04',
             'Current restored follow after the listener turned it off',
+            'focus and restored-library layouts produced non-empty 1024x768 PNG evidence',
             'settings field exposed a stable UI Automation name',
             'save mutation crossed RVT1 into the embedded backend',
             'isolated config.json contains acceptance-model'
