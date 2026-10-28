@@ -16,6 +16,8 @@ public struct PodLensWindowRect {
 }
 
 public static class PodLensNativeInput {
+    private const int ExtendedFrameBounds = 9;
+
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -31,6 +33,15 @@ public static class PodLensNativeInput {
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool GetWindowRect(IntPtr hWnd, out PodLensWindowRect rect);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute,
+        out PodLensWindowRect value, int valueSize);
+
+    public static bool GetVisibleWindowRect(IntPtr hWnd, out PodLensWindowRect rect) {
+        return DwmGetWindowAttribute(hWnd, ExtendedFrameBounds, out rect,
+            Marshal.SizeOf(typeof(PodLensWindowRect))) == 0;
+    }
 }
 '@
 
@@ -130,18 +141,41 @@ function Activate-WithEnter {
 function Set-AcceptanceWindowSize {
     param($Process, [int]$Width, [int]$Height)
     $Process.Refresh()
-    # Anchor the window to the virtual desktop origin as well as setting its
-    # outer size. Hosted runners initially center the app; a 1024x768 window
-    # left at that offset extends past the 1024x768 desktop and leaves
-    # transparent bands in the captured evidence.
+    # GetWindowRect includes the invisible DWM resize border. Measure that
+    # border, then position and size the outer window so its visible frame is
+    # exactly the requested viewport at the virtual desktop origin.
     $flags = 0x0004 -bor 0x0040
     if (-not [PodLensNativeInput]::SetWindowPos(
         $Process.MainWindowHandle, [IntPtr]::Zero, 0, 0, $Width, $Height, $flags)) {
         throw "could not resize PodLens to ${Width}x${Height}"
     }
+    Start-Sleep -Milliseconds 250
+    $outer = [PodLensWindowRect]::new()
+    $visible = [PodLensWindowRect]::new()
+    if (-not [PodLensNativeInput]::GetWindowRect(
+        $Process.MainWindowHandle, [ref]$outer) -or
+        -not [PodLensNativeInput]::GetVisibleWindowRect(
+            $Process.MainWindowHandle, [ref]$visible)) {
+        throw 'could not measure the PodLens window frame'
+    }
+    $leftInset = $visible.Left - $outer.Left
+    $topInset = $visible.Top - $outer.Top
+    $rightInset = $outer.Right - $visible.Right
+    $bottomInset = $outer.Bottom - $visible.Bottom
+    if (@($leftInset, $topInset, $rightInset, $bottomInset) |
+        Where-Object { $_ -lt 0 }) {
+        throw 'PodLens reported invalid visible-window bounds'
+    }
+    if (-not [PodLensNativeInput]::SetWindowPos(
+        $Process.MainWindowHandle, [IntPtr]::Zero,
+        -$leftInset, -$topInset,
+        $Width + $leftInset + $rightInset,
+        $Height + $topInset + $bottomInset, $flags)) {
+        throw "could not set PodLens visible frame to ${Width}x${Height}"
+    }
     [void](Wait-Until "${Width}x${Height} window size" {
         $rect = [PodLensWindowRect]::new()
-        if (-not [PodLensNativeInput]::GetWindowRect(
+        if (-not [PodLensNativeInput]::GetVisibleWindowRect(
             $Process.MainWindowHandle, [ref]$rect)) { return $false }
         return ($rect.Left -eq 0 -and $rect.Top -eq 0 -and
                 ($rect.Right - $rect.Left) -eq $Width -and
@@ -156,9 +190,9 @@ function Save-WindowScreenshot {
     [void][PodLensNativeInput]::SetForegroundWindow($Process.MainWindowHandle)
     Start-Sleep -Milliseconds 250
     $rect = [PodLensWindowRect]::new()
-    if (-not [PodLensNativeInput]::GetWindowRect(
+    if (-not [PodLensNativeInput]::GetVisibleWindowRect(
         $Process.MainWindowHandle, [ref]$rect)) {
-        throw 'could not read PodLens window bounds for screenshot'
+        throw 'could not read visible PodLens window bounds for screenshot'
     }
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
