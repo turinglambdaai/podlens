@@ -725,6 +725,11 @@ void MainWindow::RenderFeeds(std::vector<std::vector<std::string>> rows) {
         pending_resume_feed_id_.clear();
         selected_feed_id_ = feeds_[i].id;
         ShowPage(Page::Episodes);
+        // Programmatic navigation suppresses Nav_SelectionChanged, which is
+        // normally responsible for loading the feed's episodes. Resume must
+        // therefore start that load explicitly before it can select the saved
+        // episode and reveal the detail/player controls.
+        ReloadEpisodes();
         uint32_t const nav_index = 7 + i;
         if (nav_index < Nav().MenuItems().Size()) {
           suppress_nav_ = true;
@@ -1059,6 +1064,12 @@ void MainWindow::RenderTranscript() {
     seek_button.Padding(winrt::Microsoft::UI::Xaml::Thickness{0});
     seek_button.Margin(winrt::Microsoft::UI::Xaml::Thickness{0, 0, 0, 2});
     seek_button.Tag(box_value(winrt::hstring(std::to_wstring(i))));
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+        seek_button,
+        winrt::hstring(L"TranscriptSegment-" + std::to_wstring(i)));
+    winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetHelpText(
+        seek_button,
+        winrt::hstring(std::wstring(podlens::Tr("transcript.seek_hint"))));
     muxc::ToolTipService::SetToolTip(
         seek_button,
         box_value(winrt::hstring(std::wstring(podlens::Tr("transcript.seek_hint")))));
@@ -2263,7 +2274,7 @@ std::wstring MainWindow::FindLocalAudio(std::string const& episode_id) {
   if (::getenv_s(&required, nullptr, 0, "PODLENS_DATA_DIR") == 0 && required > 0) {
     std::string value(required, '\0');
     size_t written = 0;
-    ::getenv_s(&required, value.data(), value.size(), "PODLENS_DATA_DIR");
+    ::getenv_s(&written, value.data(), value.size(), "PODLENS_DATA_DIR");
     value.resize(written > 0 ? written - 1 : 0); // drop the terminating null
     base = std::filesystem::path(value);
   }

@@ -8,15 +8,17 @@ driver="$output/macos-ax"
 home="$output/home-$$"
 data="$output/data-$$"
 mkdir -p "$output" "$home" "$data"
+export PODLENS_DATA_DIR="$data"
 [[ -x "$app" ]]
 cat >"$data/config.json" <<'EOF'
 {"ui-lang":"en","check-updates-enabled":"false","last-update-check":2000000000}
 EOF
+racket "$repo/scripts/e2e/seed-listening-fixture.rkt"
 
 swiftc "$repo/scripts/e2e/macos-ax.swift" -o "$driver" \
   -framework AppKit -framework ApplicationServices
 
-HOME="$home" PODLENS_DATA_DIR="$data" "$app" >"$output/application.log" 2>&1 &
+HOME="$home" "$app" >"$output/application.log" 2>&1 &
 app_pid=$!
 
 stop_bounded() {
@@ -36,6 +38,20 @@ cleanup() {
     stop_bounded "$app_pid" || true
     wait "$app_pid" 2>/dev/null || true
   fi
+  wait "$app_pid" 2>/dev/null || true
+  # Preserve Apple's crash report alongside the accessibility snapshot. The
+  # app runs with an isolated HOME, while CrashReporter may still use the
+  # runner account's real Library depending on the host architecture.
+  for diagnostics in \
+    "$home/Library/Logs/DiagnosticReports" \
+    "$HOME/Library/Logs/DiagnosticReports"; do
+    if [[ -d "$diagnostics" ]]; then
+      crash_report="$(find "$diagnostics" -type f \( -iname 'podlens*.ips' -o -iname 'podlens*.crash' \) -print -quit)"
+      if [[ -n "$crash_report" ]]; then
+        cp "$crash_report" "$output/application-crash.${crash_report##*.}"
+      fi
+    fi
+  done
   exit "$status"
 }
 trap cleanup EXIT

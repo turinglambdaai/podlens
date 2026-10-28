@@ -184,6 +184,9 @@ agent 用两条 CLI 命令完成「订阅并取回某集的中文要点」。
 - [x] 三端实现专注布局，切换不重载单集或播放器。
 - [x] 三端逐句行具备原生键盘激活和可访问动作。
 - [x] 三端提供明确的跟随开关与返回当前句操作。
+- [x] 打包应用验收使用离线双语单集，在 Windows、Linux、macOS arm64/x64
+      完成「恢复单集→专注模式→键盘 Return 跳到 00:04→关闭跟随→当前句→
+      恢复资料库」，并分别上传交互记录与 listening accessibility snapshot。
 - [ ] 在 Windows 1024×768、125–200% 缩放与 macOS/Linux 代表窗口完成
       新截图、键盘路径和 accessibility trace；CI 绿不替代这一步。
 

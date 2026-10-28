@@ -57,6 +57,17 @@ func findButton(_ root: AXUIElement, titles: Set<String>) -> AXUIElement? {
     }
 }
 
+func findIdentifier(_ root: AXUIElement, _ identifier: String) -> AXUIElement? {
+    walk(root).first {
+        stringAttribute($0, kAXIdentifierAttribute) == identifier
+    }
+}
+
+func elementContains(_ element: AXUIElement, _ expected: String) -> Bool {
+    [kAXTitleAttribute, kAXValueAttribute, kAXDescriptionAttribute]
+        .contains { stringAttribute(element, $0).contains(expected) }
+}
+
 func findMenuItem(_ root: AXUIElement, titles: Set<String>) -> AXUIElement? {
     walk(root).first { element in
         stringAttribute(element, kAXRoleAttribute) == (kAXMenuItemRole as String) &&
@@ -69,6 +80,21 @@ func press(_ element: AXUIElement, _ description: String) throws {
     guard result == .success else {
         throw DriverError.failure("AXPress failed for \(description): \(result.rawValue)")
     }
+}
+
+func pressReturn(_ element: AXUIElement, pid: pid_t) throws {
+    guard AXUIElementSetAttributeValue(
+        element, kAXFocusedAttribute as CFString, kCFBooleanTrue
+    ) == .success else {
+        throw DriverError.failure("could not focus transcript sentence")
+    }
+    guard let source = CGEventSource(stateID: .hidSystemState),
+          let down = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: true),
+          let up = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false) else {
+        throw DriverError.failure("could not create Return key events")
+    }
+    down.postToPid(pid)
+    up.postToPid(pid)
 }
 
 func replaceText(_ element: AXUIElement, with value: String, pid: pid_t) throws {
@@ -139,6 +165,34 @@ do {
         containsText(window, ["Discover", "发现", "Choose an episode to begin", "选择一集开始"]) ? true : nil
     }
 
+    let focus: AXUIElement = try waitFor("focus listening button") {
+        findIdentifier(window, "FocusListeningButton")
+    }
+    try press(focus, "focus listening")
+    _ = try waitFor("focused listening layout") {
+        elementContains(focus, "Show Library") || elementContains(focus, "显示资料库") ? true : nil
+    }
+    let segment: AXUIElement = try waitFor("third transcript sentence in focus mode") {
+        findIdentifier(window, "TranscriptSegment-2")
+    }
+    try pressReturn(segment, pid: pid)
+    let position: AXUIElement = try waitFor("player position") {
+        findIdentifier(window, "PlayerPosition")
+    }
+    _ = try waitFor("four-second transcript seek") {
+        elementContains(position, "00:04") ? true : nil
+    }
+    let follow: AXUIElement = try waitFor("follow transcript toggle") {
+        findIdentifier(window, "FollowTranscriptButton")
+    }
+    try press(follow, "turn follow off")
+    let current: AXUIElement = try waitFor("return to current sentence") {
+        findIdentifier(window, "ReturnToCurrentButton")
+    }
+    try press(current, "return to current sentence")
+    try writeJSON(snapshot(application), to: output.appendingPathComponent("listening-accessibility.json"))
+    try press(focus, "restore library")
+
     let settingsMenuItem: AXUIElement = try waitFor("Settings menu item") {
         findMenuItem(application, titles: ["Settings…", "设置…"])
     }
@@ -179,9 +233,24 @@ do {
     try press(quitMenuItem, "Quit PodLens menu item")
     try writeJSON([
         "platform": "macos",
-        "actions": ["press:Settings menu item", "set:chat-model", "press:Saved", "press:Cancel", "press:Quit PodLens"],
+        "actions": [
+            "press:FocusListeningButton",
+            "keyboard:Return:TranscriptSegment-2",
+            "press:FollowTranscriptButton:off",
+            "press:ReturnToCurrentButton",
+            "press:FocusListeningButton:restore",
+            "press:Settings menu item",
+            "set:chat-model",
+            "press:Saved",
+            "press:Cancel",
+            "press:Quit PodLens",
+        ],
         "assertions": [
             "packaged SwiftUI window activated",
+            "synthetic bilingual transcript exposed stable accessibility identifiers",
+            "focus mode hid and restored the library without reloading the episode",
+            "activating a transcript sentence moved playback to 00:04",
+            "Current remained operable after the listener turned follow off",
             "settings field exposed a stable accessibility label",
             "save mutation crossed RVT1 into the embedded backend",
             "isolated config.json contains acceptance-model",

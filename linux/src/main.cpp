@@ -241,6 +241,8 @@ char const* tr(char const* key) {
        "Return to the playing sentence and resume following"},
       {"transcript.seek_hint", "按回车或空格跳播到这句话",
        "Press Enter or Space to seek to this sentence"},
+      {"transcript.sentence", "逐句稿句子", "Transcript sentence"},
+      {"player.play_pause", "播放或暂停", "Play or pause"},
       {"player.transcript", "逐句稿", "Transcript"},
       {"player.back15", "后退 15 秒", "Back 15 seconds"},
       {"player.forward30", "前进 30 秒", "Forward 30 seconds"},
@@ -1830,10 +1832,20 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   gtk_box_append(GTK_BOX(grid), lines);
   auto* button = gtk_button_new();
   gtk_button_set_child(GTK_BUTTON(button), grid);
+  // Keep keyboard focus explicit: the transcript journey depends on native
+  // Enter/Space activation, including under headless Wayland accessibility
+  // sessions where implicit focusability can differ between GTK releases.
+  gtk_widget_set_focusable(button, TRUE);
+  gtk_widget_set_can_target(button, TRUE);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_add_css_class(button, "pl-seg");
   gtk_widget_set_hexpand(button, TRUE);
   gtk_widget_set_tooltip_text(button, tr("transcript.seek_hint"));
+  std::string const accessible_label =
+      std::string(tr("transcript.sentence")) + ": " + seg[2];
+  gtk_accessible_update_property(
+      GTK_ACCESSIBLE(button), GTK_ACCESSIBLE_PROPERTY_LABEL,
+      accessible_label.c_str(), -1);
   carry_data<double>(G_OBJECT(button), "seg-start", start);
   carry_data<double>(G_OBJECT(button), "seg-end", std::atof(seg[1].c_str()));
 
@@ -4574,6 +4586,10 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(player_bar), player_transcript);
   auto* play_button = gtk_button_new_from_icon_name(
       "media-playback-start-symbolic");
+  gtk_widget_set_tooltip_text(play_button, tr("player.play_pause"));
+  gtk_accessible_update_property(
+      GTK_ACCESSIBLE(play_button), GTK_ACCESSIBLE_PROPERTY_LABEL,
+      tr("player.play_pause"), -1);
   gtk_box_append(GTK_BOX(player_bar), play_button);
   auto* skip_back =
       gtk_button_new_from_icon_name("media-skip-backward-symbolic");

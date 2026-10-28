@@ -107,7 +107,7 @@ final class AppModel: ObservableObject {
         // and update checks, and no unstructured tasks race the RPCs.
         await store.loadFeeds()
         await store.loadCatalog()
-        store.resumeLast()
+        await store.resumeLast()
         silentUpdateCheck()
     }
 

@@ -954,6 +954,7 @@ struct EpisodeHeader: View {
                                   ? "arrow.down.right.and.arrow.up.left"
                                   : "arrow.up.left.and.arrow.down.right")
                     }
+                    .accessibilityIdentifier("FocusListeningButton")
                     .help(columnVisibility == .detailOnly ? L("focusExitHint") : L("focusEnterHint"))
 
                     if let job = activeJob {
@@ -1056,6 +1057,7 @@ struct TranscriptView: View {
                     .focusable()
                     .focused($focusedSegment, equals: seg.id)
                     .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("TranscriptSegment-\(seg.id)")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(L("transcriptSeekHint"))
                     .accessibilityAction {
@@ -1100,6 +1102,7 @@ struct TranscriptView: View {
                         Label(L("followTranscript"), systemImage: "location.fill")
                     }
                     .toggleStyle(.button)
+                    .accessibilityIdentifier("FollowTranscriptButton")
                     .help(L("followTranscriptHint"))
                     Button {
                         followPlayback = true
@@ -1110,6 +1113,7 @@ struct TranscriptView: View {
                     } label: {
                         Label(L("returnToCurrent"), systemImage: "scope")
                     }
+                    .accessibilityIdentifier("ReturnToCurrentButton")
                     .help(L("returnToCurrentHint"))
                 }
                 .padding([.horizontal, .bottom], 8)
@@ -1218,6 +1222,7 @@ struct PlayerBar: View {
                     .font(.title3)
             }
             .buttonStyle(.borderless)
+            .accessibilityIdentifier("PlayPauseButton")
             .keyboardShortcut(.space, modifiers: [])
             .disabled(!hasEpisode)
             .help(store.playing ? L("pause") : L("play"))
@@ -1235,6 +1240,7 @@ struct PlayerBar: View {
             Text(formatTime(store.currentTime))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(hasEpisode ? .primary : .tertiary)
+                .accessibilityIdentifier("PlayerPosition")
             Slider(value: Binding(get: { store.currentTime },
                                   set: { store.seek(to: $0) }),
                    in: 0...(max(store.duration, 1)))

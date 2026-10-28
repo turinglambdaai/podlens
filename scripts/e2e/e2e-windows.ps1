@@ -2,6 +2,22 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class PodLensNativeInput {
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int command);
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
+}
+'@
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $output = Join-Path $repo '.rivet\acceptance\windows'
@@ -60,6 +76,12 @@ function Find-EditByName {
 function Activate-Control {
     param($Element)
     [object]$pattern = $null
+    if ($Element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,
+                                      [ref]$pattern)) {
+        ([System.Windows.Automation.TogglePattern]$pattern).Toggle()
+        return
+    }
+    $pattern = $null
     if ($Element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,
                                       [ref]$pattern)) {
         ([System.Windows.Automation.SelectionItemPattern]$pattern).Select()
@@ -74,10 +96,29 @@ function Activate-Control {
     throw "control $($Element.Current.Name) has no activation pattern"
 }
 
+function Activate-WithEnter {
+    param($Element, $Process)
+    $Process.Refresh()
+    [void][PodLensNativeInput]::ShowWindowAsync($Process.MainWindowHandle, 9)
+    [void][PodLensNativeInput]::SetForegroundWindow($Process.MainWindowHandle)
+    $Element.SetFocus()
+    [void](Wait-Until 'transcript sentence keyboard focus' {
+        if ($Element.Current.HasKeyboardFocus) { return $true }
+        return $false
+    } 5)
+    # Send a physical Return key pair to the foreground WinUI window. This is
+    # more deterministic on hosted runners than SendKeys' message-loop helper.
+    [PodLensNativeInput]::keybd_event(0x0D, 0, 0, [UIntPtr]::Zero)
+    [PodLensNativeInput]::keybd_event(0x0D, 0, 2, [UIntPtr]::Zero)
+}
+
 $oldData = $env:PODLENS_DATA_DIR
 $process = $null
+$window = $null
 try {
     $env:PODLENS_DATA_DIR = $data
+    & racket (Join-Path $repo 'scripts\e2e\seed-listening-fixture.rkt')
+    if ($LASTEXITCODE -ne 0) { throw 'could not seed synthetic listening fixture' }
     $process = Start-Process -FilePath $executable.FullName -PassThru `
         -RedirectStandardOutput (Join-Path $output 'application.stdout.log') `
         -RedirectStandardError (Join-Path $output 'application.stderr.log')
@@ -89,9 +130,59 @@ try {
     }
     [void](Wait-Until 'embedded backend readiness' {
         $status = Find-ById $window 'StatusLine'
-        if ($status -and $status.Current.Name -match 'Ready|就绪') { return $true }
+        if ($status -and $status.Current.Name -match 'Ready|就绪|Resuming|继续上次') { return $true }
         return $false
     })
+
+    $focus = Wait-Until 'focus listening button' { Find-ById $window 'FocusModeButton' }
+    $play = Wait-Until 'play button' { Find-ById $window 'PlayPauseButton' }
+    Activate-Control $focus
+    [void](Wait-Until 'focused listening layout' {
+        if ($focus.Current.Name -match 'Show Library|显示资料库') { return $true }
+        return $false
+    })
+    $segment = Wait-Until 'third transcript sentence in focus mode' {
+        Find-ById $window 'TranscriptSegment-2'
+    }
+    Activate-Control $play
+    Activate-WithEnter $segment $process
+    [void](Wait-Until 'four-second transcript seek' {
+        $position = Find-ById $window 'PositionText'
+        if ($position -and $position.Current.Name -eq '00:04') { return $true }
+        return $false
+    })
+    $follow = Wait-Until 'follow transcript toggle' { Find-ById $window 'FollowTranscriptButton' }
+    Activate-Control $follow
+    $toggle = $follow.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+    if ($toggle.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) {
+        throw 'follow transcript toggle did not turn off'
+    }
+    $current = Wait-Until 'return to current sentence button' {
+        Find-ById $window 'ReturnToCurrentButton'
+    }
+    Activate-Control $current
+    [void](Wait-Until 'follow transcript resumed' {
+        $state = $follow.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+        if ($state.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) {
+            return $true
+        }
+        return $false
+    })
+    Activate-Control $focus
+
+    $listeningNodes = $window.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    $listeningSnapshot = for ($index = 0; $index -lt [Math]::Min($listeningNodes.Count, 700); $index++) {
+        $node = $listeningNodes[$index]
+        [ordered]@{
+            name = $node.Current.Name
+            controlType = $node.Current.ControlType.ProgrammaticName
+            automationId = $node.Current.AutomationId
+        }
+    }
+    $listeningSnapshot | ConvertTo-Json -Depth 4 |
+        Set-Content -LiteralPath (Join-Path $output 'listening-accessibility.json') -Encoding utf8
 
     $settings = Wait-Until 'Settings navigation item' { Find-ById $window 'SettingsNavItem' }
     Activate-Control $settings
@@ -133,9 +224,23 @@ try {
     [ordered]@{
         platform = 'windows'
         artifact = $executable.FullName
-        actions = @('select:SettingsNavItem', 'set:chat-model', 'invoke:Save')
+        actions = @(
+            'toggle:FocusModeButton',
+            'invoke:PlayPauseButton',
+            'keyboard:Enter:TranscriptSegment-2',
+            'toggle:FollowTranscriptButton:off',
+            'invoke:ReturnToCurrentButton',
+            'toggle:FocusModeButton:restore',
+            'select:SettingsNavItem',
+            'set:chat-model',
+            'invoke:Save'
+        )
         assertions = @(
             'packaged WinUI window activated',
+            'synthetic bilingual transcript exposed stable UI Automation ids',
+            'focus mode hid and restored the library without reloading the episode',
+            'activating a transcript sentence moved playback to 00:04',
+            'Current restored follow after the listener turned it off',
             'settings field exposed a stable UI Automation name',
             'save mutation crossed RVT1 into the embedded backend',
             'isolated config.json contains acceptance-model'
@@ -150,6 +255,29 @@ try {
         if ($process.HasExited) { return $true }
         return $false
     } 15)
+} catch {
+    if ($window) {
+        try {
+            $failureNodes = $window.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            $failureSnapshot = for ($index = 0; $index -lt [Math]::Min($failureNodes.Count, 700); $index++) {
+                $node = $failureNodes[$index]
+                [ordered]@{
+                    name = $node.Current.Name
+                    controlType = $node.Current.ControlType.ProgrammaticName
+                    automationId = $node.Current.AutomationId
+                    hasKeyboardFocus = $node.Current.HasKeyboardFocus
+                }
+            }
+            $failureSnapshot | ConvertTo-Json -Depth 4 |
+                Set-Content -LiteralPath (Join-Path $output 'accessibility-failure.json') -Encoding utf8
+        } catch {
+            # Preserve the original acceptance failure if the diagnostic tree
+            # itself disappeared with the process.
+        }
+    }
+    throw
 } finally {
     if ($process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
