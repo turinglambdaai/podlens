@@ -2,7 +2,7 @@
 
 听得懂的英文播客。跨平台桌面播客应用：用你自己的大模型 API key，把英文单集转写、逐句翻译、自动总结——为"读得懂、听不懂"的听众而生。
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turinglambdaai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![CI](https://github.com/turlamai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turlamai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 [English](README.md) · **中文**
 
@@ -14,7 +14,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/turinglambdaai/podlens/releases/latest) 下载：
+从 [Releases](https://github.com/turlamai/podlens/releases/latest) 下载：
 
 | 平台 | 下载 | 更新 |
 |---|---|---|
@@ -48,7 +48,7 @@ macOS 版本仅为 ad-hoc 签名——首次启动若被 Gatekeeper 拦截，右
 
 ## 工作原理
 
-PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个共享的 Racket 后端（订阅解析、媒体库、AI 流水线、更新客户端）以进程内方式嵌进每个第一方原生宿主。不是 Electron，不是 web 套壳。
+PodLens 基于 [Rivet](https://github.com/turlamai/rivet) 构建：一个共享的 Racket 后端（订阅解析、媒体库、AI 流水线、更新客户端）以进程内方式嵌进每个第一方原生宿主。不是 Electron，不是 web 套壳。
 
 ```text
                  Racket 应用核心
@@ -96,8 +96,8 @@ PodLens 基于 [Rivet](https://github.com/turinglambdaai/rivet) 构建：一个�
 添加播客 RSS 地址，选一集，点 **转写 → 翻译 → 总结**。或者在终端：
 
 ```bash
-git clone https://github.com/turinglambdaai/podlens && cd podlens
-raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
+git clone https://github.com/turlamai/podlens && cd podlens
+raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.11.0'
 racket app/cli.rkt add "https://feeds.example.com/show.xml"
 racket app/cli.rkt episodes <feed-id>
 racket app/cli.rkt transcribe <episode-id>
@@ -132,7 +132,7 @@ podlens/
 前置：[Racket CS](https://racket-lang.org/)（stable）并安装 pinned 的 Rivet 包；平台工具链（macOS 装 Xcode CLT，Windows 装 VS 2022 WinUI 工作负载，Linux 装 GTK4 与 GStreamer 开发包）。
 
 ```bash
-raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
+raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.11.0'
 raco rivet doctor
 raco rivet dev          # 构建并启动当前平台宿主
 raco test tests/        # 后端测试（假服务器，不需要真实 key）

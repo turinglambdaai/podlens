@@ -54,7 +54,7 @@ jobs:
           distribution: full
           architecture: ${{ matrix.racket-arch }}
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Package (ad-hoc; notarization activates when secrets exist)
         run: raco rivet package
       - name: Update-feed zip + checksum
@@ -93,14 +93,14 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
         shell: bash
       - name: Install WiX (v5; v7 requires EULA acceptance, v5 runs the v4 schema)
         run: dotnet tool install --global wix --version 5.0.2
         shell: bash
       - name: Package + MSI (rivet release, development signing)
         env:
-          RIVET_UPDATE_BASE_URL: https://github.com/turinglambdaai/podlens/releases/download/${{ github.ref_name }}
+          RIVET_UPDATE_BASE_URL: https://github.com/turlamai/podlens/releases/download/${{ github.ref_name }}
           RIVET_UPDATE_KEY_ID: podlens-2026-10
           UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
@@ -157,7 +157,7 @@ jobs:
       # build — it ships no packages of its own. crypto backs the updater.
       - name: Install Rivet (catalog) and backend packages
         run: |
-          raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
           raco pkg install --auto --no-docs crypto
       - name: Install GTK4, GStreamer, rpm and packaging tooling
         run: |
@@ -212,7 +212,7 @@ jobs:
           distribution: full
       - name: Install Rivet (catalog; rivet/distribution signs the wrapper)
         if: env.HAS_UPDATE_KEY == 'true'
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Install OpenSSL 3
         if: env.HAS_UPDATE_KEY == 'true'
         run: brew install openssl@3

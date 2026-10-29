@@ -2,7 +2,7 @@
 
 Podcasts, in your language. A cross-platform desktop podcast player that transcribes, translates and summarizes English episodes with your own LLM API key — for listeners who understand far more reading than hearing.
 
-[![CI](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turinglambdaai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![CI](https://github.com/turlamai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turlamai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -14,7 +14,7 @@ Free BYOK application. There is no PodLens hosted-AI subscription; your configur
 
 ## Install
 
-Download from [Releases](https://github.com/turinglambdaai/podlens/releases/latest):
+Download from [Releases](https://github.com/turlamai/podlens/releases/latest):
 
 | Platform | Download | Updates |
 |---|---|---|
@@ -51,7 +51,7 @@ The transcripts, translations and summaries are cached on disk, so an episode is
 
 ## How it works
 
-PodLens is built on [Rivet](https://github.com/turinglambdaai/rivet): one shared Racket backend (feed parsing, library storage, the AI pipeline, the update client) embedded into each first-party native host. Not Electron, not a web wrapper.
+PodLens is built on [Rivet](https://github.com/turlamai/rivet): one shared Racket backend (feed parsing, library storage, the AI pipeline, the update client) embedded into each first-party native host. Not Electron, not a web wrapper.
 
 ```text
                  Racket application core
@@ -98,8 +98,8 @@ Open Settings and fill in:
 Add a podcast RSS URL, pick an episode, press **转写 → 翻译 → 总结** (transcribe → translate → summarize). Or from a terminal:
 
 ```bash
-git clone https://github.com/turinglambdaai/podlens && cd podlens
-raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
+git clone https://github.com/turlamai/podlens && cd podlens
+raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.11.0'
 racket app/cli.rkt add "https://feeds.example.com/show.xml"
 racket app/cli.rkt episodes <feed-id>
 racket app/cli.rkt transcribe <episode-id>
@@ -135,7 +135,7 @@ podlens/
 Prerequisites: [Racket CS](https://racket-lang.org/) (stable) with the pinned Rivet package installed, and the platform toolchain (Xcode CLT on macOS, VS 2022 with the WinUI workload on Windows, GTK4 + GStreamer dev packages on Linux).
 
 ```bash
-raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
+raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.11.0'
 raco rivet doctor
 raco rivet dev          # build + launch the current platform's host
 raco test tests/        # backend tests (no API key needed — fake server)

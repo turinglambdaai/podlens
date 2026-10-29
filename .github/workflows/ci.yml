@@ -32,7 +32,7 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
         shell: bash
       - name: Compile backend
         run: raco make app/core/*.rkt app/update.rkt app/backend.rkt app/cli.rkt
@@ -69,7 +69,7 @@ jobs:
           distribution: full
           architecture: arm64
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Build + package + verify
         run: raco rivet package
       - name: Launch smoke (ad-hoc build)
@@ -101,7 +101,7 @@ jobs:
       # build — it ships no packages of its own. crypto backs the updater.
       - name: Install Rivet (catalog) and backend packages
         run: |
-          raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+          raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
           raco pkg install --auto --no-docs crypto
       - name: Build host (generates linux/GeneratedBackend.hpp + compiles)
         run: raco rivet build
@@ -125,7 +125,7 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Build + package + verify
         run: raco rivet package
         shell: bash

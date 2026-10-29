@@ -13,7 +13,7 @@ Every release uploads one special asset alongside the installers:
   the exact payload bytes every client verifies.
 
 The client fetches
-`https://github.com/turinglambdaai/podlens/releases/latest/download/update-manifest.json`
+`https://github.com/turlamai/podlens/releases/latest/download/update-manifest.json`
 (the moving "latest" location; redirect-following is mandatory — release
 assets answer with a 302 to the CDN), verifies the signature, and only
 then parses the inner manifest.
