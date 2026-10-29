@@ -151,7 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
       # Installed after the embeddable runtime so the catalog dependency
       # closure (cext-lib, crypto-lib, keel) resolves against the minimal
       # build — it ships no packages of its own. crypto backs the updater.
@@ -269,11 +269,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "${{ github.ref_name }}" -R turinglambdaai/podlens >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turinglambdaai/podlens
+          if gh release view "${{ github.ref_name }}" -R turlamai/podlens >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" dist/* --clobber -R turlamai/podlens
           else
             gh release create "${{ github.ref_name }}" dist/* \
-              -R turinglambdaai/podlens \
+              -R turlamai/podlens \
               --title "PodLens ${{ github.ref_name }}" \
               --generate-notes
           fi
