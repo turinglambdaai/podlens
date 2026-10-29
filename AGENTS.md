@@ -19,7 +19,7 @@ PodLens 是**原生**播客应用（Rivet 架构）：解决「听不懂英文�
 GUI 与 CLI 共用同一份 Racket 核心：无参数启动 GUI；CLI 走源码方式
 `racket app/cli.rkt <command>`（单文件自带运行时的 CLI 在路线图上）。
 
-底层框架是 [Rivet](https://github.com/turinglambdaai/rivet)（同组织仓库）：RVT1 协议（typed RPC / Events / State）、嵌入式 Racket CS、构建编排。Rivet 迭代很快：**每次动工前先把本地 checkout 更新到 origin/main 再开发**；遇到 Rivet 的问题直接向上游提 issue 或 PR，不在 PodLens 里绕过或本地 hack。
+底层框架是 [Rivet](https://github.com/turlamai/rivet)（同组织仓库）：RVT1 协议（typed RPC / Events / State）、嵌入式 Racket CS、构建编排。Rivet 迭代很快：**每次动工前先把本地 checkout 更新到 origin/main 再开发**；遇到 Rivet 的问题直接向上游提 issue 或 PR，不在 PodLens 里绕过或本地 hack。
 
 ## 快速命令
 
@@ -105,19 +105,19 @@ scripts/update-keys.sh
 ## 组合定位（Portfolio placement）
 
 - 当前决策（2026-10-v2）：免费 BYOK；听读用户入口。具体价格、免费/付费边界和开卖门禁以本仓 [PRICING.md](PRICING.md) 为唯一权威；旧版收费候选与早鸟方案已被替代。
-- 组合归属：[PORTFOLIO](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)。当前全部产品开发中、没有实际用户；目标定价不表示已经开卖，不因此立即给开发版加收费墙。
+- 组合归属：[PORTFOLIO](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md)。当前全部产品开发中、没有实际用户；目标定价不表示已经开卖，不因此立即给开发版加收费墙。
 - 免费产品不接商业激活；付费层先实现可验证价值，再接 Commerce/Permit。优先完成本仓既有产品审查 issue；不修改现行源码 LICENSE。
 
 ## 产品交付与下一步（2026-10-23）
 
-- 家族[交付标准](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md)与[组合策略](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md)是共用政策；本仓具体行为以 `docs/DESIGN-ROADMAP.md` 为准，不复制五库依赖图。
-- 当前执行入口：[产品审查 issue](https://github.com/turinglambdaai/podlens/issues/13)。v0.4.0 切片已进入 main；先完成 BYOK 安全存储迁移与三端发现/播放/转录取消恢复，桌面证据齐备后再评估移动端。
+- 家族[交付标准](https://github.com/turlamai/turlamai.github.io/blob/master/docs/PRODUCT-STANDARD.md)与[组合策略](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md)是共用政策；本仓具体行为以 `docs/DESIGN-ROADMAP.md` 为准，不复制五库依赖图。
+- 当前执行入口：[产品审查 issue](https://github.com/turlamai/podlens/issues/13)。v0.4.0 切片已进入 main；先完成 BYOK 安全存储迁移与三端发现/播放/转录取消恢复，桌面证据齐备后再评估移动端。
 - 开工先检查干净工作树与远端，以 fast-forward-only 更新并记录 SHA；共享文件一次一个写入者，保留其他 checkout 的未提交工作。
 - 每次只完成一个可验收切片，记录 owned files、依赖 pin、命令/平台/产物证据和回滚。已实现、已发布、实机验收分别陈述；不修改 requirements 或复用旧证据来制造通过。
 
 ## Documentation languages
 
-Public default documentation is English; maintain complete Chinese user paths in `*.zh-CN.md`, with reciprocal links. Update both languages when prices, quotas, installation, recovery, privacy or supported platforms change. API/protocol identifiers and commands remain unchanged; do not maintain a second normative protocol or implementation. Follow the [family language policy](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md). Existing internal notes are not a claim that every document is bilingual.
+Public default documentation is English; maintain complete Chinese user paths in `*.zh-CN.md`, with reciprocal links. Update both languages when prices, quotas, installation, recovery, privacy or supported platforms change. API/protocol identifiers and commands remain unchanged; do not maintain a second normative protocol or implementation. Follow the [family language policy](https://github.com/turlamai/turlamai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md). Existing internal notes are not a claim that every document is bilingual.
 
 ## Public product documentation
 
