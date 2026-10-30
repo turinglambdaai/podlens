@@ -101,16 +101,26 @@
   (define m (regexp-match #px"HTTP/[0-9.]+ +([0-9]+)" s))
   (and m (string->number (second m))))
 
-;; GET with up to 5 redirects. → (values code headers body-bytes)
+;; GET with up to 8 redirects. A 30x that points back at the SAME url is a
+;; transient "retry me" (Podscribe's attribution edge does this under load),
+;; so it is retried a few times with a beat in between and does not spend
+;; the cross-host hop budget. → (values code headers body-bytes)
+(define redirect-hop-limit 8)
+(define same-url-retry-limit 8)
+
 (define (http-get-bytes url-string [extra-headers '()])
-  (let loop ([url url-string] [hops 0])
+  (let loop ([url url-string] [hops 0] [same-url-retries 0])
     (define-values (code headers body)
       (request-once "GET" url extra-headers))
-    (if (and (member code '(301 302 303 307 308)) (< hops 5))
+    (if (and (member code '(301 302 303 307 308)) (< hops redirect-hop-limit))
         (let ([location (header-value headers "location")])
           (unless location
             (error 'http-get-bytes "redirect without Location from ~a" url))
-          (loop location (add1 hops)))
+          (if (and (string=? location url) (< same-url-retries same-url-retry-limit))
+              (begin
+                (sleep 0.3)
+                (loop url hops (add1 same-url-retries)))
+              (loop location (add1 hops) 0)))
         (values code headers body))))
 
 (define (http-get-string url-string [extra-headers '()])
@@ -128,10 +138,11 @@
 ;; Returns (values code bytes-written). Raises on network failure only;
 ;; non-200 responses still write nothing and return the code.
 (define (http-download-file url-string dest-path [on-progress (lambda (_a _b) (void))])
-  ;; release assets answer with a 30x to their CDN — chase up to 5 hops,
-  ;; mirroring http-get-bytes
-  (let download-loop ([url url-string] [hops 0])
-    (define-values (ssl? host port path) (split-url url-string))
+  ;; release assets answer with a 30x to their CDN — chase up to
+  ;; redirect-hop-limit hops, mirroring http-get-bytes; a 30x back to the
+  ;; same url (Podscribe's attribution edge) is retried, not chased
+  (let download-loop ([url url-string] [hops 0] [same-url-retries 0])
+    (define-values (ssl? host port path) (split-url url))
     (define conn (http-conn-open host #:ssl? ssl? #:port port))
     (define-values (status resp-headers body-port)
       (http-conn-sendrecv! conn path
@@ -142,12 +153,17 @@
     (define code (status-code status))
     (define resp-headers-strs (headers->strings resp-headers))
     (cond
-      [(and (member code '(301 302 303 307 308)) (< hops 5))
+      [(and (member code '(301 302 303 307 308)) (< hops redirect-hop-limit))
        (define location (header-value resp-headers-strs "location"))
        (close-input-port body-port)
+       (with-handlers ([exn:fail? void]) (http-conn-close! conn))
        (unless location
          (error 'http-download-file "redirect without Location from ~a" url))
-       (download-loop location (add1 hops))]
+       (if (and (string=? location url) (< same-url-retries same-url-retry-limit))
+           (begin
+             (sleep 0.3)
+             (download-loop url hops (add1 same-url-retries)))
+           (download-loop location (add1 hops) 0))]
       [else
        (download-into! conn code resp-headers-strs body-port dest-path on-progress)])))
 

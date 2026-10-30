@@ -18,6 +18,17 @@ All notable changes to PodLens are documented here. Format follows
   follow mode. The controls and seek actions expose native accessibility
   semantics on all three desktop hosts.
 
+### Fixed
+- **Real podcast audio downloads.** The audio downloader re-requested the
+  first URL on every redirect hop instead of the redirect target, so any
+  episode whose enclosure goes through a redirect chain — attribution edges
+  like Podscribe in front of libsyn/CDNs are the norm for professional
+  feeds — failed with `download failed (302)` and could not play. Redirects
+  are now followed for real (budget 8 hops), a transient "302 to itself"
+  from an attribution edge is retried instead of burning the hop budget,
+  and superseded connections are closed on the way. Covered by new local
+  redirect-chain tests (#23).
+
 ## 0.4.0 - 2026-10-22
 
 ### Added
