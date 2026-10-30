@@ -107,45 +107,6 @@ std::wstring to_wide(std::string const& utf8_text) {
 
 namespace {
 
-// The estimate RPC answers with a small JSON object; picking the numbers
-// out with a regex beats carrying a JSON parser in the host.
-std::wstring EstimateSummaryText(std::string const& json) {
-  auto const int_field = [&json](char const* key) -> int {
-    std::regex const re(std::string("\"") + key + "\":([0-9]+)");
-    std::smatch m;
-    if (std::regex_search(json, m, re)) return std::stoi(m[1].str());
-    return -1;
-  };
-  wchar_t buffer[160];
-  std::wstring text;
-  auto const append = [&text](std::wstring piece) {
-    if (!text.empty()) text += L" · ";
-    text += piece;
-  };
-  int const minutes = int_field("durationSec") / 60;
-  if (minutes > 0) {
-    swprintf(buffer, 160, podlens::Tr("estimate.minutes").data(), minutes);
-    append(buffer);
-  }
-  int const sentences = int_field("sentences");
-  if (sentences >= 0) {
-    swprintf(buffer, 160, podlens::Tr("estimate.sentences").data(), sentences);
-    append(buffer);
-  }
-  int const chars = int_field("chars");
-  if (chars >= 0) {
-    swprintf(buffer, 160, podlens::Tr("estimate.chars").data(), chars);
-    append(buffer);
-  }
-  if (json.find("\"translated\":true") != std::string::npos) {
-    append(std::wstring(podlens::Tr("estimate.translated")));
-  }
-  if (json.find("\"summarized\":true") != std::string::npos) {
-    append(std::wstring(podlens::Tr("estimate.summarized")));
-  }
-  return text;
-}
-
 rivet::windows::RacketRuntimeConfig runtime_config() {
   auto const exe = executable_path();
   auto const root = exe.parent_path();
@@ -333,12 +294,9 @@ MainWindow::MainWindow() {
   });
   EpisodesEmptyTitle().Text(std::wstring(podlens::Tr("empty.episodes_title")));
   EpisodesEmptyHint().Text(std::wstring(podlens::Tr("empty.episodes_hint")));
-  MenuDownload().Text(std::wstring(podlens::Tr("action.download")));
-  MenuTranscribe().Text(std::wstring(podlens::Tr("action.transcribe")));
-  MenuTranslate().Text(std::wstring(podlens::Tr("action.translate")));
-  MenuSummarize().Text(std::wstring(podlens::Tr("action.summarize")));
   MenuRemoveAudio().Text(std::wstring(podlens::Tr("action.remove_audio")));
-  ModeLabel().Text(std::wstring(podlens::Tr("mode.label")));
+  BilingualToggle().Content(box_value(winrt::hstring(
+      std::wstring(podlens::Tr("mode.bilingual")))));
   FocusModeButton().Content(box_value(winrt::hstring(
       std::wstring(podlens::Tr("focus.enter")))));
   FollowTranscriptButton().Content(box_value(winrt::hstring(
@@ -347,11 +305,6 @@ MainWindow::MainWindow() {
       std::wstring(podlens::Tr("transcript.current")))));
   DiscoverSearchBox().PlaceholderText(
       winrt::hstring(std::wstring(podlens::Tr("discover.search_placeholder"))));
-  TranscriptTab().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("tab.transcript")))));
-  SummaryTab().Content(box_value(winrt::hstring(
-      std::wstring(podlens::Tr("tab.summary")))));
-
   // Filling the selectors fires SelectionChanged while the window is still
   // being constructed; initialized_ keeps those callbacks harmless.
   for (wchar_t const* label :
@@ -359,13 +312,6 @@ MainWindow::MainWindow() {
     RateSelector().Items().Append(box_value(winrt::hstring(label)));
   }
   RateSelector().SelectedIndex(0);
-  for (char const* key :
-       {"mode.bilingual", "mode.translation", "mode.original"}) {
-    ModeSelector().Items().Append(box_value(winrt::hstring(
-        std::wstring(podlens::Tr(key)))));
-  }
-  ModeSelector().SelectedIndex(0);
-  TranscriptTab().IsChecked(true);
 
   position_timer_ = DispatcherQueue().CreateTimer();
   position_timer_.Interval(std::chrono::seconds{1});
@@ -394,9 +340,6 @@ MainWindow::MainWindow() {
   PipelineButton().Content(box_value(
       winrt::hstring(std::wstring(podlens::Tr("action.pipeline")))));
   MenuMark().Text(std::wstring(podlens::Tr("action.mark_played")));
-  muxc::ToolTipService::SetToolTip(
-      TranscriptButton(),
-      box_value(winrt::hstring(std::wstring(podlens::Tr("player.transcript")))));
   muxc::ToolTipService::SetToolTip(
       FocusModeButton(),
       box_value(winrt::hstring(std::wstring(podlens::Tr("focus.enter_hint")))));
@@ -932,24 +875,12 @@ void MainWindow::UpdateActionButtons() {
   EpisodeRow const* episode = SelectedEpisode();
   if (!episode) {
     PipelineButton().IsEnabled(false);
-    MenuDownload().IsEnabled(false);
-    MenuTranscribe().IsEnabled(false);
-    MenuTranslate().IsEnabled(false);
-    MenuSummarize().IsEnabled(false);
     MenuMark().IsEnabled(false);
     MenuRemoveAudio().Visibility(Visibility::Collapsed);
     return;
   }
   bool const transcript_running = episode->transcript_status == "running";
-  bool const summary_running = episode->summary_status == "running";
   PipelineButton().IsEnabled(true);
-  MenuDownload().IsEnabled(!episode->downloaded);
-  MenuTranscribe().IsEnabled(!transcript_running &&
-                             episode->transcript_status != "done");
-  MenuTranslate().IsEnabled(episode->transcript_status == "done" &&
-                            !episode->has_translation);
-  MenuSummarize().IsEnabled(episode->transcript_status == "done" &&
-                            !summary_running && episode->summary_status != "done");
   MenuMark().IsEnabled(true);
   // Delete Audio only makes sense while local audio exists (Linux parity)
   MenuRemoveAudio().Visibility(episode->downloaded ? Visibility::Visible
@@ -985,7 +916,6 @@ void MainWindow::RenderTranscript() {
   segment_borders_.clear();
   segment_buttons_.clear();
   translation_blocks_.clear();
-  original_blocks_.clear();
   highlighted_segment_ = -1;
 
   if (transcript_.empty() && !selected_episode_id_.empty()) {
@@ -1027,8 +957,7 @@ void MainWindow::RenderTranscript() {
                                .Resources()
                                .Lookup(box_value(winrt::hstring(L"AppInkSoftBrush")))
                                .as<Microsoft::UI::Xaml::Media::Brush>());
-    translation.Visibility(mode_ == 2 ? Visibility::Collapsed : Visibility::Visible);
-    original.Visibility(mode_ == 1 ? Visibility::Collapsed : Visibility::Visible);
+    translation.Visibility(bilingual_ ? Visibility::Visible : Visibility::Collapsed);
 
     muxc::StackPanel lines;
     lines.Spacing(3);
@@ -1036,7 +965,6 @@ void MainWindow::RenderTranscript() {
     if (!seg[3].empty()) lines.Children().Append(translation);
     if (lines.Children().Size() == 0) continue;
 
-    if (!seg[2].empty()) original_blocks_.push_back(original);
     if (!seg[3].empty()) translation_blocks_.push_back(translation);
 
     muxc::Grid grid;
@@ -1096,10 +1024,7 @@ void MainWindow::RenderTranscript() {
 
 void MainWindow::ApplyMode() {
   for (auto const& block : translation_blocks_) {
-    block.Visibility(mode_ == 2 ? Visibility::Collapsed : Visibility::Visible);
-  }
-  for (auto const& block : original_blocks_) {
-    block.Visibility(mode_ == 1 ? Visibility::Collapsed : Visibility::Visible);
+    block.Visibility(bilingual_ ? Visibility::Visible : Visibility::Collapsed);
   }
 }
 
@@ -1551,16 +1476,10 @@ void MainWindow::SelectEpisodeContext(std::string const& feed_id,
   UpdateDetailVisibility();
   UpdateActionButtons();
   UpdatePlayerInfo();
-  summary_tab_active_ = false;
-  TranscriptTab().IsChecked(true);
-  SummaryTab().IsChecked(false);
-  TranscriptList().Visibility(Visibility::Visible);
-  SummaryView().Visibility(Visibility::Collapsed);
   if (!episode_id.empty()) {
     LoadTranscript();
     LoadSummary(episode_id);
     LoadChapters();
-    LoadEstimate();
   }
   if (autoplay) StartPlayback();
 }
@@ -2161,28 +2080,6 @@ void MainWindow::SkipChapter(int direction) {
                                                  : current_start);
 }
 
-void MainWindow::LoadEstimate() {
-  DetailEstimate().Text(L"");
-  if (!api_ || selected_episode_id_.empty()) return;
-  auto const dispatcher = DispatcherQueue();
-  auto const weak = get_weak();
-  auto const episode_id = selected_episode_id_;
-  (void)api_->episode_estimate_async(
-      episode_id, [dispatcher, weak, episode_id](rivet_app::Result<std::string> result) {
-        dispatcher.TryEnqueue([weak, result, episode_id]() mutable {
-          if (auto window = weak.get()) {
-            try {
-              if (window->selected_episode_id_ != episode_id) return;
-              std::string const json = result.get();
-              window->DetailEstimate().Text(
-                  winrt::hstring(EstimateSummaryText(json)));
-            } catch (std::exception const&) {
-            }
-          }
-        });
-      });
-}
-
 void MainWindow::ResumeLast() {
   if (!api_) return;
   auto const dispatcher = DispatcherQueue();
@@ -2395,45 +2292,18 @@ void MainWindow::EpisodeList_SelectionChanged(
   RenderDetailHeader();
   UpdateDetailVisibility();
   UpdateActionButtons();
-  summary_tab_active_ = false;
-  TranscriptTab().IsChecked(true);
-  SummaryTab().IsChecked(false);
-  TranscriptList().Visibility(Visibility::Visible);
-  SummaryView().Visibility(Visibility::Collapsed);
   if (!selected_episode_id_.empty()) {
     LoadTranscript();
     LoadSummary(selected_episode_id_);
     LoadChapters();
-    LoadEstimate();
   }
   UpdatePlayerInfo();
 }
 
-void MainWindow::Mode_SelectionChanged(
-    winrt::Windows::Foundation::IInspectable const&,
-    Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&) {
-  if (!initialized_) return;
-  mode_ = ModeSelector().SelectedIndex() < 0 ? 0
-                                             : static_cast<uint32_t>(ModeSelector().SelectedIndex());
+void MainWindow::Bilingual_Click(winrt::Windows::Foundation::IInspectable const&,
+                                 Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  bilingual_ = BilingualToggle().IsChecked().Value();
   ApplyMode();
-}
-
-void MainWindow::TranscriptTab_Click(winrt::Windows::Foundation::IInspectable const&,
-                                     Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  summary_tab_active_ = false;
-  TranscriptTab().IsChecked(true);
-  SummaryTab().IsChecked(false);
-  TranscriptList().Visibility(Visibility::Visible);
-  SummaryView().Visibility(Visibility::Collapsed);
-}
-
-void MainWindow::SummaryTab_Click(winrt::Windows::Foundation::IInspectable const&,
-                                  Microsoft::UI::Xaml::RoutedEventArgs const&) {
-  summary_tab_active_ = true;
-  SummaryTab().IsChecked(true);
-  TranscriptTab().IsChecked(false);
-  TranscriptList().Visibility(Visibility::Collapsed);
-  SummaryView().Visibility(Visibility::Visible);
 }
 
 void MainWindow::AddFeed_Click(winrt::Windows::Foundation::IInspectable const&,

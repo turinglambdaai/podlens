@@ -107,7 +107,7 @@ struct EpisodeStatusChips: View {
             if transcriptStatus == "done" {
                 Image(systemName: "text.bubble")
                     .foregroundStyle(Color.accentColor)
-                    .help(L("transcriptTab"))
+                    .help(L("tooltipTranscript"))
             }
             if transcriptStatus == "running" {
                 Image(systemName: "doc.text.magnifyingglass")
@@ -869,19 +869,7 @@ struct DetailView: View {
         VStack(spacing: 0) {
             if let episode = store.selectedEpisode {
                 EpisodeHeader(episode: episode, columnVisibility: $columnVisibility)
-                Picker("", selection: Binding(get: { store.detailTab },
-                                              set: { store.detailTab = $0 })) {
-                    Text(L("transcriptTab")).tag(0)
-                    Text(L("summaryTab")).tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding([.horizontal, .top], 12)
-
-                if store.detailTab == 0 {
-                    TranscriptView()
-                } else {
-                    SummaryView()
-                }
+                TranscriptView()
             } else {
                 Text(L("selectEpisode"))
                     .foregroundStyle(.secondary)
@@ -916,22 +904,10 @@ struct EpisodeHeader: View {
                         Label(L("pipeline"), systemImage: "wand.and.stars")
                     }
                     .buttonStyle(.borderedProminent)
+                    .fixedSize()
                     .help(estimateHint)
 
                     Menu {
-                        Button(L("download")) {
-                            store.startJob("download", episode: episode)
-                        }
-                        Button(L("transcribe")) {
-                            store.startJob("transcribe", episode: episode)
-                        }
-                        Button(L("translate")) {
-                            store.startJob("translate", episode: episode)
-                        }
-                        Button(L("summarize")) {
-                            store.startJob("summarize", episode: episode)
-                        }
-                        Divider()
                         Button(episode.done ? L("markUnplayed") : L("markPlayed")) {
                             store.markEpisode(episode, done: !episode.done)
                         }
@@ -943,16 +919,17 @@ struct EpisodeHeader: View {
                             }
                         }
                     } label: {
-                        Label(L("more"), systemImage: "ellipsis.circle")
+                        Image(systemName: "ellipsis.circle")
                     }
+                    .menuStyle(.button)
+                    .help(L("more"))
 
                     Button {
                         columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
                     } label: {
-                        Label(columnVisibility == .detailOnly ? L("focusExit") : L("focusEnter"),
-                              systemImage: columnVisibility == .detailOnly
-                                  ? "arrow.down.right.and.arrow.up.left"
-                                  : "arrow.up.left.and.arrow.down.right")
+                        Image(systemName: columnVisibility == .detailOnly
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right")
                     }
                     .accessibilityIdentifier("FocusListeningButton")
                     .help(columnVisibility == .detailOnly ? L("focusExitHint") : L("focusEnterHint"))
@@ -964,12 +941,6 @@ struct EpisodeHeader: View {
                         }
                         .frame(width: 180)
                     }
-                }
-
-                if let hint = estimateLine {
-                    Text(hint)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
             }
         }
@@ -991,23 +962,6 @@ struct EpisodeHeader: View {
         store.jobs.values.first { $0.status == "running" && $0.pct > 0 }
     }
 
-    private var estimateLine: String? {
-        guard let est = store.estimate else { return nil }
-        var parts: [String] = []
-        if let seconds = est.durationSec, seconds > 0 {
-            parts.append(String(format: "%d min", Int(seconds / 60)))
-        }
-        if est.transcriptKnown, let sentences = est.sentences {
-            parts.append(String(format: L("estimateSentences"), sentences))
-        }
-        if let chars = est.chars {
-            parts.append(String(format: L("estimateChars"), chars))
-        }
-        if est.translated { parts.append(L("estimateTranslated")) }
-        if est.summarized { parts.append(L("estimateSummarized")) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
     private var estimateHint: String {
         guard let est = store.estimate else { return L("pipeline") }
         if est.summarized { return L("pipelineNothingTodo") }
@@ -1026,8 +980,11 @@ struct TranscriptView: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
+                if let s = store.summary {
+                    summarySection(s)
+                }
                 if store.segments.isEmpty {
-                    Text(L("noTranscript"))
+                    Text(store.summary == nil ? L("noTranscript") : L("noTranscriptButSummary"))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(store.segments) { seg in
@@ -1036,20 +993,14 @@ struct TranscriptView: View {
                         Text(formatTime(seg.start))
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
-                        Text(display(seg))
+                        Text(seg.text)
                             .font(.system(size: active ? 15 : 14))
                             .foregroundStyle(active ? Color.primary : Color.primary.opacity(0.75))
                             .background(active ? DesignTokens.accentSoft : .clear)
-                        if store.translationMode != 2 && !seg.translation.isEmpty {
+                        if store.bilingual && !seg.translation.isEmpty {
                             Text(seg.translation)
                                 .font(.system(size: 14))
                                 .foregroundStyle(active ? Color.accentColor : .secondary)
-                        }
-                        if store.translationMode == 2 {
-                            Text(seg.text)
-                                .font(.system(size: 14))
-                                .foregroundStyle(active ? Color.accentColor : .secondary)
-                                .opacity(store.translationMode == 2 ? 0 : 1)
                         }
                     }
                     .id(seg.id)
@@ -1089,14 +1040,12 @@ struct TranscriptView: View {
             }
             .safeAreaInset(edge: .top) {
                 HStack {
-                    Picker("", selection: Binding(get: { store.translationMode },
-                                                  set: { store.translationMode = $0 })) {
-                        Text(L("bilingual")).tag(0)
-                        Text(L("zhOnly")).tag(1)
-                        Text(L("enOnly")).tag(2)
+                    Toggle(isOn: $store.bilingual) {
+                        Label(L("bilingual"), systemImage: "text.justify.leading")
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 260)
+                    .toggleStyle(.button)
+                    .disabled(store.segments.isEmpty || !store.translationAvailable)
+                    .help(L("bilingualHint"))
                     Spacer()
                     Toggle(isOn: $followPlayback) {
                         Label(L("followTranscript"), systemImage: "location.fill")
@@ -1121,65 +1070,56 @@ struct TranscriptView: View {
         }
     }
 
-    private func display(_ seg: PodLensStore.Segment) -> String {
-        store.translationMode == 1 && !seg.translation.isEmpty ? seg.translation : seg.text
-    }
-
     private func formatTime(_ t: Double) -> String {
         let m = Int(t) / 60, s = Int(t) % 60
         return String(format: "%02d:%02d", m, s)
     }
 }
 
-struct SummaryView: View {
-    @EnvironmentObject private var store: PodLensStore
-
-    var body: some View {
-        ScrollView {
-            if let s = store.summary {
-                VStack(alignment: .leading, spacing: 16) {
-                    section(L("tldr")) { Text(s.tldr) }
-                    if !s.keyPoints.isEmpty {
-                        section(L("keyPoints")) {
-                            ForEach(Array(s.keyPoints.enumerated()), id: \.offset) { _, p in
-                                HStack(alignment: .top) {
-                                    Text("•")
-                                    Text(p)
-                                }
-                            }
-                        }
-                    }
-                    if !s.quotes.isEmpty {
-                        section(L("quotes")) {
-                            ForEach(Array(s.quotes.enumerated()), id: \.offset) { _, q in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("“\(q.0)”").italic()
-                                    Text(q.1).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    if !s.topics.isEmpty {
-                        section(L("topics")) {
-                            HStack {
-                                ForEach(s.topics, id: \.self) { t in
-                                    Text(t)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(Color.accentColor.opacity(0.15))
-                                        .clipShape(Capsule())
-                                }
-                            }
+extension TranscriptView {
+    /// The summary leads the same scroll as the transcript — one reading
+    /// surface, no tab to switch.
+    @ViewBuilder
+    fileprivate func summarySection(_ s: PodLensStore.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            section(L("tldr")) { Text(s.tldr) }
+            if !s.keyPoints.isEmpty {
+                section(L("keyPoints")) {
+                    ForEach(Array(s.keyPoints.enumerated()), id: \.offset) { _, p in
+                        HStack(alignment: .top) {
+                            Text("•")
+                            Text(p)
                         }
                     }
                 }
-                .padding(16)
-            } else {
-                Text(L("noSummary")).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            if !s.quotes.isEmpty {
+                section(L("quotes")) {
+                    ForEach(Array(s.quotes.enumerated()), id: \.offset) { _, q in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("“\(q.0)”").italic()
+                            Text(q.1).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if !s.topics.isEmpty {
+                section(L("topics")) {
+                    HStack {
+                        ForEach(s.topics, id: \.self) { t in
+                            Text(t)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.accentColor.opacity(0.15))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+            Divider()
         }
+        .padding(.vertical, 4)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -1201,7 +1141,6 @@ struct PlayerBar: View {
     var body: some View {
         HStack(spacing: 12) {
             nowPlaying
-            transcriptShortcut
 
             chapterControls
 
@@ -1291,20 +1230,6 @@ struct PlayerBar: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 230, alignment: .leading)
-        }
-    }
-
-    /// PodLens' edge: jump straight into the bilingual transcript reader.
-    @ViewBuilder
-    private var transcriptShortcut: some View {
-        if store.transcriptAvailable {
-            Button {
-                store.detailTab = 0
-            } label: {
-                Image(systemName: "text.bubble")
-            }
-            .buttonStyle(.borderless)
-            .help(L("transcriptTab"))
         }
     }
 

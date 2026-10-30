@@ -84,6 +84,7 @@
                     <Grid x:Name="DiscoverView" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Row="0" Orientation="Horizontal"
@@ -125,6 +126,7 @@
                     <!-- one feed's episodes -->
                     <Grid x:Name="EpisodesPage" Visibility="Collapsed">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
@@ -185,6 +187,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -197,7 +200,6 @@
                             <TextBlock x:Name="DetailNotes" FontSize="12" Opacity="0.7"
                                        TextWrapping="Wrap" MaxLines="3"
                                        TextTrimming="CharacterEllipsis" />
-                            <TextBlock x:Name="DetailEstimate" FontSize="11" Opacity="0.55" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
@@ -208,11 +210,6 @@
                             <Button x:Name="MoreButton" Padding="10,4">
                                 <Button.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem x:Name="MenuDownload" Click="Download_Click" />
-                                        <MenuFlyoutItem x:Name="MenuTranscribe" Click="Transcribe_Click" />
-                                        <MenuFlyoutItem x:Name="MenuTranslate" Click="Translate_Click" />
-                                        <MenuFlyoutItem x:Name="MenuSummarize" Click="Summarize_Click" />
-                                        <MenuFlyoutSeparator />
                                         <MenuFlyoutItem x:Name="MenuMark" Click="MarkMenu_Click" />
                                         <MenuFlyoutItem x:Name="MenuRemoveAudio" Click="RemoveAudio_Click"
                                                         Visibility="Collapsed" />
@@ -225,25 +222,21 @@
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4"
                                     VerticalAlignment="Center" Margin="0,0,0,6">
-                            <ToggleButton x:Name="TranscriptTab" Click="TranscriptTab_Click" />
-                            <ToggleButton x:Name="SummaryTab" Click="SummaryTab_Click" />
-                            <TextBlock x:Name="ModeLabel" Margin="18,0,6,0" VerticalAlignment="Center"
-                                       FontSize="12" Opacity="0.7" />
-                            <ComboBox x:Name="ModeSelector" MinWidth="110"
-                                       SelectionChanged="Mode_SelectionChanged" />
+                            <ToggleButton x:Name="BilingualToggle" IsChecked="True"
+                                          Click="Bilingual_Click" />
                             <ToggleButton x:Name="FollowTranscriptButton" Margin="12,0,0,0"
                                           IsChecked="True" Click="FollowTranscript_Click" />
                             <Button x:Name="ReturnToCurrentButton"
                                     Click="ReturnToCurrent_Click" />
                         </StackPanel>
 
-                        <ListView Grid.Row="3" x:Name="TranscriptList"
-                                  SelectionMode="None" IsItemClickEnabled="False" />
-
-                        <ScrollViewer Grid.Row="3" x:Name="SummaryView" Visibility="Collapsed">
+                        <ScrollViewer Grid.Row="3" x:Name="SummaryPanel">
                             <StackPanel x:Name="SummaryList" MaxWidth="720" HorizontalAlignment="Left"
-                                        Spacing="16" Margin="0,4,12,24" />
+                                        Spacing="16" Margin="0,4,12,4" />
                         </ScrollViewer>
+
+                        <ListView Grid.Row="4" x:Name="TranscriptList"
+                                  SelectionMode="None" IsItemClickEnabled="False" />
                     </Grid>
                 </Grid>
             </Grid>
@@ -304,13 +297,6 @@
                     <TextBlock x:Name="PlayerShow" FontSize="11" Opacity="0.7"
                                MaxLines="1" TextTrimming="CharacterEllipsis" Text="" />
                 </StackPanel>
-
-                <!-- PodLens' edge: jump straight into the transcript reader -->
-                <Button Grid.Column="2" x:Name="TranscriptButton" Width="36" Height="36"
-                        CornerRadius="18" Background="Transparent" BorderThickness="0"
-                        Padding="0" Click="TranscriptTab_Click">
-                    <FontIcon Glyph="&#xE8E9;" FontSize="14" />
-                </Button>
 
                 <Button Grid.Column="3" x:Name="SleepButton" Width="36" Height="36"
                         CornerRadius="18" Background="Transparent" BorderThickness="0"
