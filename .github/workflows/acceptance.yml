@@ -34,8 +34,8 @@ jobs:
       - name: Install pinned dependencies
         shell: pwsh
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#$env:KEEL_PIN"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#$env:RIVET_PIN"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#$env:KEEL_PIN"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#$env:RIVET_PIN"
           raco pkg install --auto --no-docs --skip-installed crypto
       - name: Run executable acceptance contract
         shell: pwsh
@@ -73,8 +73,8 @@ jobs:
           version: stable
       - name: Install pinned dependencies
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${RIVET_PIN}"
           raco pkg install --auto --no-docs --skip-installed crypto
       - name: Run executable acceptance contract
         shell: bash
@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
+        uses: turlamai/rivet/.github/actions/setup-embed-racket@9d766b4acab672844093204cb4845ef4ef933d2c
       - name: Install native and pinned Racket dependencies
         shell: bash
         run: |
@@ -107,8 +107,8 @@ jobs:
             libadwaita-1-dev libjson-glib-dev libsecret-1-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             python3-pyatspi weston
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/keel.git#${KEEL_PIN}"
-          raco pkg install --auto --no-docs "https://github.com/turinglambdaai/rivet.git#${RIVET_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#${KEEL_PIN}"
+          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#${RIVET_PIN}"
           raco pkg install --auto --no-docs --skip-installed crypto
       - name: Run executable acceptance contract
         shell: bash

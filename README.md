@@ -2,7 +2,7 @@
 
 Podcasts, in your language. A cross-platform desktop podcast player that transcribes, translates and summarizes English episodes with your own LLM API key — for listeners who understand far more reading than hearing.
 
-[![CI](https://github.com/turlamai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turinglambdaai/podlens)](https://github.com/turlamai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![CI](https://github.com/turlamai/podlens/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/podlens/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/turlamai/podlens)](https://github.com/turlamai/podlens/releases/latest) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -23,7 +23,7 @@ Download from [Releases](https://github.com/turlamai/podlens/releases/latest):
 | Linux x64 / arm64 | `podlens-<version>-linux-x64.AppImage` / `podlens-<version>-linux-arm64.AppImage` (bundled GTK4), `podlens-<version>-linux-<distro-arch>.deb` (ships the GStreamer plugin closure incl. `gst-libav` for m4a/mp3), `.rpm`, or the portable `tar.gz`/`.zip` | tarball/AppImage: in-app check + download (signed manifest); deb/rpm: upgrade through the package manager |
 
 Every release carries a `SHA256SUMS` manifest and Sigstore build provenance
-(`gh attestation verify <file> -R turinglambdaai/podlens`).
+(`gh attestation verify <file> -R turlamai/podlens`).
 
 The macOS build is ad-hoc signed — on first launch, right-click the app and
 choose Open to clear the Gatekeeper prompt. Updates arrive in-app through an
