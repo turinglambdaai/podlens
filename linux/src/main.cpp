@@ -375,10 +375,6 @@ struct ChapterMark {
 struct AppState {
   GtkWindow* window{nullptr};
   GtkButton* pipeline_button{nullptr};
-  GtkButton* download_button{nullptr};
-  GtkButton* transcribe_button{nullptr};
-  GtkButton* translate_button{nullptr};
-  GtkButton* summarize_button{nullptr};
   GtkButton* mark_button{nullptr};
   GtkButton* remove_audio_button{nullptr};
   GtkListBox* feed_list{nullptr};  // the navigation sidebar
@@ -1750,32 +1746,13 @@ EpisodeRow const* selected_episode() {
 
 void update_action_buttons() {
   auto const* episode = selected_episode();
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.pipeline_button),
-                           episode != nullptr);
-  if (episode == nullptr) {
-    for (GtkButton* button :
-         {g_state.download_button, g_state.transcribe_button,
-          g_state.translate_button, g_state.summarize_button,
-          g_state.mark_button, g_state.remove_audio_button}) {
-      gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
-    }
+  bool const has_episode = episode != nullptr;
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.pipeline_button), has_episode);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.mark_button), has_episode);
+  if (!has_episode) {
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove_audio_button), FALSE);
     return;
   }
-  bool const transcript_running = episode->transcript_status == "running";
-  bool const summary_running = episode->summary_status == "running";
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.download_button),
-                           !episode->downloaded);
-  gtk_widget_set_sensitive(
-      GTK_WIDGET(g_state.transcribe_button),
-      !transcript_running && episode->transcript_status != "done");
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.translate_button),
-                           episode->transcript_status == "done" &&
-                               !episode->has_translation);
-  gtk_widget_set_sensitive(
-      GTK_WIDGET(g_state.summarize_button),
-      episode->transcript_status == "done" && !summary_running &&
-          episode->summary_status != "done");
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.mark_button), TRUE);
   gtk_button_set_label(g_state.mark_button,
                        episode->done ? tr("action.mark_unplayed")
                                      : tr("action.mark_played"));
@@ -4456,6 +4433,13 @@ void on_activate(GtkApplication* app, gpointer) {
           scroll_to_running_segment();
         }),
         nullptr);
+    g_signal_connect(
+        bilingual_button, "toggled",
+        G_CALLBACK(+[](GtkToggleButton* toggle, gpointer) {
+          g_state.transcript_bilingual = gtk_toggle_button_get_active(toggle);
+          render_transcript_public();
+        }),
+        nullptr);
     gtk_box_append(GTK_BOX(reading), switcher_row);
   }
 
@@ -4588,10 +4572,6 @@ void on_activate(GtkApplication* app, gpointer) {
 
   g_state.window = GTK_WINDOW(window);
   g_state.pipeline_button = GTK_BUTTON(pipeline);
-  g_state.download_button = GTK_BUTTON(download);
-  g_state.transcribe_button = GTK_BUTTON(transcribe);
-  g_state.translate_button = GTK_BUTTON(translate);
-  g_state.summarize_button = GTK_BUTTON(summarize);
   g_state.mark_button = GTK_BUTTON(mark);
   g_state.remove_audio_button = GTK_BUTTON(remove_audio);
   g_state.player_bar = GTK_BOX(player_bar);
@@ -4704,14 +4684,6 @@ void on_activate(GtkApplication* app, gpointer) {
   }
   g_signal_connect(rate_selector, "changed", G_CALLBACK(on_rate_changed),
                    nullptr);
-  g_signal_connect(
-      bilingual_button, "toggled",
-      G_CALLBACK(+[](GtkToggleButton* toggle, gpointer) {
-        g_state.transcript_bilingual = gtk_toggle_button_get_active(toggle);
-        render_transcript_public();
-      }),
-      nullptr);
-
   // Show the player bar as soon as an episode exists to play.
   g_signal_connect(episode_list, "row-selected",
                    G_CALLBACK(+[](GtkListBox*, GtkListBoxRow* row,
