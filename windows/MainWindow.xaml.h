@@ -79,18 +79,14 @@ struct MainWindow : MainWindowT<MainWindow> {
                            Microsoft::UI::Xaml::Input::KeyboardAcceleratorInvokedEventArgs const&);
   void FocusMode_Click(winrt::Windows::Foundation::IInspectable const&,
                        Microsoft::UI::Xaml::RoutedEventArgs const&);
+  void Bilingual_Click(winrt::Windows::Foundation::IInspectable const&,
+      Microsoft::UI::Xaml::RoutedEventArgs const&);
   void FollowTranscript_Click(winrt::Windows::Foundation::IInspectable const&,
                               Microsoft::UI::Xaml::RoutedEventArgs const&);
   void ReturnToCurrent_Click(winrt::Windows::Foundation::IInspectable const&,
                              Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void TranscriptTab_Click(winrt::Windows::Foundation::IInspectable const&,
-                           Microsoft::UI::Xaml::RoutedEventArgs const&);
-  void SummaryTab_Click(winrt::Windows::Foundation::IInspectable const&,
-                        Microsoft::UI::Xaml::RoutedEventArgs const&);
   void EpisodeList_SelectionChanged(winrt::Windows::Foundation::IInspectable const&,
                                     Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
-  void Mode_SelectionChanged(winrt::Windows::Foundation::IInspectable const&,
-                             Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&);
   void DiscoverSearch_Click(winrt::Windows::Foundation::IInspectable const&,
                             Microsoft::UI::Xaml::RoutedEventArgs const&);
   void DiscoverSearch_KeyDown(winrt::Windows::Foundation::IInspectable const&,
@@ -187,7 +183,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   void LoadChapters();
   void UpdateChapterButtons();
   void SkipChapter(int direction);
-  void LoadEstimate();
   void ResumeLast();
   void AutoRefreshTick();
 
@@ -262,8 +257,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::string selected_feed_id_;
   std::string selected_episode_id_;
   bool suppress_nav_ = false;
-  uint32_t mode_ = 0;  // 0 bilingual, 1 translation only, 2 original only
-  bool summary_tab_active_ = false;
+  bool bilingual_ = true;  // off: original only
   bool focus_listening_ = false;
   bool follow_transcript_ = true;
 
@@ -271,7 +265,6 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::vector<Microsoft::UI::Xaml::Controls::Border> segment_borders_;
   std::vector<Microsoft::UI::Xaml::Controls::Button> segment_buttons_;
   std::vector<Microsoft::UI::Xaml::Controls::TextBlock> translation_blocks_;
-  std::vector<Microsoft::UI::Xaml::Controls::TextBlock> original_blocks_;
   int highlighted_segment_ = -1;
   // true while a feed-peek audition owns the player (no library episode)
   bool preview_active_ = false;

@@ -137,7 +137,6 @@ final class PodLensStore: ObservableObject {
     @Published var recentEpisodes: [RecentEpisode] = []
     /// Transcript/summary tab of the detail column; the player bar's
     /// transcript button jumps here.
-    @Published var detailTab = 0
 
     @Published var searchResults: [CatalogEntry] = []
     @Published var isSearching = false
@@ -153,7 +152,8 @@ final class PodLensStore: ObservableObject {
     @Published var jobs: [String: Job] = [:]
     @Published var statusLine = ""
     @Published var bootStatus = ""
-    @Published var translationMode = 0 // 0 bilingual, 1 zh only, 2 en only
+    @Published var bilingual = true // on: original + translation, off: original only
+    var translationAvailable: Bool { segments.contains { !$0.translation.isEmpty } }
     @Published var updateOutcome: Result<UpdateService.CheckResult, Error>?
     @Published var playing = false
     @Published var currentTime: Double = 0

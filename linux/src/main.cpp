@@ -216,10 +216,6 @@ char const* tr(char const* key) {
       {"episode.new", " 新单集", " new"},
       {"action.add_feed", "添加订阅", "Add Feed"},
       {"action.understand", "一键听懂", "Understand"},
-      {"action.download", "下载", "Download"},
-      {"action.transcribe", "转写", "Transcribe"},
-      {"action.translate", "翻译", "Translate"},
-      {"action.summarize", "总结", "Summarize"},
       {"action.mark_played", "标记已听", "Mark played"},
       {"action.mark_unplayed", "标记未听", "Mark unplayed"},
       {"action.delete_audio", "删除音频", "Delete Audio"},
@@ -227,8 +223,6 @@ char const* tr(char const* key) {
       {"action.added", "已订阅", "Added"},
       {"action.preview", "试听", "Preview"},
       {"mode.bilingual", "双语", "Bilingual"},
-      {"mode.translation", "只看译文", "Translation only"},
-      {"mode.original", "只看原文", "Original only"},
       {"focus.enter", "专注聆听", "Focus Listening"},
       {"focus.exit", "显示资料库", "Show Library"},
       {"focus.enter_hint", "收起导航与单集列表，专注逐句稿和播放器",
@@ -243,7 +237,6 @@ char const* tr(char const* key) {
        "Press Enter or Space to seek to this sentence"},
       {"transcript.sentence", "逐句稿句子", "Transcript sentence"},
       {"player.play_pause", "播放或暂停", "Play or pause"},
-      {"player.transcript", "逐句稿", "Transcript"},
       {"player.back15", "后退 15 秒", "Back 15 seconds"},
       {"player.forward30", "前进 30 秒", "Forward 30 seconds"},
       {"player.chapter_prev", "上一章", "Previous chapter"},
@@ -382,10 +375,6 @@ struct ChapterMark {
 struct AppState {
   GtkWindow* window{nullptr};
   GtkButton* pipeline_button{nullptr};
-  GtkButton* download_button{nullptr};
-  GtkButton* transcribe_button{nullptr};
-  GtkButton* translate_button{nullptr};
-  GtkButton* summarize_button{nullptr};
   GtkButton* mark_button{nullptr};
   GtkButton* remove_audio_button{nullptr};
   GtkListBox* feed_list{nullptr};  // the navigation sidebar
@@ -419,8 +408,6 @@ struct AppState {
   GtkLabel* detail_notes{nullptr};
   GtkProgressBar* job_bar{nullptr};
   GtkLabel* job_label{nullptr};
-  GtkLabel* estimate_label{nullptr};
-  GtkStack* reading_stack{nullptr};
   GtkBox* transcript_box{nullptr};
   GtkBox* summary_box{nullptr};
 
@@ -477,8 +464,8 @@ struct AppState {
   bool user_seeking{false};
   std::vector<ChapterMark> chapters;
 
-  // Transcript reading mode: 0 bilingual, 1 translation only, 2 original.
-  int transcript_mode{0};
+  // Transcript reading: show the line-by-line translation under the original.
+  bool transcript_bilingual{true};
   // Segment widgets parallel to the rendered transcript rows; the player
   // tick highlights and follows the running sentence among them.
   std::vector<GtkWidget*> segment_widgets;
@@ -486,7 +473,6 @@ struct AppState {
   bool transcript_follow{true};
   GtkToggleButton* follow_button{nullptr};
   GtkScrolledWindow* transcript_scroll{nullptr};
-  GtkComboBoxText* mode_selector{nullptr};
 
   // Try-before-subscribe audition owning the player (no library episode).
   bool preview_active{false};
@@ -528,7 +514,6 @@ void load_discover();
 void start_playback();
 void load_transcript();
 void load_summary();
-void load_estimate();
 void load_chapters();
 EpisodeRow const* selected_episode();
 void update_action_buttons();
@@ -1701,10 +1686,8 @@ void show_episode_details(EpisodeRow const* episode) {
       }
     }
   }
-  gtk_stack_set_visible_child_name(g_state.reading_stack, "transcript");
   load_transcript();
   load_summary();
-  load_estimate();
   load_chapters();
   update_action_buttons();
   mpris_update();
@@ -1763,32 +1746,13 @@ EpisodeRow const* selected_episode() {
 
 void update_action_buttons() {
   auto const* episode = selected_episode();
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.pipeline_button),
-                           episode != nullptr);
-  if (episode == nullptr) {
-    for (GtkButton* button :
-         {g_state.download_button, g_state.transcribe_button,
-          g_state.translate_button, g_state.summarize_button,
-          g_state.mark_button, g_state.remove_audio_button}) {
-      gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
-    }
+  bool const has_episode = episode != nullptr;
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.pipeline_button), has_episode);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.mark_button), has_episode);
+  if (!has_episode) {
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove_audio_button), FALSE);
     return;
   }
-  bool const transcript_running = episode->transcript_status == "running";
-  bool const summary_running = episode->summary_status == "running";
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.download_button),
-                           !episode->downloaded);
-  gtk_widget_set_sensitive(
-      GTK_WIDGET(g_state.transcribe_button),
-      !transcript_running && episode->transcript_status != "done");
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.translate_button),
-                           episode->transcript_status == "done" &&
-                               !episode->has_translation);
-  gtk_widget_set_sensitive(
-      GTK_WIDGET(g_state.summarize_button),
-      episode->transcript_status == "done" && !summary_running &&
-          episode->summary_status != "done");
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.mark_button), TRUE);
   gtk_button_set_label(g_state.mark_button,
                        episode->done ? tr("action.mark_unplayed")
                                      : tr("action.mark_played"));
@@ -1812,15 +1776,14 @@ GtkWidget* make_transcript_segment(std::vector<std::string> const& seg) {
   gtk_box_append(GTK_BOX(grid), time_text);
 
   auto* lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
-  // Reading mode: 0 bilingual, 1 translation only, 2 original only.
-  if (!seg[2].empty() && g_state.transcript_mode != 1) {
+  if (!seg[2].empty()) {
     auto* original = GTK_LABEL(gtk_label_new(seg[2].c_str()));
     gtk_label_set_wrap(original, TRUE);
     gtk_label_set_xalign(original, 0.0f);
     gtk_label_set_selectable(original, TRUE);
     gtk_box_append(GTK_BOX(lines), GTK_WIDGET(original));
   }
-  if (!seg[3].empty() && g_state.transcript_mode != 2) {
+  if (!seg[3].empty() && g_state.transcript_bilingual) {
     auto* translation = GTK_LABEL(gtk_label_new(seg[3].c_str()));
     gtk_label_set_wrap(translation, TRUE);
     gtk_label_set_xalign(translation, 0.0f);
@@ -2929,20 +2892,6 @@ void on_pipeline_clicked(GtkButton*, gpointer) {
       });
 }
 
-void load_estimate() {
-  gtk_label_set_text(g_state.estimate_label, "");
-  if (g_state.api == nullptr || g_state.selected_episode_id.empty()) return;
-  auto const episode_id = g_state.selected_episode_id;
-  (void)g_state.api->episode_estimate_async(
-      episode_id, [episode_id](rivet_app::Result<std::string> result) {
-        on_result(std::move(result), [episode_id](std::string const& json) {
-          if (g_state.selected_episode_id != episode_id) return;
-          gtk_label_set_text(g_state.estimate_label,
-                             estimate_line(json).c_str());
-        });
-      });
-}
-
 // ---------------------------------------------------------------------------
 // Episode jobs — download / transcribe / translate / summarize
 // ---------------------------------------------------------------------------
@@ -2980,22 +2929,6 @@ void start_job(std::string const& kind, std::string const& episode_id) {
           on_result(std::move(result), started);
         });
   }
-}
-
-void on_download_clicked(GtkButton*, gpointer) {
-  start_job("download", g_state.selected_episode_id);
-}
-
-void on_transcribe_clicked(GtkButton*, gpointer) {
-  start_job("transcribe", g_state.selected_episode_id);
-}
-
-void on_translate_clicked(GtkButton*, gpointer) {
-  start_job("translate", g_state.selected_episode_id);
-}
-
-void on_summarize_clicked(GtkButton*, gpointer) {
-  start_job("summarize", g_state.selected_episode_id);
 }
 
 void on_mark_clicked(GtkButton*, gpointer) {
@@ -4440,19 +4373,6 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_add_css_class(pipeline, "suggested-action");
   gtk_widget_set_sensitive(pipeline, FALSE);
   gtk_box_append(GTK_BOX(actions), pipeline);
-  auto* download = make_button_with_icon("folder-download-symbolic",
-                                         tr("action.download"));
-  gtk_widget_set_sensitive(download, FALSE);
-  gtk_box_append(GTK_BOX(actions), download);
-  auto* transcribe = gtk_button_new_with_label(tr("action.transcribe"));
-  gtk_widget_set_sensitive(transcribe, FALSE);
-  gtk_box_append(GTK_BOX(actions), transcribe);
-  auto* translate = gtk_button_new_with_label(tr("action.translate"));
-  gtk_widget_set_sensitive(translate, FALSE);
-  gtk_box_append(GTK_BOX(actions), translate);
-  auto* summarize = gtk_button_new_with_label(tr("action.summarize"));
-  gtk_widget_set_sensitive(summarize, FALSE);
-  gtk_box_append(GTK_BOX(actions), summarize);
   auto* mark = gtk_button_new_with_label(tr("action.mark_played"));
   gtk_widget_set_sensitive(mark, FALSE);
   gtk_box_append(GTK_BOX(actions), mark);
@@ -4474,29 +4394,16 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_visible(job_label, FALSE);
   gtk_box_append(GTK_BOX(actions), job_label);
   gtk_box_append(GTK_BOX(detail), actions);
-  auto* estimate_label = GTK_LABEL(gtk_label_new(""));
-  gtk_label_set_xalign(estimate_label, 0.0f);
-  gtk_widget_add_css_class(GTK_WIDGET(estimate_label), "pl-meta");
-  gtk_label_set_ellipsize(estimate_label, PANGO_ELLIPSIZE_END);
-  gtk_box_append(GTK_BOX(detail), GTK_WIDGET(estimate_label));
 
-  // Reading stack: transcript | summary.
+  // Reading row: translation on/off, follow, return to current.
   auto* reading = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  auto* reading_stack = gtk_stack_new();
-  auto* switcher = gtk_stack_switcher_new();
-  gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(switcher),
-                               GTK_STACK(reading_stack));
   {
     auto* switcher_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_append(GTK_BOX(switcher_row), switcher);
-    // reading mode: bilingual / translation only / original only
-    auto* mode_selector = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
-    for (char const* key : {"mode.bilingual", "mode.translation",
-                            "mode.original"}) {
-      gtk_combo_box_text_append_text(mode_selector, tr(key));
-    }
-    gtk_combo_box_set_active(GTK_COMBO_BOX(mode_selector), 0);
-    gtk_box_append(GTK_BOX(switcher_row), GTK_WIDGET(mode_selector));
+    // reading mode: line-by-line translation on/off
+    auto* bilingual_button = GTK_TOGGLE_BUTTON(
+        gtk_toggle_button_new_with_label(tr("mode.bilingual")));
+    gtk_toggle_button_set_active(bilingual_button, TRUE);
+    gtk_box_append(GTK_BOX(switcher_row), GTK_WIDGET(bilingual_button));
     auto* follow_button = GTK_TOGGLE_BUTTON(
         gtk_toggle_button_new_with_label(tr("transcript.follow")));
     gtk_toggle_button_set_active(follow_button, TRUE);
@@ -4508,7 +4415,6 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_widget_set_tooltip_text(current_button,
                                 tr("transcript.current_hint"));
     gtk_box_append(GTK_BOX(switcher_row), current_button);
-    g_state.mode_selector = mode_selector;
     g_state.follow_button = follow_button;
     g_signal_connect(
         follow_button, "toggled",
@@ -4527,6 +4433,13 @@ void on_activate(GtkApplication* app, gpointer) {
           scroll_to_running_segment();
         }),
         nullptr);
+    g_signal_connect(
+        bilingual_button, "toggled",
+        G_CALLBACK(+[](GtkToggleButton* toggle, gpointer) {
+          g_state.transcript_bilingual = gtk_toggle_button_get_active(toggle);
+          render_transcript_public();
+        }),
+        nullptr);
     gtk_box_append(GTK_BOX(reading), switcher_row);
   }
 
@@ -4537,10 +4450,6 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_margin_top(transcript_box, 6);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(transcript_scroll),
                                 transcript_box);
-  gtk_stack_add_named(GTK_STACK(reading_stack), transcript_scroll,
-                      "transcript");
-  gtk_stack_set_visible_child_name(GTK_STACK(reading_stack), "transcript");
-
   auto* summary_scroll = gtk_scrolled_window_new();
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(summary_scroll),
                                  GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
@@ -4548,9 +4457,11 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_margin_top(summary_box, 6);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(summary_scroll),
                                 summary_box);
-  gtk_stack_add_named(GTK_STACK(reading_stack), summary_scroll, "summary");
 
-  gtk_box_append(GTK_BOX(reading), reading_stack);
+  // one reading surface: summary on top, transcript below
+  gtk_box_append(GTK_BOX(reading), GTK_WIDGET(summary_scroll));
+  gtk_box_append(GTK_BOX(reading), GTK_WIDGET(transcript_scroll));
+  gtk_widget_set_vexpand(GTK_WIDGET(transcript_scroll), TRUE);
   gtk_widget_set_vexpand(reading, TRUE);
   gtk_box_append(GTK_BOX(detail), reading);
   gtk_paned_set_end_child(GTK_PANED(vertical), detail);
@@ -4580,10 +4491,6 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(now_playing), player_show);
   gtk_widget_set_size_request(now_playing, 200, -1);
   gtk_box_append(GTK_BOX(player_bar), now_playing);
-  auto* player_transcript =
-      gtk_button_new_from_icon_name("text-x-generic-symbolic");
-  gtk_widget_set_tooltip_text(player_transcript, tr("player.transcript"));
-  gtk_box_append(GTK_BOX(player_bar), player_transcript);
   auto* play_button = gtk_button_new_from_icon_name(
       "media-playback-start-symbolic");
   gtk_widget_set_tooltip_text(play_button, tr("player.play_pause"));
@@ -4665,10 +4572,6 @@ void on_activate(GtkApplication* app, gpointer) {
 
   g_state.window = GTK_WINDOW(window);
   g_state.pipeline_button = GTK_BUTTON(pipeline);
-  g_state.download_button = GTK_BUTTON(download);
-  g_state.transcribe_button = GTK_BUTTON(transcribe);
-  g_state.translate_button = GTK_BUTTON(translate);
-  g_state.summarize_button = GTK_BUTTON(summarize);
   g_state.mark_button = GTK_BUTTON(mark);
   g_state.remove_audio_button = GTK_BUTTON(remove_audio);
   g_state.player_bar = GTK_BOX(player_bar);
@@ -4698,8 +4601,6 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.detail_notes = GTK_LABEL(detail_notes);
   g_state.job_bar = GTK_PROGRESS_BAR(job_bar);
   g_state.job_label = GTK_LABEL(job_label);
-  g_state.estimate_label = GTK_LABEL(estimate_label);
-  g_state.reading_stack = GTK_STACK(reading_stack);
   g_state.transcript_scroll = GTK_SCROLLED_WINDOW(transcript_scroll);
   g_state.transcript_box = GTK_BOX(transcript_box);
   g_state.summary_box = GTK_BOX(summary_box);
@@ -4741,14 +4642,6 @@ void on_activate(GtkApplication* app, gpointer) {
   }
   g_signal_connect(pipeline, "clicked", G_CALLBACK(on_pipeline_clicked),
                    nullptr);
-  g_signal_connect(download, "clicked", G_CALLBACK(on_download_clicked),
-                   nullptr);
-  g_signal_connect(transcribe, "clicked", G_CALLBACK(on_transcribe_clicked),
-                   nullptr);
-  g_signal_connect(translate, "clicked", G_CALLBACK(on_translate_clicked),
-                   nullptr);
-  g_signal_connect(summarize, "clicked", G_CALLBACK(on_summarize_clicked),
-                   nullptr);
   g_signal_connect(mark, "clicked", G_CALLBACK(on_mark_clicked), nullptr);
   g_signal_connect(remove_audio, "clicked",
                    G_CALLBACK(on_remove_audio_clicked), nullptr);
@@ -4766,12 +4659,6 @@ void on_activate(GtkApplication* app, gpointer) {
                              tr(focused ? "focus.exit" : "focus.enter"));
       }),
       nullptr);
-  g_signal_connect(player_transcript, "clicked",
-                   G_CALLBACK(+[](GtkButton*, gpointer) {
-                     gtk_stack_set_visible_child_name(
-                         g_state.reading_stack, "transcript");
-                   }),
-                   nullptr);
   g_signal_connect(play_button, "clicked", G_CALLBACK(on_play_clicked),
                    nullptr);
   g_signal_connect(skip_back, "clicked", G_CALLBACK(on_skip_back_clicked),
@@ -4797,14 +4684,6 @@ void on_activate(GtkApplication* app, gpointer) {
   }
   g_signal_connect(rate_selector, "changed", G_CALLBACK(on_rate_changed),
                    nullptr);
-  g_signal_connect(
-      g_state.mode_selector, "changed",
-      G_CALLBACK(+[](GtkComboBox* combo, gpointer) {
-        g_state.transcript_mode = gtk_combo_box_get_active(combo);
-        render_transcript_public();
-      }),
-      nullptr);
-
   // Show the player bar as soon as an episode exists to play.
   g_signal_connect(episode_list, "row-selected",
                    G_CALLBACK(+[](GtkListBox*, GtkListBoxRow* row,

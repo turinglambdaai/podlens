@@ -17,9 +17,12 @@
   ;; SwiftUI evaluates the episode header. These formats are consumed with
   ;; String(format:..., Int), so they must remain integer placeholders.
   (check-regexp-match #rx"pipelineCostKnown[^\n]+%d[^\n]+%d characters" macos-lang)
-  (check-regexp-match #rx"estimateChars[^\n]+%d[^\n]+%d characters" macos-lang)
   (check-false
-   (regexp-match? #rx"(pipelineCostKnown|estimateChars)[^\n]+%@" macos-lang)))
+   (regexp-match? #rx"(pipelineCostKnown|estimateChars)[^\n]+%@" macos-lang))
+  ;; The minimal-detail refactor removed the header estimate line entirely;
+  ;; its keys must stay gone so dev-ese numbers cannot creep back in.
+  (check-false (regexp-match? #rx"\"estimateChars\"" macos-lang))
+  (check-false (regexp-match? #rx"\"estimateSentences\"" macos-lang)))
 
 (test-case "Windows data-directory lookup keeps getenv_s output length"
   ;; Querying the required size and reading the value use separate variables.
