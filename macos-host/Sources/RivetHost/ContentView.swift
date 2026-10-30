@@ -932,6 +932,10 @@ struct EpisodeHeader: View {
                             : "arrow.up.left.and.arrow.down.right")
                     }
                     .accessibilityIdentifier("FocusListeningButton")
+                    // icon-only on screen, but the accessibility tree keeps
+                    // the state text — the acceptance journey reads it
+                    .accessibilityLabel(columnVisibility == .detailOnly
+                        ? L("focusExit") : L("focusEnter"))
                     .help(columnVisibility == .detailOnly ? L("focusExitHint") : L("focusEnterHint"))
 
                     if let job = activeJob {
