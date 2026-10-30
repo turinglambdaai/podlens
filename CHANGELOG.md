@@ -3,6 +3,26 @@
 All notable changes to PodLens are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## 0.5.0 - 2026-10-30
+
+### Fixed
+- **Real podcast audio downloads.** The audio downloader re-requested the
+  first URL on every redirect hop instead of the redirect target, so any
+  episode whose enclosure goes through a redirect chain — attribution edges
+  like Podscribe in front of libsyn/CDNs are the norm for professional
+  feeds — failed with `download failed (302)` and could not play. Redirects
+  are now followed for real (budget 8 hops), a transient "302 to itself"
+  from an attribution edge is retried instead of burning the hop budget,
+  and superseded connections are closed on the way (#23).
+
+### Changed
+- **Minimal-detail reading surface.** The episode detail collapses to one
+  scroll: the summary leads and the transcript follows, with a single
+  双语 toggle and one-click Understand as the only pipeline entry point.
+  The per-stage action buttons, the header estimate line and the
+  transcript/summary tab pair are gone on all three hosts — the redundant
+  entities the one-click pipeline made redundant (#26).
+
 ## [Unreleased]
 
 ### Added
