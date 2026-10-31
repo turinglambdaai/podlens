@@ -28,8 +28,19 @@
   (check-exn exn:fail:contract? (lambda () (config-set! mgr 'target-lang "fr")))
   (check-exn exn:fail:contract? (lambda () (config-set! mgr 'no-such-key "x")))
   (check-exn exn:fail:contract? (lambda () (config-set! mgr 'max-transcript-chars "not-a-number")))
+  (check-exn exn:fail:contract? (lambda () (config-set! mgr 'max-transcript-chars "-1")))
   (check-equal? (config-set! mgr 'check-updates-enabled "yes") "true")
-  (check-equal? (config-set! mgr 'check-updates-enabled "0") "false"))
+  (check-equal? (config-set! mgr 'check-updates-enabled "0") "false")
+  ;; 0 must satisfy the number contract: the declared default of the
+  ;; internal last-update-check used to fail its own validation and host
+  ;; settings loops surfaced that as a spurious save error (#20)
+  (check-equal? (config-set! mgr 'last-update-check "0") "0"))
+
+(test-case "internal keys stay off the settings surface"
+  ;; hosts echo every listed row back on save; internal bookkeeping keys
+  ;; must not be listed (and a stray write to them is a no-op upstream)
+  (check-false (member "last-update-check" (config-user-keys)))
+  (check-not-false (member "chat-model" (config-user-keys))))
 
 (test-case "api configured predicate"
   (config-set! mgr 'api-key "")
