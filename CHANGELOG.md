@@ -23,6 +23,21 @@ All notable changes to PodLens are documented here. Format follows
   transcript/summary tab pair are gone on all three hosts — the redundant
   entities the one-click pipeline made redundant (#26).
 
+## 0.5.1 - 2026-10-31
+
+### Fixed
+- **Settings save no longer shows a spurious contract violation.** The
+  save loop echoed the internal `last-update-check=0` back through a
+  validator whose declared default failed its own contract; the error
+  pasted over an otherwise successful save. Internal keys stay off the
+  settings surface, a stray echo is swallowed, and zero satisfies the
+  number contract (#20, #29).
+- **Windows: episode selection survives list reloads.** At 200% display
+  scaling the selection dropped out of the rebuilt list and the detail
+  pane reverted to 「未选择单集」, blocking the listening journey. The
+  selection is now re-pinned to the live episode on every render, and a
+  re-pin of the playing episode no longer stops playback (#22, #30).
+
 ## [Unreleased]
 
 ### Added
