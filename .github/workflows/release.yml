@@ -93,7 +93,14 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
+        # raco's HTTPS goes through Racket's OpenSSL, whose Windows
+        # certificate-store loader crashes on runner images that ship a
+        # certificate d2i_X509 cannot parse. git's own TLS is stable, so
+        # clone the pinned checkout and install from the directory.
+        run: |
+          git clone --no-checkout https://github.com/turlamai/rivet.git rivet-src
+          git -C rivet-src checkout ${{ env.RIVET_PIN }}
+          raco pkg install --auto --no-docs ./rivet-src
         shell: bash
       - name: Install WiX (v5; v7 requires EULA acceptance, v5 runs the v4 schema)
         run: dotnet tool install --global wix --version 5.0.2
