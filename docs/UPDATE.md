@@ -3,6 +3,22 @@
 PodLens uses the family scheme: the update feed travels as a GitHub Release
 asset, trust comes from an Ed25519 signature, never from HTTPS alone.
 
+## Release trust and publisher signing
+
+The release pipeline must **fail closed** if the Ed25519 private key is missing,
+invalid, or does not match the pinned public keys in the Racket backend and
+macOS host. A nonempty signed `update-manifest.json` is required before
+publishing any installers. The manifest contains SHA-256 hashes of update
+payloads; OS code signing is a separate trust layer.
+
+Today macOS artifacts are **ad-hoc signed, not Developer ID signed or Apple
+notarized**. Developer ID signing, hardened runtime, notarization and stapling
+require future Apple credentials and independent release validation; their
+success must never be inferred from an ad-hoc build. Windows MSI and portable
+ZIP are unsigned by default; Authenticode may be added independently later.
+Linux DEB/RPM/AppImage packaging does not require a paid developer account.
+No formal release is performed by changing this contract.
+
 ## Feed layout
 
 Every release uploads one special asset alongside the installers:
