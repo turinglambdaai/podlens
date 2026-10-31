@@ -280,7 +280,7 @@ jobs:
           # A valid signature is insufficient if installed clients trust a different key.
           OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
           ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | tail -c 32 | base64 | tr -d '\r\n')"
-          BACKEND_PUB="$(awk '/^\(define update-public-key-b64/{getline;gsub(/^[ \t"]+|[ \t"]+$/,"");print;exit}' app/update.rkt)"
+          BACKEND_PUB="$(grep -A1 'define update-public-key-b64' app/update.rkt | grep -oE '"[A-Za-z0-9+/=]+"' | head -1 | tr -d '"')"
           MACOS_PUB="$(grep -E 'public static let publicKeyBase64 = "' macos-host/Sources/RivetHost/UpdateService.swift | cut -d'"' -f2)"
           if [[ -z "$ACTUAL_PUB" || "$ACTUAL_PUB" != "$BACKEND_PUB" || "$ACTUAL_PUB" != "$MACOS_PUB" ]]; then
             echo "::error::Update signing key does not match both shipped clients' pinned Ed25519 public keys"
