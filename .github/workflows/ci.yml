@@ -36,7 +36,25 @@ jobs:
         with:
           version: stable
           distribution: full
+      - name: Export trusted Mozilla CA roots for Windows Racket
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Racket's Windows ROOT-store loader may throw X509*->C on hosted images.
+          # Node bundles independent Mozilla roots; do not bypass TLS validation.
+          $bundle = Join-Path $env:RUNNER_TEMP 'podlens-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\n")+"\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "PODLENS_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install pinned Rivet with verified TLS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt
       - name: Install Rivet (catalog)
+        if: runner.os != 'Windows'
         run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
         shell: bash
       - name: Compile backend
