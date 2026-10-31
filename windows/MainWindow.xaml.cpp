@@ -2232,9 +2232,15 @@ void MainWindow::StartJob(std::string const& kind, std::string const& episode_id
       });
       return;
     }
-    // poll until the job leaves "running"
+    // Poll until the job leaves "running". The 100ms cadence is load-bearing
+    // on Windows: the embedded Racket place shares one OS thread between the
+    // pipe reader (blocking read) and every green thread, so background job
+    // threads only advance while a request is being serviced. Each poll is a
+    // scheduling window — without this cadence a pipeline job freezes at its
+    // first network I/O (issue #21). 100ms keeps the reader's UI latency
+    // imperceptible while the job makes steady progress.
     for (;;) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       if (!weak.get()) return;
       try {
         auto const status_json = weak.get()->api_->job_status(job_id).get();
