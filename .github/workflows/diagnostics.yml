@@ -20,9 +20,7 @@ jobs:
           KEY_FILE=$(mktemp)
           trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
-          OPENSSL3="$(sudo find /usr -name openssl 2>/dev/null | head -1 || true)"
-          OPENSSL3="${OPENSSL3:-openssl}"
-          "$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER \
+          openssl pkey -in "$KEY_FILE" -pubout -outform DER \
             | tail -c 32 | base64 | tr -d '\r\n' > pub.txt
           echo "::notice::CI-secret public key (base64, raw 32B): $(cat pub.txt)"
           echo "FINGERPRINT=$(cat pub.txt)" >> "$GITHUB_OUTPUT"
