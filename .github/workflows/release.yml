@@ -30,6 +30,15 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
+      - name: Preflight mandatory signed-update key before platform builds
+        shell: bash
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::UPDATE_ED25519_PRIVATE_KEY missing; skipping expensive platform builds rather than publishing without a signed feed"
+            exit 1
+          fi
 
   macos:
     name: macOS build (${{ matrix.arch }})
