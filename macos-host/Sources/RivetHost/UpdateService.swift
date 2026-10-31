@@ -26,9 +26,9 @@ public final class UpdateService {
     nonisolated public static let expectedKeyID = "podlens-2026-10"
 
     public static let manifestURL = URL(string:
-        "https://github.com/turinglambdaai/podlens/releases/latest/download/update-manifest.json")!
-    public static let releasesAPI = "https://api.github.com/repos/turinglambdaai/podlens/releases/latest"
-    public static let releasesPage = "https://github.com/turinglambdaai/podlens/releases/latest"
+        "https://github.com/turlamai/podlens/releases/latest/download/update-manifest.json")!
+    public static let releasesAPI = "https://api.github.com/repos/turlamai/podlens/releases/latest"
+    public static let releasesPage = "https://github.com/turlamai/podlens/releases/latest"
 
     /// Silent checks run at most once per 4 h (docs/UPDATE.md triggers).
     public static let throttleSeconds: TimeInterval = 4 * 60 * 60
