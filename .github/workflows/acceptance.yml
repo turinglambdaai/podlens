@@ -33,12 +33,21 @@ jobs:
           distribution: full
           variant: CS
           version: stable
-      - name: Install pinned dependencies
+      - name: Export trusted Mozilla CA roots for Windows Racket
         shell: pwsh
         run: |
-          raco pkg install --auto --no-docs "https://github.com/turlamai/keel.git#$env:KEEL_PIN"
-          raco pkg install --auto --no-docs "https://github.com/turlamai/rivet.git#$env:RIVET_PIN"
-          raco pkg install --auto --no-docs --skip-installed crypto
+          # Racket's Windows ROOT-store loader may throw X509*->C on hosted images.
+          # Node bundles independent Mozilla roots; do not bypass TLS validation.
+          $bundle = Join-Path $env:RUNNER_TEMP 'podlens-mozilla-roots.pem'
+          $js = 'const tls=require("node:tls"),fs=require("node:fs"); if(tls.rootCertificates.length<50) process.exit(2); fs.writeFileSync(process.argv[1],tls.rootCertificates.join("\\n")+"\\n",{flag:"wx"});'
+          node -e $js $bundle
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $bundle -PathType Leaf)) {
+            throw "Unable to export trusted CA roots; refusing insecure TLS fallback"
+          }
+          "PODLENS_CI_CA_BUNDLE=$bundle" >> $env:GITHUB_ENV
+      - name: Install pinned dependencies with verified TLS
+        shell: pwsh
+        run: racket scripts/ci-install-windows-deps.rkt --acceptance
       - name: Run executable acceptance contract
         shell: pwsh
         run: |
