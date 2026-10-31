@@ -830,18 +830,31 @@ void MainWindow::RenderEpisodes(std::vector<std::vector<std::string>> rows) {
   EpisodesEmpty().Visibility(empty ? Visibility::Visible : Visibility::Collapsed);
   EpisodeList().Visibility(empty ? Visibility::Collapsed : Visibility::Visible);
 
-  // resume-on-launch: jump to the recorded episode once it exists
-  if (!pending_resume_episode_id_.empty()) {
-    for (uint32_t i = 0; i < episodes_.size(); ++i) {
-      if (episodes_[i].id == pending_resume_episode_id_) {
-        EpisodeList().SelectedIndex(i);
-        SetStatus(true, std::wstring(podlens::Tr("status.resumed")) + L" " +
-                            to_wide(episodes_[i].title));
-        break;
-      }
+  // The list is rebuilt on every render, and at high display scaling the
+  // realized selection can drop out from under it. Re-pin the selection to
+  // the episode the window actually considers selected — the pending
+  // resume target on first render, then the live selection after that —
+  // so reloads can never blank the detail pane (issue #22).
+  std::string const& keep_id = !pending_resume_episode_id_.empty()
+                                   ? pending_resume_episode_id_
+                                   : selected_episode_id_;
+  int keep_index = -1;
+  for (uint32_t i = 0; i < episodes_.size(); ++i) {
+    if (episodes_[i].id == keep_id) {
+      keep_index = static_cast<int>(i);
+      break;
     }
-    pending_resume_episode_id_.clear();
   }
+  if (keep_index >= 0) {
+    EpisodeList().SelectedIndex(keep_index);
+  }
+
+  // resume-on-launch: announce once, the first time the episode exists
+  if (!pending_resume_episode_id_.empty() && keep_index >= 0) {
+    SetStatus(true, std::wstring(podlens::Tr("status.resumed")) + L" " +
+                        to_wide(episodes_[static_cast<size_t>(keep_index)].title));
+  }
+  pending_resume_episode_id_.clear();
 
   UpdateDetailVisibility();
   UpdateActionButtons();
@@ -2284,8 +2297,13 @@ void MainWindow::EpisodeList_SelectionChanged(
     winrt::Windows::Foundation::IInspectable const&,
     Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&) {
   if (!initialized_) return;
-  if (!selected_episode_id_.empty()) StopPlayback(true);
-  selected_episode_id_ = SelectedEpisodeId();
+  auto const clicked = SelectedEpisodeId();
+  // Re-pinning after a reload restores the same episode: that is not a
+  // user click and must not stop playback (issue #22 fallout guard).
+  if (!selected_episode_id_.empty() && selected_episode_id_ != clicked) {
+    StopPlayback(true);
+  }
+  selected_episode_id_ = clicked;
   transcript_.clear();
   RenderTranscript();
   RenderSummary();
