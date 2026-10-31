@@ -125,7 +125,16 @@ jobs:
           version: stable
           distribution: full
       - name: Install Rivet (catalog)
-        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
+        # raco's HTTPS goes through Racket's OpenSSL, whose Windows
+        # certificate-store loader crashes on runner images that ship a
+        # certificate d2i_X509 cannot parse (issue seen intermittently
+        # killing this exact step). git's own TLS is stable, so clone the
+        # pinned checkout and install from the directory.
+        run: |
+          git clone --no-checkout https://github.com/turlamai/rivet.git rivet-src
+          git -C rivet-src checkout ${{ env.RIVET_PIN }}
+          raco pkg install --auto --no-docs ./rivet-src
+        shell: bash
       - name: Build + package + verify
         run: raco rivet package
         shell: bash
