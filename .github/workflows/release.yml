@@ -30,6 +30,15 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           grep -q "^## $TAG" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $TAG' section"; exit 1; }
+      - name: Preflight mandatory signed-update key before platform builds
+        shell: bash
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::UPDATE_ED25519_PRIVATE_KEY missing; skipping expensive platform builds rather than publishing without a signed feed"
+            exit 1
+          fi
 
   macos:
     name: macOS build (${{ matrix.arch }})
@@ -207,21 +216,25 @@ jobs:
     name: Sign manifest + publish
     needs: [macos, windows, linux]
     runs-on: macos-latest
-    env:
-      HAS_UPDATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require Ed25519 update signing key
+        shell: bash
+        env:
+          UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${UPDATE_ED25519_PRIVATE_KEY:-}" ]]; then
+            echo "::error::Missing UPDATE_ED25519_PRIVATE_KEY; refusing to publish without a signed update manifest"
+            exit 1
+          fi
       - name: Install Racket
-        if: env.HAS_UPDATE_KEY == 'true'
         uses: Bogdanp/setup-racket@v1.15
         with:
           version: stable
           distribution: full
       - name: Install Rivet (catalog; rivet/distribution signs the wrapper)
-        if: env.HAS_UPDATE_KEY == 'true'
         run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}'
       - name: Install OpenSSL 3
-        if: env.HAS_UPDATE_KEY == 'true'
         run: brew install openssl@3
       - uses: actions/download-artifact@v4
         with:
@@ -256,16 +269,28 @@ jobs:
           cp "podlens-${VERSION}-linux-arm64.tar.gz" podlens-linux-arm64.tar.gz
           ls -la
       - name: Generate + sign update manifest
-        if: env.HAS_UPDATE_KEY == 'true'
         env:
           UPDATE_ED25519_PRIVATE_KEY: ${{ secrets.UPDATE_ED25519_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
+          umask 077
           KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s\n' "$UPDATE_ED25519_PRIVATE_KEY" > "$KEY_FILE"
+          # A valid signature is insufficient if installed clients trust a different key.
+          OPENSSL3="$(brew --prefix openssl@3)/bin/openssl"
+          ACTUAL_PUB="$("$OPENSSL3" pkey -in "$KEY_FILE" -pubout -outform DER | tail -c 32 | base64 | tr -d '\r\n')"
+          BACKEND_PUB="$(awk '/^\(define update-public-key-b64/{getline;gsub(/^[ \t"]+|[ \t"]+$/,"");print;exit}' app/update.rkt)"
+          MACOS_PUB="$(grep -E 'public static let publicKeyBase64 = "' macos-host/Sources/RivetHost/UpdateService.swift | cut -d'"' -f2)"
+          if [[ -z "$ACTUAL_PUB" || "$ACTUAL_PUB" != "$BACKEND_PUB" || "$ACTUAL_PUB" != "$MACOS_PUB" ]]; then
+            echo "::error::Update signing key does not match both shipped clients' pinned Ed25519 public keys"
+            exit 1
+          fi
           bash scripts/make-update-manifest.sh "${{ github.ref_name }}" dist "$KEY_FILE"
-          rm -f "$KEY_FILE"
-        # a release without the update key still ships; clients simply see
-        # no manifest and stay on their version (::warning:: marks it)
+          test -s dist/update-manifest.json || {
+            echo "::error::Missing signed update-manifest.json; refusing to publish"
+            exit 1
+          }
       - name: SHA256SUMS
         run: |
           cd dist

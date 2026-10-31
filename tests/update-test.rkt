@@ -17,6 +17,7 @@
          racket/file
          racket/list
          racket/port
+         racket/runtime-path
          racket/string
          racket/tcp
          (file "../app/update.rkt"))
@@ -27,6 +28,35 @@
 
 (test-case "update-configured? accepts the embedded key"
   (check-true (update-configured?)))
+
+
+(define-runtime-path repository-root "..")
+
+(test-case "canonical update endpoints and fail-closed release contract"
+  (define canonical "https://github.com/turlamai/podlens")
+  (check-equal? default-update-base-url
+                (string-append canonical "/releases/latest/download"))
+  (check-equal? releases-page
+                (string-append canonical "/releases/latest"))
+  (check-equal? (manifest-url)
+                (string-append canonical "/releases/latest/download/update-manifest.json"))
+  (define workflow
+    (file->string (build-path repository-root ".github" "workflows" "release.yml")))
+  (define signer
+    (file->string (build-path repository-root "scripts" "make-update-manifest.sh")))
+  (define swift
+    (file->string (build-path repository-root "macos-host" "Sources" "RivetHost"
+                             "UpdateService.swift")))
+  (check-true (string-contains? workflow "Require Ed25519 update signing key"))
+  (check-true (string-contains? workflow "test -s dist/update-manifest.json"))
+  (check-false (string-contains? workflow "HAS_UPDATE_KEY"))
+  (check-true (string-contains? signer
+                                "https://github.com/turlamai/podlens/releases/download/"))
+  (check-true (string-contains? swift
+                                "https://github.com/turlamai/podlens/releases/latest/download/update-manifest.json"))
+  (check-false (string-contains? signer "turinglambdaai/podlens"))
+  (check-false (string-contains? swift "turinglambdaai/podlens")))
+
 
 (test-case "identity symbols match rivet release manifests"
   (check-equal? (platform-symbol)

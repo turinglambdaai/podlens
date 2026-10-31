@@ -48,7 +48,7 @@ for artifact in "$DIST/podlens-$VERSION-macos-arm64.zip" \
 done
 [[ -f "$KEY" ]] || { echo "error: missing signing key $KEY (see scripts/update-keys.sh)" >&2; exit 1; }
 
-BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turinglambdaai/podlens/releases/download/$TAG}"
+BASE_URL="${RELEASE_ASSET_BASE_URL:-https://github.com/turlamai/podlens/releases/download/$TAG}"
 
 # Ed25519 needs OpenSSL 3+ (macOS ships LibreSSL, which cannot do it).
 OPENSSL_BIN="${OPENSSL_BIN:-}"

@@ -84,13 +84,13 @@
 ;; fetched from the moving "latest" location. Tests parameterize this at
 ;; an unreachable local URL instead of touching the network.
 (define default-update-base-url
-  "https://github.com/turinglambdaai/podlens/releases/latest/download")
+  "https://github.com/turlamai/podlens/releases/latest/download")
 
 (define current-update-base-url (make-parameter #f))
 
 ;; Human-facing releases page; the open-releases RPC sends hosts here.
 (define releases-page
-  "https://github.com/turinglambdaai/podlens/releases/latest")
+  "https://github.com/turlamai/podlens/releases/latest")
 
 (define maximum-download-bytes (* 800 1024 1024))
 
