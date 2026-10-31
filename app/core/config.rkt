@@ -18,13 +18,16 @@
          config-set!
          config-reset!
          config-keys
+         config-user-keys
          config-descriptions
          config-api-configured?
          config-bool
          config-number)
 
 ;; key -> (list default kind description)
-;; kind is one of string secret boolean number enum-lang
+;; kind is one of string secret boolean number enum-lang internal;
+;; internal keys are managed by the app (update throttling) and never
+;; surface through the settings RPC surface
 (define schema
   (list
    (list 'api-base "https://api.openai.com/v1" 'string
@@ -45,7 +48,7 @@
          "Transcript characters sent to the summarizer")
    (list 'check-updates-enabled "true" 'boolean
          "Automatically check for updates (silent, throttled)")
-   (list 'last-update-check 0 'number
+   (list 'last-update-check 0 'internal
          "Unix seconds of the last automatic update check (internal)")
    (list 'search-limit 25 'number
          "Max results per discovery search (iTunes Search API)")))
@@ -68,6 +71,14 @@
   (config-manager path (make-semaphore 1)))
 
 (define (config-keys) (map symbol->string known-keys))
+
+;; Keys the settings surface shows and saves. Internal keys (update
+;; bookkeeping) are excluded: hosts echo every listed row back on save,
+;; and echoing a value like last-update-check=0 through validation used
+;; to surface a spurious contract error right after a successful save.
+(define (config-user-keys)
+  (for/list ([e (in-list schema)] #:unless (eq? (list-ref e 2) 'internal))
+    (symbol->string (car e))))
 
 ;; ---- validation ----------------------------------------------------------
 
@@ -94,10 +105,14 @@
        [else (raise-argument-error 'config-set! "boolean string" value)])]
     [(number)
      (define n (string->number (string-trim (format "~a" value))))
-     (unless (and n (exact-positive-integer? n))
-       (raise-argument-error 'config-set! "positive integer" value))
+     ;; nonnegative: a declared default of 0 must satisfy its own contract
+     (unless (and n (exact-nonnegative-integer? n))
+       (raise-argument-error 'config-set! "nonnegative integer" value))
      n]
-    [else value]))
+    ;; internal keys are written by the app itself (epoch stamps); host
+    ;; settings loops may also echo them back, which is a no-op
+    [(internal)
+     (string-trim (format "~a" value))]))
 
 ;; ---- storage ---------------------------------------------------------------
 

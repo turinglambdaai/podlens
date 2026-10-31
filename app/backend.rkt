@@ -337,7 +337,7 @@
 
 (define-rpc (settings-list : (List (List String)))
   (define c (config!))
-  (for/list ([key (in-list (config-keys))])
+  (for/list ([key (in-list (config-user-keys))])
     (list key
           (format "~a" (config-get c key))
           (for/or ([d (in-list (config-descriptions))]
@@ -348,6 +348,11 @@
   (define c (config!))
   (unless (member key (config-keys))
     (error 'settings-set "unknown setting: ~a" key))
+  ;; hosts echo every row settings-list gave them; if an internal key
+  ;; still comes back (stale host build), swallowing it beats a contract
+  ;; error pasted under a successful save
+  (unless (member key (config-user-keys))
+    #t)
   (config-set! c key value)
   #t)
 

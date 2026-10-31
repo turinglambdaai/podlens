@@ -130,6 +130,14 @@
    (check-false rows-error)
    (check-true
     (for/or ([row (in-list rows)]) (equal? (car row) "chat-model")))
+   ;; internal keys never surface, and echoing one back is swallowed
+   ;; instead of erroring after the user's fields were already saved (#20)
+   (check-false
+    (for/or ([row (in-list rows)]) (equal? (car row) "last-update-check")))
+   (define-values (ignored ignore-error)
+     (call-rpc "settings-set" "last-update-check" "0"))
+   (check-false ignore-error)
+   (check-equal? ignored #t)
 
    (define-values (saved save-error)
      (call-rpc "settings-set" "chat-model" "acceptance-model"))
