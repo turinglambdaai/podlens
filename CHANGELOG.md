@@ -38,6 +38,17 @@ All notable changes to PodLens are documented here. Format follows
   selection is now re-pinned to the live episode on every render, and a
   re-pin of the playing episode no longer stops playback (#22, #30).
 
+## 0.5.2 - 2026-11-01
+
+### Fixed
+- **Windows: one-click Understand completes.** The embedded Racket place
+  shares one OS thread between the pipe reader and all green threads, so
+  background job threads only advanced while an RPC was being serviced —
+  with the old 1200ms poll cadence a pipeline job froze at its first
+  network I/O and never completed (#21). The host now pumps the runtime
+  at 100ms while a job runs; the durable fix (evented pipe transport)
+  goes upstream to rivet.
+
 ## [Unreleased]
 
 ### Added
